@@ -204,7 +204,7 @@ export default function ProspectForm() {
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Montant potentiel (FCFA)">
+            <Field label="Montant potentiel (GNF)">
               <input className="input" type="number" min="0" value={form.montant_potentiel} onChange={e => f('montant_potentiel', e.target.value)} placeholder="0" />
             </Field>
             <Field label="Taux de commission (%)">
@@ -215,7 +215,7 @@ export default function ProspectForm() {
             <div className="bg-blue-50 rounded-lg p-3 text-sm">
               <span className="text-blue-700 font-medium">Commission prévisionnelle : </span>
               <span className="text-blue-900 font-bold">
-                {new Intl.NumberFormat('fr-FR').format(Math.round(Number(form.montant_potentiel) * Number(form.taux_commission) / 100))} FCFA
+                {new Intl.NumberFormat('fr-FR').format(Math.round(Number(form.montant_potentiel) * Number(form.taux_commission) / 100))} GNF
               </span>
             </div>
           )}

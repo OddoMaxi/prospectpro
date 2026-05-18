@@ -32,8 +32,8 @@ function ProspectModal({ prospect, onClose }) {
               ['Code postal', prospect.code_postal || '-'],
               ['Secteur', prospect.secteur_activite || '-'],
               ['Date prospection', fmtDate(prospect.date_prospection)],
-              ['Montant potentiel', `${fmt(prospect.montant_potentiel)} FCFA`],
-              ['Commission prév.', `${fmt(comm)} FCFA`],
+              ['Montant potentiel', `${fmt(prospect.montant_potentiel)} GNF`],
+              ['Commission prév.', `${fmt(comm)} GNF`],
             ].map(([k, v]) => (
               <div key={k}><p className="text-xs text-gray-400">{k}</p><p className="font-medium text-gray-800">{v}</p></div>
             ))}
@@ -83,7 +83,7 @@ export default function ProspectsAdmin() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Tous les prospects</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{prospects.length} prospect(s) — Commission prévisionnelle : {fmt(totalCommission)} FCFA</p>
+          <p className="text-gray-500 text-sm mt-0.5">{prospects.length} prospect(s) — Commission prévisionnelle : {fmt(totalCommission)} GNF</p>
         </div>
       </div>
 

@@ -6,7 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 const PIE_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6']
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
-const fmtCur = n => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', minimumFractionDigits: 0 }).format(Math.round(n || 0))
+const fmtCur = n => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'GNF', minimumFractionDigits: 0 }).format(Math.round(n || 0))
 
 function ProgressBar({ label, value, max, color = 'bg-blue-500' }) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0

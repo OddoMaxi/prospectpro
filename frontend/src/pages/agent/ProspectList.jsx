@@ -36,11 +36,11 @@ function ProspectCard({ p, onEdit, onDelete, onView }) {
       <div className="flex items-center justify-between mb-3 pt-2 border-t border-gray-50">
         <div>
           <p className="text-xs text-gray-400">Montant potentiel</p>
-          <p className="text-sm font-bold text-gray-800">{fmt(p.montant_potentiel)} FCFA</p>
+          <p className="text-sm font-bold text-gray-800">{fmt(p.montant_potentiel)} GNF</p>
         </div>
         <div className="text-right">
           <p className="text-xs text-gray-400">Commission prév.</p>
-          <p className="text-sm font-bold text-blue-600">{fmt(comm)} FCFA</p>
+          <p className="text-sm font-bold text-blue-600">{fmt(comm)} GNF</p>
         </div>
       </div>
 
@@ -88,8 +88,8 @@ function ProspectModal({ prospect, onClose }) {
               ['Code postal', prospect.code_postal],
               ['Secteur', prospect.secteur_activite],
               ['Date prospection', fmtDate(prospect.date_prospection)],
-              ['Montant potentiel', `${fmt(prospect.montant_potentiel)} FCFA`],
-              ['Commission prévisionnelle', `${fmt(comm)} FCFA`],
+              ['Montant potentiel', `${fmt(prospect.montant_potentiel)} GNF`],
+              ['Commission prévisionnelle', `${fmt(comm)} GNF`],
             ].filter(([, v]) => v).map(([k, v]) => (
               <div key={k}><p className="text-xs text-gray-400">{k}</p><p className="font-medium text-gray-800">{v}</p></div>
             ))}
@@ -145,7 +145,7 @@ export default function ProspectList() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Mes prospects</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {prospects.length} résultat(s) · {fmt(totalMontant)} FCFA · Commission : {fmt(totalComm)} FCFA
+            {prospects.length} résultat(s) · {fmt(totalMontant)} GNF · Commission : {fmt(totalComm)} GNF
           </p>
         </div>
         <Link to="/agent/prospects/create" className="btn btn-primary hidden sm:inline-flex">

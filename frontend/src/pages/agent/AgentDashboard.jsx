@@ -9,7 +9,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 const STATUS_LABELS = { prospect: 'Prospect', en_cours: 'En cours', client: 'Client', perdu: 'Perdu' }
 const STATUS_COLORS = { prospect: '#3b82f6', en_cours: '#f59e0b', client: '#10b981', perdu: '#ef4444' }
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
-const fmtCur = n => `${fmt(n)} FCFA`
+const fmtCur = n => `${fmt(n)} GNF`
 const fmtDate = d => d ? new Date(d).toLocaleDateString('fr-FR') : '-'
 
 function ProgressBar({ label, value, max, colorClass = 'bg-blue-500' }) {
@@ -136,7 +136,7 @@ export default function AgentDashboard() {
                   <p className="text-sm font-medium text-gray-900 truncate">{p.nom}{p.prenom ? ` ${p.prenom}` : ''}</p>
                   <p className="text-xs text-gray-400">{p.ville || 'Ville non renseignée'} • {fmtDate(p.date_prospection)}</p>
                 </div>
-                <span className="text-xs font-medium text-gray-500 shrink-0">{fmt(p.montant_potentiel)} FCFA</span>
+                <span className="text-xs font-medium text-gray-500 shrink-0">{fmt(p.montant_potentiel)} GNF</span>
               </div>
             ))}
           </div>
