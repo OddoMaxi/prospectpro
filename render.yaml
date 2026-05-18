@@ -1,13 +1,13 @@
 services:
   - type: web
-    name: prospectpro-backend
-    runtime: node
+    name: prospection-backend
+    env: node
     rootDir: backend
     buildCommand: npm install
     startCommand: npm start
     envVars:
       - key: PORT
-        value: 3001
+        value: 10000
       - key: NODE_ENV
         value: production
       - key: JWT_SECRET
@@ -18,3 +18,17 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
+
+  - type: web
+    name: prospection-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
