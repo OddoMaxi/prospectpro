@@ -172,7 +172,11 @@ export default function AdminDashboard() {
                 const pct = a.objectif_mensuel > 0 ? Math.min((a.monthly_prospects / a.objectif_mensuel) * 100, 100) : 0
                 return (
                   <tr key={a.id} className="hover:bg-gray-50">
-                    <td className="py-3 font-medium">{a.prenom} {a.nom}</td>
+                    <td className="py-3 font-medium">
+                      {a.type_agent === 'morale'
+                        ? (a.raison_sociale || a.nom)
+                        : `${a.prenom} ${a.nom}`}
+                    </td>
                     <td className="py-3 text-right">{fmt(a.total_prospects)}</td>
                     <td className="py-3 text-right">{fmt(a.monthly_prospects)}</td>
                     <td className="py-3 text-right text-emerald-600 font-medium">{fmt(a.total_clients)}</td>

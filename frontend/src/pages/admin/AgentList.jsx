@@ -295,8 +295,24 @@ export default function AgentList() {
                   : 0
                 return (
                   <tr key={agent.id} className="hover:bg-gray-50">
-                    <td className="py-3 font-semibold text-gray-900">{agent.nom}</td>
-                    <td className="py-3 text-gray-700">{agent.prenom}</td>
+                    <td className="py-3">
+                      {agent.type_agent === 'morale' ? (
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-gray-900">{agent.raison_sociale || agent.nom}</span>
+                            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">Morale</span>
+                          </div>
+                          {agent.representant_legal && (
+                            <p className="text-xs text-gray-400 mt-0.5">Rép. : {agent.representant_legal}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="font-semibold text-gray-900">{agent.nom}</span>
+                      )}
+                    </td>
+                    <td className="py-3 text-gray-700">
+                      {agent.type_agent === 'morale' ? '' : agent.prenom}
+                    </td>
                     <td className="py-3 text-gray-500">
                       <div className="text-xs space-y-0.5">
                         {agent.email && <p>{agent.email}</p>}

@@ -71,6 +71,7 @@ router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
 
   const agentStats = await all(`
     SELECT u.id, u.nom, u.prenom, u.username, u.objectif_mensuel, u.taux_commission,
+           u.type_agent, u.raison_sociale,
            COUNT(p.id) total_prospects,
            SUM(CASE WHEN p.statut='client' THEN 1 ELSE 0 END) total_clients,
            SUM(CASE WHEN p.date_prospection>=? THEN 1 ELSE 0 END) monthly_prospects,

@@ -72,8 +72,23 @@ async function initializeSchema() {
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
 
-  // Migration : ajoute produit_id si absent (bases existantes)
+  await db.execute(`CREATE TABLE IF NOT EXISTS agent_product_objectives (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    objectif_mensuel INTEGER DEFAULT 0,
+    periode TEXT NOT NULL DEFAULT 'annuel',
+    objectif_annuel INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(agent_id, product_id)
+  )`);
+
+  // Migrations bases existantes
   try { await db.execute("ALTER TABLE prospects ADD COLUMN produit_id TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE users ADD COLUMN type_agent TEXT DEFAULT 'physique'"); } catch(_) {}
+  try { await db.execute("ALTER TABLE users ADD COLUMN raison_sociale TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE users ADD COLUMN representant_legal TEXT"); } catch(_) {}
 
   const r = await db.execute("SELECT id FROM users WHERE role = 'admin'");
   if (r.rows.length === 0) {
