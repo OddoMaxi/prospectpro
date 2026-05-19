@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
-import { Plus, Search, Filter, Edit, Trash2, ChevronDown, X } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Trash2, ChevronDown, X, ChevronLeft, ChevronRight } from 'lucide-react'
+
+const PAGE_SIZE = 10
 
 const STATUTS   = { prospect: 'Prospect', client: 'Client' }
 const TYPES     = { physique: 'Particulier', morale: 'Entreprise' }
@@ -29,6 +31,7 @@ export default function ProspectList() {
   const [loading, setLoading] = useState(true)
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState({ search: '', type: '', statut: '', date_debut: '', date_fin: '' })
+  const [page, setPage] = useState(1)
 
   const load = () => {
     setLoading(true)
@@ -37,7 +40,7 @@ export default function ProspectList() {
   }
 
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t) }, [filters])
-  const setF = (k, v) => setFilters(p => ({ ...p, [k]: v }))
+  const setF = (k, v) => { setFilters(p => ({ ...p, [k]: v })); setPage(1) }
 
   const handleDelete = async id => {
     if (!confirm('Supprimer ce prospect ?')) return
@@ -51,6 +54,9 @@ export default function ProspectList() {
   const totalPrime = prospects.reduce((s, p) => s + (p.montant_potentiel || 0), 0)
   const totalComm  = prospects.reduce((s, p) => s + (p.montant_potentiel || 0) * (p.taux_commission || 0) / 100, 0)
   const hasActiveFilters = Object.values(filters).some(Boolean)
+
+  const totalPages = Math.ceil(prospects.length / PAGE_SIZE)
+  const paginated  = prospects.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <div>
@@ -163,7 +169,7 @@ export default function ProspectList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {prospects.map(p => (
+              {paginated.map(p => (
                 <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                   <td className="py-3 font-medium text-gray-900">
                     {p.type === 'physique'
@@ -215,6 +221,58 @@ export default function ProspectList() {
               ))}
             </tbody>
           </table>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100 mt-2">
+              <span className="text-xs text-gray-500">
+                Page {page} / {totalPages} · {prospects.length} résultat(s)
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(1)}
+                  disabled={page === 1}
+                  className="btn btn-secondary btn-sm disabled:opacity-40"
+                  title="Première page"
+                >«</button>
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="btn btn-secondary btn-sm disabled:opacity-40"
+                  title="Page précédente"
+                ><ChevronLeft size={14} /></button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(n => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
+                  .reduce((acc, n, idx, arr) => {
+                    if (idx > 0 && n - arr[idx - 1] > 1) acc.push('…')
+                    acc.push(n)
+                    return acc
+                  }, [])
+                  .map((n, i) =>
+                    n === '…'
+                      ? <span key={`e${i}`} className="px-1 text-gray-400 text-xs">…</span>
+                      : <button
+                          key={n}
+                          onClick={() => setPage(n)}
+                          className={`btn btn-sm min-w-[32px] ${n === page ? 'btn-primary' : 'btn-secondary'}`}
+                        >{n}</button>
+                  )}
+
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="btn btn-secondary btn-sm disabled:opacity-40"
+                  title="Page suivante"
+                ><ChevronRight size={14} /></button>
+                <button
+                  onClick={() => setPage(totalPages)}
+                  disabled={page === totalPages}
+                  className="btn btn-secondary btn-sm disabled:opacity-40"
+                  title="Dernière page"
+                >»</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
