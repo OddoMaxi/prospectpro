@@ -9,6 +9,7 @@ const TYPES     = { physique: 'Particulier', morale: 'Entreprise' }
 const NIVEAUX   = { Faible: 'text-gray-500 bg-gray-100', Moyen: 'text-amber-700 bg-amber-100', Élevé: 'text-emerald-700 bg-emerald-100' }
 const fmt       = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
 const fmtDate   = d => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
+const fmtTel    = t => t ? String(t).replace(/\s+/g, '').replace(/(\d{3})(?=\d)/g, '$1 ') : '—'
 
 function statutBadge(s) {
   const cls = s === 'client'
@@ -18,12 +19,8 @@ function statutBadge(s) {
 }
 
 function lieu(p) {
-  if (p.type === 'physique') {
-    const parts = [p.lieu_residence_commune, p.lieu_residence_quartier].filter(Boolean)
-    return parts.length ? parts.join(' – ') : '—'
-  }
-  const parts = [p.siege_social_commune, p.siege_social_quartier].filter(Boolean)
-  return parts.length ? parts.join(' – ') : '—'
+  if (p.type === 'physique') return p.lieu_residence_quartier || p.lieu_residence_commune || '—'
+  return p.siege_social_quartier || p.siege_social_commune || '—'
 }
 
 export default function ProspectList() {
@@ -160,6 +157,7 @@ export default function ProspectList() {
                 <th className="pb-3 font-medium text-center">Intérêt</th>
                 <th className="pb-3 font-medium text-center">Statut</th>
                 <th className="pb-3 font-medium text-right">Prime prév.</th>
+                <th className="pb-3 font-medium text-right">Commission</th>
                 <th className="pb-3 font-medium text-right">Date</th>
                 <th className="pb-3 font-medium text-right">Actions</th>
               </tr>
@@ -178,7 +176,7 @@ export default function ProspectList() {
                       {TYPES[p.type]}
                     </span>
                   </td>
-                  <td className="py-3 text-gray-600">{p.telephone || '—'}</td>
+                  <td className="py-3 text-gray-600">{fmtTel(p.telephone)}</td>
                   <td className="py-3 text-gray-500 max-w-[160px] truncate" title={lieu(p)}>{lieu(p)}</td>
                   <td className="py-3 text-center">
                     {p.niveau_interet ? (
@@ -189,7 +187,12 @@ export default function ProspectList() {
                   </td>
                   <td className="py-3 text-center">{statutBadge(p.statut)}</td>
                   <td className="py-3 text-right font-medium text-blue-700">
-                    {p.montant_potentiel > 0 ? `${fmt(p.montant_potentiel)} GNF` : '—'}
+                    {p.montant_potentiel > 0 ? fmt(p.montant_potentiel) : '—'}
+                  </td>
+                  <td className="py-3 text-right font-medium text-emerald-700">
+                    {p.montant_potentiel > 0 && p.taux_commission > 0
+                      ? fmt(p.montant_potentiel * p.taux_commission / 100)
+                      : '—'}
                   </td>
                   <td className="py-3 text-right text-gray-500 text-xs">{fmtDate(p.date_prospection)}</td>
                   <td className="py-3 text-right">
