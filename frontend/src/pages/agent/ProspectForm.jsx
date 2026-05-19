@@ -2,29 +2,64 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
-import { Save, ArrowLeft, User, Building2, Package } from 'lucide-react'
+import { Save, ArrowLeft, User, Building2, Plus, Trash2 } from 'lucide-react'
+import { COMMUNES, getQuartiers, PROFESSIONS, SECTEURS_MORALE } from '../../data/guinea'
 
-const SECTEURS = [
-  'Immobilier','Assurance','Finance / Banque','Santé','Commerce de détail',
-  'Industrie','Services aux entreprises','Transport / Logistique',
-  'Restauration / Hôtellerie','Agriculture','Informatique / Tech',
-  'Éducation / Formation','BTP / Construction','Énergie','Télécommunications','Autre'
-]
+const fmtGNF = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0)) + ' GNF'
+
+const NIVEAUX_INTERET = ['Faible', 'Moyen', 'Élevé']
 
 const EMPTY = {
-  type: 'physique', nom: '', prenom: '', siret: '',
+  type: 'physique',
+  nom: '', prenom: '',
   nom_contact: '', prenom_contact: '',
-  telephone: '', email: '', adresse: '', ville: '', code_postal: '',
-  secteur_activite: '', notes: '', statut: 'prospect',
-  montant_potentiel: '', taux_commission: '', produit_id: '',
-  date_prospection: new Date().toISOString().split('T')[0]
+  telephone: '', email: '',
+  lieu_residence_commune: '', lieu_residence_quartier: '',
+  lieu_activite_commune: '', lieu_activite_quartier: '',
+  siege_social_commune: '', siege_social_quartier: '',
+  profession: '',
+  secteur_activite: '',
+  niveau_interet: '',
+  statut: 'prospect',
+  date_prospection: new Date().toISOString().split('T')[0],
 }
 
 function Field({ label, children, required }) {
   return (
     <div>
-      <label className="label">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+      <label className="label">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
       {children}
+    </div>
+  )
+}
+
+function LocationSelect({ communeValue, quartierValue, onCommuneChange, onQuartierChange, labelCommune, labelQuartier }) {
+  const quartiers = getQuartiers(communeValue)
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      <Field label={labelCommune}>
+        <select
+          className="input"
+          value={communeValue}
+          onChange={e => { onCommuneChange(e.target.value); onQuartierChange('') }}
+        >
+          <option value="">Commune...</option>
+          {COMMUNES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </Field>
+      <Field label={labelQuartier}>
+        <select
+          className="input"
+          value={quartierValue}
+          onChange={e => onQuartierChange(e.target.value)}
+          disabled={!communeValue}
+        >
+          <option value="">Quartier...</option>
+          {quartiers.map(q => <option key={q} value={q}>{q}</option>)}
+        </select>
+      </Field>
     </div>
   )
 }
@@ -37,10 +72,11 @@ export default function ProspectForm() {
   const [form, setForm] = useState(EMPTY)
   const [loading, setLoading] = useState(false)
   const [initLoading, setInitLoading] = useState(isEdit)
-  const [products, setProducts] = useState([])
+  const [availableProducts, setAvailableProducts] = useState([])
+  const [selectedProducts, setSelectedProducts] = useState([])
 
   useEffect(() => {
-    api.get('/products/active').then(r => setProducts(r.data)).catch(() => {})
+    api.get('/products/active').then(r => setAvailableProducts(r.data)).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -49,44 +85,85 @@ export default function ProspectForm() {
         .then(r => {
           const p = r.data
           setForm({
-            ...EMPTY, ...p,
-            montant_potentiel: String(p.montant_potentiel || ''),
-            taux_commission: String(p.taux_commission || ''),
-            produit_id: p.produit_id || ''
+            type: p.type || 'physique',
+            nom: p.nom || '',
+            prenom: p.prenom || '',
+            nom_contact: p.nom_contact || '',
+            prenom_contact: p.prenom_contact || '',
+            telephone: p.telephone || '',
+            email: p.email || '',
+            lieu_residence_commune: p.lieu_residence_commune || '',
+            lieu_residence_quartier: p.lieu_residence_quartier || '',
+            lieu_activite_commune: p.lieu_activite_commune || '',
+            lieu_activite_quartier: p.lieu_activite_quartier || '',
+            siege_social_commune: p.siege_social_commune || '',
+            siege_social_quartier: p.siege_social_quartier || '',
+            profession: p.profession || '',
+            secteur_activite: p.secteur_activite || '',
+            niveau_interet: p.niveau_interet || '',
+            statut: p.statut || 'prospect',
+            date_prospection: p.date_prospection || new Date().toISOString().split('T')[0],
           })
+          if (p.prospect_products?.length > 0) {
+            setSelectedProducts(p.prospect_products.map(pp => ({
+              product_id: pp.product_id,
+              product_nom: pp.product_nom,
+              prime_annuelle: Number(pp.prime_annuelle) || 0,
+              taux_commission: Number(pp.product_taux) || 0,
+              nb_beneficiaires: String(pp.nb_beneficiaires || 1),
+            })))
+          }
         })
         .catch(() => { toast.error('Prospect introuvable'); navigate('/agent/prospects') })
         .finally(() => setInitLoading(false))
-    } else {
-      api.get('/auth/me').then(r => setForm(f => ({ ...f, taux_commission: String(r.data.taux_commission || 5) }))).catch(() => {})
     }
   }, [id, isEdit])
 
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  const handleProductSelect = produitId => {
-    const product = products.find(p => p.id === produitId)
-    if (product) {
-      setForm(prev => ({
-        ...prev,
-        produit_id: produitId,
-        montant_potentiel: String(product.prime_annuelle),
-        taux_commission: String(product.taux_commission)
-      }))
-    } else {
-      setForm(prev => ({ ...prev, produit_id: '' }))
-    }
+  // Gestion de la table produits
+  const addProduct = () => {
+    setSelectedProducts(prev => [...prev, {
+      product_id: '', product_nom: '', prime_annuelle: 0, taux_commission: 0, nb_beneficiaires: '1'
+    }])
   }
+
+  const removeProduct = idx => setSelectedProducts(prev => prev.filter((_, i) => i !== idx))
+
+  const updateProduct = (idx, key, value) => {
+    setSelectedProducts(prev => prev.map((sp, i) => {
+      if (i !== idx) return sp
+      if (key === 'product_id') {
+        const p = availableProducts.find(p => p.id === value)
+        return p
+          ? { ...sp, product_id: value, product_nom: p.nom, prime_annuelle: Number(p.prime_annuelle), taux_commission: Number(p.taux_commission) }
+          : { ...sp, product_id: '', product_nom: '', prime_annuelle: 0, taux_commission: 0 }
+      }
+      return { ...sp, [key]: value }
+    }))
+  }
+
+  const getPrimePrev = sp => (Number(sp.prime_annuelle) || 0) * (Number(sp.nb_beneficiaires) || 1)
+  const getCommPrev  = sp => getPrimePrev(sp) * (Number(sp.taux_commission) || 0) / 100
+
+  const totalPrime = selectedProducts.reduce((s, sp) => s + getPrimePrev(sp), 0)
+  const totalComm  = selectedProducts.reduce((s, sp) => s + getCommPrev(sp), 0)
 
   const handleSubmit = async e => {
     e.preventDefault()
+    if (isPhysique && (!form.nom.trim() || !form.prenom.trim())) {
+      return toast.error('Prénom et nom obligatoires')
+    }
+    if (!isPhysique && !form.nom.trim()) {
+      return toast.error('Raison sociale obligatoire')
+    }
     setLoading(true)
     try {
       const payload = {
         ...form,
-        montant_potentiel: Number(form.montant_potentiel) || 0,
-        taux_commission: Number(form.taux_commission) || 5,
-        produit_id: form.produit_id || null
+        prospect_products: selectedProducts
+          .filter(sp => sp.product_id)
+          .map(sp => ({ product_id: sp.product_id, nb_beneficiaires: Number(sp.nb_beneficiaires) || 1 })),
       }
       if (isEdit) {
         await api.put(`/prospects/${id}`, payload)
@@ -103,7 +180,11 @@ export default function ProspectForm() {
     }
   }
 
-  if (initLoading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>
+  if (initLoading) return (
+    <div className="flex justify-center py-20">
+      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
 
   const isPhysique = form.type === 'physique'
 
@@ -114,165 +195,256 @@ export default function ProspectForm() {
           <ArrowLeft size={15} />Retour
         </button>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">{isEdit ? 'Modifier le prospect' : 'Nouveau prospect'}</h1>
-          <p className="text-sm text-gray-500">{isEdit ? 'Modifier les informations' : 'Saisir les informations du prospect'}</p>
+          <h1 className="text-xl font-bold text-gray-900">
+            {isEdit ? 'Modifier le prospect' : 'Nouveau prospect'}
+          </h1>
+          <p className="text-sm text-gray-500">
+            {isEdit ? 'Modifier les informations' : 'Saisir les informations du prospect'}
+          </p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Type selection */}
+
+        {/* Sélecteur de type */}
         <div className="card">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">Type de prospect</h2>
           <div className="grid grid-cols-2 gap-3">
             <button type="button"
               onClick={() => f('type', 'physique')}
-              className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${form.type === 'physique' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${form.type === 'physique' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+              className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all
+                ${isPhysique ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center
+                ${isPhysique ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
                 <User size={20} />
               </div>
               <div className="text-left">
-                <p className={`text-sm font-semibold ${form.type === 'physique' ? 'text-blue-700' : 'text-gray-700'}`}>Personne physique</p>
+                <p className={`text-sm font-semibold ${isPhysique ? 'text-blue-700' : 'text-gray-700'}`}>Personne physique</p>
                 <p className="text-xs text-gray-400">Particulier</p>
               </div>
             </button>
             <button type="button"
               onClick={() => f('type', 'morale')}
-              className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${form.type === 'morale' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${form.type === 'morale' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>
+              className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all
+                ${!isPhysique ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center
+                ${!isPhysique ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>
                 <Building2 size={20} />
               </div>
               <div className="text-left">
-                <p className={`text-sm font-semibold ${form.type === 'morale' ? 'text-purple-700' : 'text-gray-700'}`}>Personne morale</p>
+                <p className={`text-sm font-semibold ${!isPhysique ? 'text-purple-700' : 'text-gray-700'}`}>Personne morale</p>
                 <p className="text-xs text-gray-400">Entreprise</p>
               </div>
             </button>
           </div>
         </div>
 
-        {/* Identity */}
-        <div className="card space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700">{isPhysique ? 'Identité' : 'Entreprise'}</h2>
-
-          {isPhysique ? (
+        {/* ── PHYSIQUE : Identité ─────────────────────────────────────────── */}
+        {isPhysique && (
+          <div className="card space-y-4">
+            <h2 className="text-sm font-semibold text-gray-700">Identité</h2>
             <div className="grid grid-cols-2 gap-4">
               <Field label="Prénom" required>
-                <input className="input" type="text" value={form.prenom} onChange={e => f('prenom', e.target.value)} required placeholder="Jean" />
+                <input className="input" type="text" value={form.prenom}
+                  onChange={e => f('prenom', e.target.value)} required placeholder="Mamadou" />
               </Field>
               <Field label="Nom" required>
-                <input className="input" type="text" value={form.nom} onChange={e => f('nom', e.target.value)} required placeholder="DUPONT" />
+                <input className="input" type="text" value={form.nom}
+                  onChange={e => f('nom', e.target.value)} required placeholder="DIALLO" />
               </Field>
             </div>
-          ) : (
+          </div>
+        )}
+
+        {/* ── MORALE : Entreprise ─────────────────────────────────────────── */}
+        {!isPhysique && (
+          <div className="card space-y-4">
+            <h2 className="text-sm font-semibold text-gray-700">Entreprise</h2>
+            <Field label="Raison sociale" required>
+              <input className="input" type="text" value={form.nom}
+                onChange={e => f('nom', e.target.value)} required placeholder="Entreprise SARL" />
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Prénom du contact">
+                <input className="input" type="text" value={form.prenom_contact}
+                  onChange={e => f('prenom_contact', e.target.value)} placeholder="Mariama" />
+              </Field>
+              <Field label="Nom du contact">
+                <input className="input" type="text" value={form.nom_contact}
+                  onChange={e => f('nom_contact', e.target.value)} placeholder="CAMARA" />
+              </Field>
+            </div>
+            <LocationSelect
+              communeValue={form.siege_social_commune}
+              quartierValue={form.siege_social_quartier}
+              onCommuneChange={v => f('siege_social_commune', v)}
+              onQuartierChange={v => f('siege_social_quartier', v)}
+              labelCommune="Siège social – Commune"
+              labelQuartier="Siège social – Quartier"
+            />
+            <Field label="Secteur d'activité">
+              <select className="input" value={form.secteur_activite}
+                onChange={e => f('secteur_activite', e.target.value)}>
+                <option value="">Sélectionner...</option>
+                {SECTEURS_MORALE.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </Field>
+          </div>
+        )}
+
+        {/* ── Coordonnées ─────────────────────────────────────────────────── */}
+        <div className="card space-y-4">
+          <h2 className="text-sm font-semibold text-gray-700">Coordonnées</h2>
+          <Field label="Téléphone">
+            <input className="input" type="tel" value={form.telephone}
+              onChange={e => f('telephone', e.target.value)} placeholder="+224 6XX XX XX XX" />
+          </Field>
+
+          {/* Email uniquement pour les personnes morales */}
+          {!isPhysique && (
+            <Field label="Email">
+              <input className="input" type="email" value={form.email}
+                onChange={e => f('email', e.target.value)} placeholder="contact@entreprise.com" />
+            </Field>
+          )}
+
+          {isPhysique && (
             <>
-              <Field label="Raison sociale" required>
-                <input className="input" type="text" value={form.nom} onChange={e => f('nom', e.target.value)} required placeholder="Entreprise SARL" />
+              <LocationSelect
+                communeValue={form.lieu_residence_commune}
+                quartierValue={form.lieu_residence_quartier}
+                onCommuneChange={v => f('lieu_residence_commune', v)}
+                onQuartierChange={v => f('lieu_residence_quartier', v)}
+                labelCommune="Lieu de résidence – Commune"
+                labelQuartier="Lieu de résidence – Quartier"
+              />
+              <LocationSelect
+                communeValue={form.lieu_activite_commune}
+                quartierValue={form.lieu_activite_quartier}
+                onCommuneChange={v => f('lieu_activite_commune', v)}
+                onQuartierChange={v => f('lieu_activite_quartier', v)}
+                labelCommune="Lieu d'activité – Commune"
+                labelQuartier="Lieu d'activité – Quartier"
+              />
+              <Field label="Profession">
+                <select className="input" value={form.profession}
+                  onChange={e => f('profession', e.target.value)}>
+                  <option value="">Sélectionner...</option>
+                  {PROFESSIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
               </Field>
-              <Field label="SIRET">
-                <input className="input" type="text" value={form.siret} onChange={e => f('siret', e.target.value)} placeholder="123 456 789 00000" />
-              </Field>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Prénom du contact">
-                  <input className="input" type="text" value={form.prenom_contact} onChange={e => f('prenom_contact', e.target.value)} placeholder="Marie" />
-                </Field>
-                <Field label="Nom du contact">
-                  <input className="input" type="text" value={form.nom_contact} onChange={e => f('nom_contact', e.target.value)} placeholder="MARTIN" />
-                </Field>
-              </div>
             </>
           )}
         </div>
 
-        {/* Contact */}
-        <div className="card space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700">Coordonnées</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Téléphone">
-              <input className="input" type="tel" value={form.telephone} onChange={e => f('telephone', e.target.value)} placeholder="+225 07 XX XX XX XX" />
-            </Field>
-            <Field label="Email">
-              <input className="input" type="email" value={form.email} onChange={e => f('email', e.target.value)} placeholder="contact@email.com" />
-            </Field>
-          </div>
-          <Field label="Adresse">
-            <input className="input" type="text" value={form.adresse} onChange={e => f('adresse', e.target.value)} placeholder="Rue, Quartier" />
-          </Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Ville">
-              <input className="input" type="text" value={form.ville} onChange={e => f('ville', e.target.value)} placeholder="Abidjan" />
-            </Field>
-            <Field label="Code postal">
-              <input className="input" type="text" value={form.code_postal} onChange={e => f('code_postal', e.target.value)} placeholder="00225" />
-            </Field>
-          </div>
-          <Field label="Secteur d'activité">
-            <select className="input" value={form.secteur_activite} onChange={e => f('secteur_activite', e.target.value)}>
-              <option value="">Sélectionner...</option>
-              {SECTEURS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </Field>
-        </div>
-
-        {/* Commercial */}
+        {/* ── Informations commerciales ────────────────────────────────────── */}
         <div className="card space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">Informations commerciales</h2>
-
-          {products.length > 0 && (
-            <Field label="Produit d'assurance">
-              <div className="flex items-center gap-2">
-                <Package size={16} className="text-blue-500 shrink-0" />
-                <select
-                  className="input flex-1"
-                  value={form.produit_id}
-                  onChange={e => handleProductSelect(e.target.value)}
-                >
-                  <option value="">Sélectionner un produit (optionnel)</option>
-                  {products.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.nom} — {new Intl.NumberFormat('fr-FR').format(p.prime_annuelle)} GNF / {p.taux_commission}%
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {form.produit_id && (
-                <p className="text-xs text-blue-600 mt-1">
-                  Prime et commission pré-remplies depuis le produit sélectionné.
-                </p>
-              )}
-            </Field>
-          )}
 
           <div className="grid grid-cols-2 gap-4">
             <Field label="Statut">
               <select className="input" value={form.statut} onChange={e => f('statut', e.target.value)}>
                 <option value="prospect">Prospect</option>
-                <option value="en_cours">En cours</option>
                 <option value="client">Client</option>
-                <option value="perdu">Perdu</option>
               </select>
             </Field>
-            <Field label="Date de prospection">
-              <input className="input" type="date" value={form.date_prospection} onChange={e => f('date_prospection', e.target.value)} />
+            <Field label="Niveau d'intérêt">
+              <select className="input" value={form.niveau_interet} onChange={e => f('niveau_interet', e.target.value)}>
+                <option value="">Sélectionner...</option>
+                {NIVEAUX_INTERET.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Prime / Montant potentiel (GNF)">
-              <input className="input" type="number" min="0" value={form.montant_potentiel} onChange={e => f('montant_potentiel', e.target.value)} placeholder="0" />
-            </Field>
-            <Field label="Taux de commission (%)">
-              <input className="input" type="number" min="0" max="100" step="0.1" value={form.taux_commission} onChange={e => f('taux_commission', e.target.value)} placeholder="5" />
-            </Field>
-          </div>
-          {form.montant_potentiel && form.taux_commission && (
-            <div className="bg-blue-50 rounded-lg p-3 text-sm">
-              <span className="text-blue-700 font-medium">Commission prévisionnelle : </span>
-              <span className="text-blue-900 font-bold">
-                {new Intl.NumberFormat('fr-FR').format(Math.round(Number(form.montant_potentiel) * Number(form.taux_commission) / 100))} GNF
-              </span>
-            </div>
-          )}
-          <Field label="Notes">
-            <textarea className="input resize-none" rows={3} value={form.notes} onChange={e => f('notes', e.target.value)} placeholder="Observations, remarques..." />
+
+          <Field label="Date de prospection">
+            <input className="input" type="date" value={form.date_prospection}
+              onChange={e => f('date_prospection', e.target.value)} />
           </Field>
+
+          {/* Table des produits */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="label mb-0">Produits d'assurance</label>
+              <button type="button" onClick={addProduct}
+                className="btn btn-secondary btn-sm"
+                disabled={availableProducts.length === 0}>
+                <Plus size={13} />Ajouter
+              </button>
+            </div>
+
+            {availableProducts.length === 0 && (
+              <p className="text-xs text-gray-400 py-2">Aucun produit actif. L'administrateur doit en créer.</p>
+            )}
+
+            {selectedProducts.length > 0 && (
+              <div className="overflow-x-auto border border-gray-100 rounded-xl">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr className="text-xs text-gray-500 uppercase tracking-wide">
+                      <th className="px-3 py-2 text-left font-medium">Produit</th>
+                      <th className="px-3 py-2 text-right font-medium w-24">Bénéficiaires</th>
+                      <th className="px-3 py-2 text-right font-medium">Prime prév.</th>
+                      <th className="px-3 py-2 text-right font-medium">Commission prév.</th>
+                      <th className="px-3 py-2 w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {selectedProducts.map((sp, idx) => {
+                      const primePrev = getPrimePrev(sp)
+                      const commPrev  = getCommPrev(sp)
+                      return (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-3 py-2">
+                            <select
+                              className="input text-sm"
+                              value={sp.product_id}
+                              onChange={e => updateProduct(idx, 'product_id', e.target.value)}
+                            >
+                              <option value="">Choisir un produit...</option>
+                              {availableProducts.map(p => (
+                                <option key={p.id} value={p.id}>{p.nom}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              className="input text-right w-20 ml-auto"
+                              type="number" min="1" step="1"
+                              value={sp.nb_beneficiaires}
+                              onChange={e => updateProduct(idx, 'nb_beneficiaires', e.target.value)}
+                              placeholder="1"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right font-medium text-blue-700">
+                            {sp.product_id ? fmtGNF(primePrev) : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right font-medium text-purple-700">
+                            {sp.product_id ? fmtGNF(commPrev) : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <button type="button" onClick={() => removeProduct(idx)}
+                              className="text-red-400 hover:text-red-600 transition-colors">
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  {selectedProducts.some(sp => sp.product_id) && (
+                    <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                      <tr className="text-sm font-bold">
+                        <td className="px-3 py-2 text-gray-600 text-xs uppercase tracking-wide" colSpan={2}>Total</td>
+                        <td className="px-3 py-2 text-right text-blue-800">{fmtGNF(totalPrime)}</td>
+                        <td className="px-3 py-2 text-right text-purple-800">{fmtGNF(totalComm)}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-3 pb-6">
@@ -280,7 +452,9 @@ export default function ProspectForm() {
             Annuler
           </button>
           <button type="submit" disabled={loading} className="btn btn-primary flex-1 justify-center">
-            {loading ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save size={16} />}
+            {loading
+              ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              : <Save size={16} />}
             {loading ? 'En cours...' : (isEdit ? 'Enregistrer' : 'Créer le prospect')}
           </button>
         </div>

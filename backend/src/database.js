@@ -84,11 +84,27 @@ async function initializeSchema() {
     UNIQUE(agent_id, product_id)
   )`);
 
+  await db.execute(`CREATE TABLE IF NOT EXISTS prospect_products (
+    id TEXT PRIMARY KEY,
+    prospect_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    nb_beneficiaires INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+
   // Migrations bases existantes
   try { await db.execute("ALTER TABLE prospects ADD COLUMN produit_id TEXT"); } catch(_) {}
   try { await db.execute("ALTER TABLE users ADD COLUMN type_agent TEXT DEFAULT 'physique'"); } catch(_) {}
   try { await db.execute("ALTER TABLE users ADD COLUMN raison_sociale TEXT"); } catch(_) {}
   try { await db.execute("ALTER TABLE users ADD COLUMN representant_legal TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE prospects ADD COLUMN lieu_residence_commune TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE prospects ADD COLUMN lieu_residence_quartier TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE prospects ADD COLUMN lieu_activite_commune TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE prospects ADD COLUMN lieu_activite_quartier TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE prospects ADD COLUMN siege_social_commune TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE prospects ADD COLUMN siege_social_quartier TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE prospects ADD COLUMN niveau_interet TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE prospects ADD COLUMN profession TEXT"); } catch(_) {}
 
   const r = await db.execute("SELECT id FROM users WHERE role = 'admin'");
   if (r.rows.length === 0) {
