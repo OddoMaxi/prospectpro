@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
-import { Save, ArrowLeft, User, Building2 } from 'lucide-react'
+import { Save, ArrowLeft, User, Building2, Package } from 'lucide-react'
 
 const SECTEURS = [
   'Immobilier','Assurance','Finance / Banque','Santé','Commerce de détail',
@@ -16,7 +16,7 @@ const EMPTY = {
   nom_contact: '', prenom_contact: '',
   telephone: '', email: '', adresse: '', ville: '', code_postal: '',
   secteur_activite: '', notes: '', statut: 'prospect',
-  montant_potentiel: '', taux_commission: '',
+  montant_potentiel: '', taux_commission: '', produit_id: '',
   date_prospection: new Date().toISOString().split('T')[0]
 }
 
@@ -37,13 +37,23 @@ export default function ProspectForm() {
   const [form, setForm] = useState(EMPTY)
   const [loading, setLoading] = useState(false)
   const [initLoading, setInitLoading] = useState(isEdit)
+  const [products, setProducts] = useState([])
+
+  useEffect(() => {
+    api.get('/products/active').then(r => setProducts(r.data)).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (isEdit) {
       api.get(`/prospects/${id}`)
         .then(r => {
           const p = r.data
-          setForm({ ...EMPTY, ...p, montant_potentiel: String(p.montant_potentiel || ''), taux_commission: String(p.taux_commission || '') })
+          setForm({
+            ...EMPTY, ...p,
+            montant_potentiel: String(p.montant_potentiel || ''),
+            taux_commission: String(p.taux_commission || ''),
+            produit_id: p.produit_id || ''
+          })
         })
         .catch(() => { toast.error('Prospect introuvable'); navigate('/agent/prospects') })
         .finally(() => setInitLoading(false))
@@ -54,6 +64,20 @@ export default function ProspectForm() {
 
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
+  const handleProductSelect = produitId => {
+    const product = products.find(p => p.id === produitId)
+    if (product) {
+      setForm(prev => ({
+        ...prev,
+        produit_id: produitId,
+        montant_potentiel: String(product.prime_annuelle),
+        taux_commission: String(product.taux_commission)
+      }))
+    } else {
+      setForm(prev => ({ ...prev, produit_id: '' }))
+    }
+  }
+
   const handleSubmit = async e => {
     e.preventDefault()
     setLoading(true)
@@ -61,7 +85,8 @@ export default function ProspectForm() {
       const payload = {
         ...form,
         montant_potentiel: Number(form.montant_potentiel) || 0,
-        taux_commission: Number(form.taux_commission) || 5
+        taux_commission: Number(form.taux_commission) || 5,
+        produit_id: form.produit_id || null
       }
       if (isEdit) {
         await api.put(`/prospects/${id}`, payload)
@@ -190,6 +215,32 @@ export default function ProspectForm() {
         {/* Commercial */}
         <div className="card space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">Informations commerciales</h2>
+
+          {products.length > 0 && (
+            <Field label="Produit d'assurance">
+              <div className="flex items-center gap-2">
+                <Package size={16} className="text-blue-500 shrink-0" />
+                <select
+                  className="input flex-1"
+                  value={form.produit_id}
+                  onChange={e => handleProductSelect(e.target.value)}
+                >
+                  <option value="">Sélectionner un produit (optionnel)</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.nom} — {new Intl.NumberFormat('fr-FR').format(p.prime_annuelle)} GNF / {p.taux_commission}%
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {form.produit_id && (
+                <p className="text-xs text-blue-600 mt-1">
+                  Prime et commission pré-remplies depuis le produit sélectionné.
+                </p>
+              )}
+            </Field>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <Field label="Statut">
               <select className="input" value={form.statut} onChange={e => f('statut', e.target.value)}>
@@ -204,7 +255,7 @@ export default function ProspectForm() {
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Montant potentiel (GNF)">
+            <Field label="Prime / Montant potentiel (GNF)">
               <input className="input" type="number" min="0" value={form.montant_potentiel} onChange={e => f('montant_potentiel', e.target.value)} placeholder="0" />
             </Field>
             <Field label="Taux de commission (%)">

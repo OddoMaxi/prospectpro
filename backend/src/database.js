@@ -55,10 +55,25 @@ async function initializeSchema() {
     statut TEXT DEFAULT 'prospect',
     montant_potentiel REAL DEFAULT 0,
     taux_commission REAL DEFAULT 5.0,
+    produit_id TEXT,
     date_prospection TEXT DEFAULT (date('now')),
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
+
+  await db.execute(`CREATE TABLE IF NOT EXISTS products (
+    id TEXT PRIMARY KEY,
+    nom TEXT NOT NULL,
+    description TEXT,
+    prime_annuelle REAL NOT NULL DEFAULT 0,
+    taux_commission REAL NOT NULL DEFAULT 5.0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+
+  // Migration : ajoute produit_id si absent (bases existantes)
+  try { await db.execute("ALTER TABLE prospects ADD COLUMN produit_id TEXT"); } catch(_) {}
 
   const r = await db.execute("SELECT id FROM users WHERE role = 'admin'");
   if (r.rows.length === 0) {

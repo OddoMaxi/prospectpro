@@ -102,4 +102,25 @@ router.post('/:id/reset-password', authenticateToken, requireAdmin, ah(async (re
   res.json({ message: 'Mot de passe réinitialisé', credentials: { temp_password: tempPassword } });
 }));
 
+// Transférer tout le portefeuille d'un agent vers un autre (sans supprimer l'agent source)
+router.post('/:id/transfer-portfolio', authenticateToken, requireAdmin, ah(async (req, res) => {
+  const { transfer_to } = req.body;
+  if (!transfer_to) return res.status(400).json({ error: 'Agent cible requis' });
+  if (req.params.id === transfer_to) return res.status(400).json({ error: 'Source et cible identiques' });
+
+  const source = await get("SELECT id, nom, prenom FROM users WHERE id=? AND role='agent'", [req.params.id]);
+  if (!source) return res.status(404).json({ error: 'Agent source introuvable' });
+
+  const target = await get("SELECT id, nom, prenom FROM users WHERE id=? AND role='agent' AND is_active=1", [transfer_to]);
+  if (!target) return res.status(400).json({ error: 'Agent cible introuvable ou inactif' });
+
+  const result = await run("UPDATE prospects SET agent_id=? WHERE agent_id=?", [transfer_to, req.params.id]);
+  const count = Number(result.rowsAffected) || 0;
+
+  res.json({
+    message: `${count} prospect(s) transféré(s) de ${source.prenom} ${source.nom} vers ${target.prenom} ${target.nom}`,
+    count
+  });
+}));
+
 module.exports = router;

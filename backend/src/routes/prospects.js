@@ -11,7 +11,7 @@ router.post('/', authenticateToken, ah(async (req, res) => {
     type, nom, prenom, siret, nom_contact, prenom_contact,
     telephone, email, adresse, ville, code_postal,
     secteur_activite, notes, statut, montant_potentiel,
-    taux_commission, date_prospection
+    taux_commission, date_prospection, produit_id
   } = req.body;
 
   if (!type || !nom) return res.status(400).json({ error: 'Type et nom requis' });
@@ -24,13 +24,13 @@ router.post('/', authenticateToken, ah(async (req, res) => {
   await run(
     `INSERT INTO prospects (id, agent_id, type, nom, prenom, siret, nom_contact, prenom_contact,
       telephone, email, adresse, ville, code_postal, secteur_activite, notes, statut,
-      montant_potentiel, taux_commission, date_prospection)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      montant_potentiel, taux_commission, produit_id, date_prospection)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, req.user.id, type, nom, prenom||null, siret||null,
      nom_contact||null, prenom_contact||null, telephone||null, email||null,
      adresse||null, ville||null, code_postal||null, secteur_activite||null,
      notes||null, statut||'prospect', Number(montant_potentiel)||0, commRate,
-     date_prospection || new Date().toISOString().split('T')[0]]
+     produit_id||null, date_prospection || new Date().toISOString().split('T')[0]]
   );
   res.status(201).json({ message: 'Prospect créé avec succès', id });
 }));
@@ -80,19 +80,19 @@ router.put('/:id', authenticateToken, ah(async (req, res) => {
     type, nom, prenom, siret, nom_contact, prenom_contact,
     telephone, email, adresse, ville, code_postal,
     secteur_activite, notes, statut, montant_potentiel,
-    taux_commission, date_prospection
+    taux_commission, date_prospection, produit_id
   } = req.body;
 
   await run(
     `UPDATE prospects SET type=?,nom=?,prenom=?,siret=?,nom_contact=?,prenom_contact=?,
     telephone=?,email=?,adresse=?,ville=?,code_postal=?,secteur_activite=?,notes=?,
-    statut=?,montant_potentiel=?,taux_commission=?,date_prospection=?,updated_at=datetime('now')
+    statut=?,montant_potentiel=?,taux_commission=?,produit_id=?,date_prospection=?,updated_at=datetime('now')
     WHERE id=?`,
     [type, nom, prenom||null, siret||null, nom_contact||null, prenom_contact||null,
      telephone||null, email||null, adresse||null, ville||null, code_postal||null,
      secteur_activite||null, notes||null, statut||'prospect',
      Number(montant_potentiel)||0, Number(taux_commission)||5.0,
-     date_prospection||new Date().toISOString().split('T')[0], req.params.id]
+     produit_id||null, date_prospection||new Date().toISOString().split('T')[0], req.params.id]
   );
   res.json({ message: 'Prospect mis à jour avec succès' });
 }));

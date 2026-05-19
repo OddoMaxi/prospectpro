@@ -58,20 +58,26 @@ router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
   const m = String(now.getMonth() + 1).padStart(2, '0');
   const monthStart = `${y}-${m}-01`;
 
-  const [totalAgents, totalProspects, monthly, totalClients, commTotal] = await Promise.all([
+  const [totalAgents, totalProspects, monthly, totalClients, commTotal, primesTotal, primesClients, commClients] = await Promise.all([
     get("SELECT COUNT(*) c FROM users WHERE role='agent' AND is_active=1"),
     get("SELECT COUNT(*) c FROM prospects"),
     get("SELECT COUNT(*) c FROM prospects WHERE date_prospection>=?", [monthStart]),
     get("SELECT COUNT(*) c FROM prospects WHERE statut='client'"),
     get("SELECT COALESCE(SUM(montant_potentiel*taux_commission/100),0) v FROM prospects"),
+    get("SELECT COALESCE(SUM(montant_potentiel),0) v FROM prospects"),
+    get("SELECT COALESCE(SUM(montant_potentiel),0) v FROM prospects WHERE statut='client'"),
+    get("SELECT COALESCE(SUM(montant_potentiel*taux_commission/100),0) v FROM prospects WHERE statut='client'"),
   ]);
 
   const agentStats = await all(`
-    SELECT u.id, u.nom, u.prenom, u.username, u.objectif_mensuel,
+    SELECT u.id, u.nom, u.prenom, u.username, u.objectif_mensuel, u.taux_commission,
            COUNT(p.id) total_prospects,
            SUM(CASE WHEN p.statut='client' THEN 1 ELSE 0 END) total_clients,
            SUM(CASE WHEN p.date_prospection>=? THEN 1 ELSE 0 END) monthly_prospects,
-           COALESCE(SUM(p.montant_potentiel*p.taux_commission/100),0) commission_total
+           COALESCE(SUM(p.montant_potentiel*p.taux_commission/100),0) commission_total,
+           COALESCE(SUM(p.montant_potentiel),0) prime_total,
+           COALESCE(SUM(CASE WHEN p.statut='client' THEN p.montant_potentiel ELSE 0 END),0) prime_clients,
+           COALESCE(SUM(CASE WHEN p.statut='client' THEN p.montant_potentiel*p.taux_commission/100 ELSE 0 END),0) commission_clients
     FROM users u LEFT JOIN prospects p ON p.agent_id=u.id
     WHERE u.role='agent' AND u.is_active=1
     GROUP BY u.id ORDER BY total_prospects DESC
@@ -88,6 +94,9 @@ router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
     total_agents: Number(totalAgents.c), total_prospects: tp,
     monthly_prospects: Number(monthly.c), total_clients: tc,
     commission_total: Number(commTotal.v),
+    primes_total: Number(primesTotal.v),
+    primes_clients: Number(primesClients.v),
+    commission_clients: Number(commClients.v),
     global_conversion_rate: tp > 0 ? parseFloat((tc / tp * 100).toFixed(1)) : 0,
     agent_stats: agentStats, by_sector: bySector, monthly_trend: [...trend].reverse()
   });

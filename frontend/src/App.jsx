@@ -8,6 +8,8 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import AgentList from './pages/admin/AgentList'
 import AgentCreate from './pages/admin/AgentCreate'
 import ProspectsAdmin from './pages/admin/ProspectsAdmin'
+import ProductList from './pages/admin/ProductList'
+import ProductForm from './pages/admin/ProductForm'
 import AgentDashboard from './pages/agent/AgentDashboard'
 import ProspectList from './pages/agent/ProspectList'
 import ProspectForm from './pages/agent/ProspectForm'
@@ -45,6 +47,9 @@ function AppRoutes() {
         <Route path="agents" element={<AgentList />} />
         <Route path="agents/create" element={<AgentCreate />} />
         <Route path="agents/:id/edit" element={<AgentCreate />} />
+        <Route path="products" element={<ProductList />} />
+        <Route path="products/create" element={<ProductForm />} />
+        <Route path="products/:id/edit" element={<ProductForm />} />
         <Route path="prospects" element={<ProspectsAdmin />} />
       </Route>
       <Route path="*" element={<Navigate to="/admin" replace />} />
