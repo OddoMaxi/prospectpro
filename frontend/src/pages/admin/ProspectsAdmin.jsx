@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
 import { Search, Filter, Download, Trash2, Eye, ChevronDown } from 'lucide-react'
+import Pagination from '../../components/Pagination'
+
+const PAGE_SIZE = 10
 
 const STATUTS = { prospect: 'Prospect', en_cours: 'En cours', client: 'Client', perdu: 'Perdu' }
 const TYPES   = { physique: 'Particulier', morale: 'Entreprise' }
@@ -53,6 +56,7 @@ export default function ProspectsAdmin() {
   const [selected, setSelected] = useState(null)
   const [filters, setFilters] = useState({ search: '', type: '', statut: '', agent_id: '', date_debut: '', date_fin: '' })
   const [showFilters, setShowFilters] = useState(false)
+  const [page, setPage] = useState(1)
 
   const load = () => {
     setLoading(true)
@@ -63,7 +67,7 @@ export default function ProspectsAdmin() {
   useEffect(() => { api.get('/agents').then(r => setAgents(r.data)) }, [])
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t) }, [filters])
 
-  const setF = (k, v) => setFilters(p => ({ ...p, [k]: v }))
+  const setF = (k, v) => { setFilters(p => ({ ...p, [k]: v })); setPage(1) }
 
   const handleDelete = async id => {
     if (!confirm('Supprimer ce prospect définitivement ?')) return
@@ -149,7 +153,7 @@ export default function ProspectsAdmin() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {prospects.map(p => (
+                {prospects.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(p => (
                   <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-900">
                       {p.nom}{p.prenom ? ` ${p.prenom}` : ''}
@@ -185,6 +189,9 @@ export default function ProspectsAdmin() {
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="px-4 pb-4">
+            <Pagination page={page} totalPages={Math.ceil(prospects.length / PAGE_SIZE)} total={prospects.length} onPageChange={setPage} />
           </div>
         </div>
       )}

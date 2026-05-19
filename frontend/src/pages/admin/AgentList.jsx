@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
 import { Plus, Edit, Trash2, RefreshCw, UserX, ArrowRight, Copy, CheckCircle, AlertTriangle, ArrowLeftRight, ChevronUp, ChevronDown } from 'lucide-react'
+import Pagination from '../../components/Pagination'
+
+const PAGE_SIZE = 10
 
 const fmt = n => new Intl.NumberFormat('fr-FR').format(n || 0)
 const fmtCur = n => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'GNF', minimumFractionDigits: 0 }).format(Math.round(n || 0))
@@ -190,6 +193,7 @@ export default function AgentList() {
   const [resetAgentName, setResetAgentName] = useState('')
   const [sortKey, setSortKey] = useState('nom')
   const [sortDir, setSortDir] = useState('asc')
+  const [page, setPage] = useState(1)
 
   const load = () => {
     setLoading(true)
@@ -200,12 +204,15 @@ export default function AgentList() {
   const handleSort = key => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
+    setPage(1)
   }
 
   const sortedAgents = [...agents].sort((a, b) => {
     const cmp = SORT_FIELDS[sortKey] ? SORT_FIELDS[sortKey](a, b) : 0
     return sortDir === 'asc' ? cmp : -cmp
   })
+  const totalPages   = Math.ceil(sortedAgents.length / PAGE_SIZE)
+  const paginatedAgents = sortedAgents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const handleDelete = async (agentId, transferTo) => {
     try {
@@ -289,7 +296,7 @@ export default function AgentList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {sortedAgents.map(agent => {
+              {paginatedAgents.map(agent => {
                 const convRate = agent.total_prospects > 0
                   ? ((agent.total_clients / agent.total_prospects) * 100).toFixed(0)
                   : 0
@@ -373,6 +380,7 @@ export default function AgentList() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} total={agents.length} onPageChange={setPage} />
         </div>
       )}
     </div>

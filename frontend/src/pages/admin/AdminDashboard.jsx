@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import StatCard from '../../components/StatCard'
 import { Users, UserCheck, TrendingUp, DollarSign, BarChart2, Target, Banknote, Award } from 'lucide-react'
+import Pagination from '../../components/Pagination'
+
+const PAGE_SIZE = 10
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 const PIE_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6']
@@ -39,6 +42,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [sortKey, setSortKey] = useState('total_prospects')
   const [sortDir, setSortDir] = useState('desc')
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     api.get('/stats/admin').then(r => setStats(r.data)).finally(() => setLoading(false))
@@ -47,6 +51,7 @@ export default function AdminDashboard() {
   const handleSort = key => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('desc') }
+    setPage(1)
   }
 
   if (loading) return (
@@ -63,6 +68,8 @@ export default function AdminDashboard() {
 
   const totalPrimes = sortedAgents.reduce((s, a) => s + Number(a.prime_total || 0), 0)
   const totalCommissions = sortedAgents.reduce((s, a) => s + Number(a.commission_total || 0), 0)
+  const totalPages   = Math.ceil(sortedAgents.length / PAGE_SIZE)
+  const paginatedAgents = sortedAgents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <div className="space-y-6">
@@ -168,7 +175,7 @@ export default function AdminDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {sortedAgents.map(a => {
+              {paginatedAgents.map(a => {
                 const pct = a.objectif_mensuel > 0 ? Math.min((a.monthly_prospects / a.objectif_mensuel) * 100, 100) : 0
                 return (
                   <tr key={a.id} className="hover:bg-gray-50">
@@ -226,6 +233,7 @@ export default function AdminDashboard() {
               )}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} total={sortedAgents.length} onPageChange={setPage} />
         </div>
       </div>
     </div>

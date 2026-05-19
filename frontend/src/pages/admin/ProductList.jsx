@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
 import { Plus, Edit, Trash2, Package, ToggleLeft, ToggleRight, AlertTriangle } from 'lucide-react'
+import Pagination from '../../components/Pagination'
+
+const PAGE_SIZE = 10
 
 const fmtCur = n => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'GNF', minimumFractionDigits: 0 }).format(Math.round(n || 0))
 
@@ -37,6 +40,7 @@ export default function ProductList() {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [page, setPage] = useState(1)
 
   const load = () => {
     setLoading(true)
@@ -105,7 +109,7 @@ export default function ProductList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {products.map(p => (
+              {products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(p => (
                 <tr key={p.id} className="hover:bg-gray-50">
                   <td className="py-3 font-semibold text-gray-900">{p.nom}</td>
                   <td className="py-3 text-gray-500 max-w-xs truncate">{p.description || '—'}</td>
@@ -148,6 +152,7 @@ export default function ProductList() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={Math.ceil(products.length / PAGE_SIZE)} total={products.length} onPageChange={setPage} />
         </div>
       )}
     </div>

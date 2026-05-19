@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
-import { Plus, Search, Filter, Edit, Trash2, ChevronDown, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Trash2, ChevronDown, X } from 'lucide-react'
+import Pagination from '../../components/Pagination'
 
 const PAGE_SIZE = 10
 
@@ -222,57 +223,7 @@ export default function ProspectList() {
             </tbody>
           </table>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4 border-t border-gray-100 mt-2">
-              <span className="text-xs text-gray-500">
-                Page {page} / {totalPages} · {prospects.length} résultat(s)
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage(1)}
-                  disabled={page === 1}
-                  className="btn btn-secondary btn-sm disabled:opacity-40"
-                  title="Première page"
-                >«</button>
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="btn btn-secondary btn-sm disabled:opacity-40"
-                  title="Page précédente"
-                ><ChevronLeft size={14} /></button>
-
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter(n => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
-                  .reduce((acc, n, idx, arr) => {
-                    if (idx > 0 && n - arr[idx - 1] > 1) acc.push('…')
-                    acc.push(n)
-                    return acc
-                  }, [])
-                  .map((n, i) =>
-                    n === '…'
-                      ? <span key={`e${i}`} className="px-1 text-gray-400 text-xs">…</span>
-                      : <button
-                          key={n}
-                          onClick={() => setPage(n)}
-                          className={`btn btn-sm min-w-[32px] ${n === page ? 'btn-primary' : 'btn-secondary'}`}
-                        >{n}</button>
-                  )}
-
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="btn btn-secondary btn-sm disabled:opacity-40"
-                  title="Page suivante"
-                ><ChevronRight size={14} /></button>
-                <button
-                  onClick={() => setPage(totalPages)}
-                  disabled={page === totalPages}
-                  className="btn btn-secondary btn-sm disabled:opacity-40"
-                  title="Dernière page"
-                >»</button>
-              </div>
-            </div>
-          )}
+          <Pagination page={page} totalPages={totalPages} total={prospects.length} onPageChange={setPage} />
         </div>
       )}
     </div>
