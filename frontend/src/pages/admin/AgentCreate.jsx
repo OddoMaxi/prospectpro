@@ -304,22 +304,6 @@ export default function AgentCreate() {
           </Field>
         </div>
 
-        {/* Commission générale */}
-        <div className="card">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">Commission par défaut</h2>
-          <div className="max-w-xs">
-            <Field label="Taux de commission (%)">
-              <input className="input" type="number" min="0" max="100" step="0.1"
-                value={form.taux_commission}
-                onChange={e => f('taux_commission', e.target.value)}
-                placeholder="5" />
-            </Field>
-          </div>
-          <p className="text-xs text-gray-400 mt-2">
-            Ce taux s'applique par défaut quand aucun produit n'est sélectionné pour un prospect.
-          </p>
-        </div>
-
         {/* Objectifs par produit */}
         <div className="card">
           <h2 className="text-sm font-semibold text-gray-700 mb-1">Objectifs par produit</h2>
