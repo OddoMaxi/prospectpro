@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import StatCard from '../../components/StatCard'
-import { Users, UserCheck, TrendingUp, DollarSign, Target, Calendar, PlusCircle, ArrowRight } from 'lucide-react'
+import { Users, UserCheck, TrendingUp, DollarSign, Target, Calendar, PlusCircle, ArrowRight, Banknote } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 
 const STATUS_LABELS = { prospect: 'Prospect', en_cours: 'En cours', client: 'Client', perdu: 'Perdu' }
@@ -62,12 +62,25 @@ export default function AgentDashboard() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         <StatCard title="Total prospects"   value={fmt(stats.total_prospects)}    icon={Users}      color="blue" />
         <StatCard title="Ce mois"           value={fmt(stats.monthly_prospects)}  icon={Calendar}   color="orange" />
         <StatCard title="Clients"           value={fmt(stats.total_clients)}      icon={UserCheck}  color="green" />
         <StatCard title="Taux conversion"   value={`${stats.conversion_rate}%`}   icon={TrendingUp} color="purple" />
-        <div className="card col-span-2 lg:col-span-1 xl:col-span-1 flex items-start gap-3">
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="card flex items-start gap-3">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-blue-50 text-blue-600">
+            <Banknote size={22} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-gray-500 font-medium">Total primes prévisionnelles</p>
+            <p className="text-lg font-bold text-gray-900 mt-0.5">{fmtCur(stats.prime_total)}</p>
+            <p className="text-xs text-emerald-600 mt-0.5">Clients : {fmtCur(stats.prime_clients)}</p>
+          </div>
+        </div>
+        <div className="card flex items-start gap-3">
           <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-green-50 text-green-600">
             <DollarSign size={22} />
           </div>

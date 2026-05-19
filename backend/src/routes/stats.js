@@ -23,9 +23,11 @@ router.get('/agent', authenticateToken, ah(async (req, res) => {
     get("SELECT COUNT(*) c FROM prospects WHERE agent_id=? AND statut='client' AND date_prospection>=?", [id, monthStart]),
   ]);
 
-  const [commAll, commClients] = await Promise.all([
+  const [commAll, commClients, primesAll, primesClients] = await Promise.all([
     get("SELECT COALESCE(SUM(montant_potentiel*taux_commission/100),0) v FROM prospects WHERE agent_id=?", [id]),
     get("SELECT COALESCE(SUM(montant_potentiel*taux_commission/100),0) v FROM prospects WHERE agent_id=? AND statut='client'", [id]),
+    get("SELECT COALESCE(SUM(montant_potentiel),0) v FROM prospects WHERE agent_id=?", [id]),
+    get("SELECT COALESCE(SUM(montant_potentiel),0) v FROM prospects WHERE agent_id=? AND statut='client'", [id]),
   ]);
 
   const [byStatus, byType, trend, daily, recents] = await Promise.all([
@@ -44,6 +46,7 @@ router.get('/agent', authenticateToken, ah(async (req, res) => {
     total_clients: clientsC, clients_this_month: Number(clientsMonth.c),
     conversion_rate: totalC > 0 ? parseFloat((clientsC / totalC * 100).toFixed(1)) : 0,
     commission_total: Number(commAll.v), commission_clients: Number(commClients.v),
+    prime_total: Number(primesAll.v), prime_clients: Number(primesClients.v),
     objectif_mensuel: objM, objectif_annuel: objA,
     monthly_progress: objM > 0 ? parseFloat((monthlyC / objM * 100).toFixed(1)) : 0,
     annual_progress:  objA > 0 ? parseFloat((annualC  / objA * 100).toFixed(1)) : 0,
