@@ -1,5 +1,2 @@
-/*.css
-  Content-Type: text/css; charset=utf-8
-
-/*.js
-  Content-Type: application/javascript; charset=utf-8
+# Render does not support Netlify-style _headers files.
+# MIME types and SPA routing are handled by the serve package (see package.json).
