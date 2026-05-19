@@ -365,7 +365,7 @@ export default function AgentCreate() {
                             onChange={e => updateObjective(obj.product_id, 'periode', e.target.value)}
                           >
                             {PERIODES.map(p => (
-                              <option key={p.value} value={p.value}>{p.label} (×{p.multiplier})</option>
+                              <option key={p.value} value={p.value}>{p.label}</option>
                             ))}
                           </select>
                         </td>
