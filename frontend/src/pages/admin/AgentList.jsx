@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
-import { Plus, Edit, Trash2, RefreshCw, UserX, ArrowRight, Copy, CheckCircle, AlertTriangle, ArrowLeftRight, ChevronUp, ChevronDown } from 'lucide-react'
+import { Plus, Edit, Trash2, RefreshCw, UserX, ArrowRight, Copy, CheckCircle, AlertTriangle, ArrowLeftRight, ChevronUp, ChevronDown, Percent } from 'lucide-react'
 import Pagination from '../../components/Pagination'
 
 const PAGE_SIZE = 10
@@ -159,6 +159,161 @@ function CredentialModal({ agentName, creds, onClose }) {
   )
 }
 
+// Modal répartition des commissions pour un sous-agent
+function CommissionSplitModal({ agent, onClose, onSaved }) {
+  const parentName = agent.parent_prenom
+    ? `${agent.parent_prenom} ${agent.parent_nom || agent.parent_raison_sociale || ''}`
+    : (agent.parent_raison_sociale || '')
+
+  const [tc,  setTc]  = useState(String(agent.taux_commission        ?? 5))
+  const [tcp, setTcp] = useState(String(agent.taux_commission_parent ?? 0))
+  const [saving, setSaving] = useState(false)
+
+  const agentRate  = Math.max(0, Number(tc)  || 0)
+  const parentRate = Math.max(0, Number(tcp) || 0)
+  const total      = agentRate + parentRate
+  // Barre de répartition : largeur de chaque segment proportionnelle
+  const maxBar = total > 0 ? total : 1
+  const agentPct  = (agentRate  / maxBar) * 100
+  const parentPct = (parentRate / maxBar) * 100
+
+  // Exemple sur 1 000 GNF de prime
+  const exPrime = 1000
+  const exAgent  = (exPrime * agentRate  / 100).toFixed(0)
+  const exParent = (exPrime * parentRate / 100).toFixed(0)
+  const exTotal  = (exPrime * total / 100).toFixed(0)
+
+  const handleSave = async () => {
+    if (agentRate < 0 || parentRate < 0) return toast.error('Les taux ne peuvent pas être négatifs')
+    setSaving(true)
+    try {
+      await api.patch(`/agents/${agent.id}/commission`, {
+        taux_commission: agentRate,
+        taux_commission_parent: parentRate,
+      })
+      toast.success('Répartition enregistrée')
+      onSaved()
+      onClose()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de l\'enregistrement')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+
+        {/* En-tête */}
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center shrink-0">
+            <Percent size={20} className="text-purple-600" />
+          </div>
+          <div>
+            <h3 className="font-bold text-gray-900">Répartition des commissions</h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Sous-agent : <strong>{agent.prenom} {agent.nom || agent.raison_sociale}</strong>
+            </p>
+            {parentName && (
+              <p className="text-xs text-orange-600 mt-0.5">Agent parent : {parentName}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Saisie des taux */}
+        <div className="grid grid-cols-2 gap-4 mb-5">
+          <div>
+            <label className="label">Taux sous-agent (%)</label>
+            <input
+              className="input text-center text-lg font-bold"
+              type="number" min="0" max="100" step="0.1"
+              value={tc}
+              onChange={e => setTc(e.target.value)}
+            />
+            <p className="text-xs text-blue-600 font-medium text-center mt-1">Sous-agent</p>
+          </div>
+          <div>
+            <label className="label">Taux agent parent (%)</label>
+            <input
+              className="input text-center text-lg font-bold"
+              type="number" min="0" max="100" step="0.1"
+              value={tcp}
+              onChange={e => setTcp(e.target.value)}
+            />
+            <p className="text-xs text-orange-600 font-medium text-center mt-1">Agent parent</p>
+          </div>
+        </div>
+
+        {/* Barre de répartition visuelle */}
+        <div className="mb-5">
+          <div className="flex items-center justify-between mb-1.5 text-xs text-gray-500 font-medium">
+            <span>Répartition visuelle</span>
+            <span className="font-bold text-gray-700">Total : {total.toFixed(2)}%</span>
+          </div>
+          <div className="h-8 rounded-xl overflow-hidden flex bg-gray-100">
+            {agentRate > 0 && (
+              <div
+                className="flex items-center justify-center text-xs font-bold text-white bg-blue-500 transition-all"
+                style={{ width: `${agentPct}%`, minWidth: agentRate > 0 ? '2rem' : 0 }}
+              >
+                {agentRate}%
+              </div>
+            )}
+            {parentRate > 0 && (
+              <div
+                className="flex items-center justify-center text-xs font-bold text-white bg-orange-500 transition-all"
+                style={{ width: `${parentPct}%`, minWidth: parentRate > 0 ? '2rem' : 0 }}
+              >
+                {parentRate}%
+              </div>
+            )}
+            {total === 0 && (
+              <div className="flex-1 flex items-center justify-center text-xs text-gray-400">
+                Aucun taux défini
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between mt-1.5 text-xs">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Sous-agent</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />Agent parent</span>
+          </div>
+        </div>
+
+        {/* Exemple de calcul */}
+        <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-5">
+          <p className="text-xs text-gray-500 font-medium mb-2">Exemple — pour {fmt(exPrime)} GNF de prime annuelle :</p>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-blue-50 rounded-lg p-2">
+              <p className="text-xs text-blue-600 font-medium">Sous-agent</p>
+              <p className="text-sm font-bold text-blue-800">{fmt(exAgent)} GNF</p>
+            </div>
+            <div className="bg-orange-50 rounded-lg p-2">
+              <p className="text-xs text-orange-600 font-medium">Agent parent</p>
+              <p className="text-sm font-bold text-orange-800">{fmt(exParent)} GNF</p>
+            </div>
+            <div className="bg-gray-100 rounded-lg p-2">
+              <p className="text-xs text-gray-500 font-medium">Total versé</p>
+              <p className="text-sm font-bold text-gray-800">{fmt(exTotal)} GNF</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button onClick={onClose} className="btn btn-secondary flex-1 justify-center">Annuler</button>
+          <button onClick={handleSave} disabled={saving} className="btn btn-primary flex-1 justify-center">
+            {saving
+              ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              : <CheckCircle size={15} />
+            }
+            {saving ? 'Enregistrement...' : 'Enregistrer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const SORT_FIELDS = {
   nom: (a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`),
   prenom: (a, b) => `${a.prenom} ${a.nom}`.localeCompare(`${b.prenom} ${b.nom}`),
@@ -194,6 +349,7 @@ export default function AgentList() {
   const [sortKey, setSortKey] = useState('nom')
   const [sortDir, setSortDir] = useState('asc')
   const [page, setPage] = useState(1)
+  const [commissionTarget, setCommissionTarget] = useState(null)
 
   const load = () => {
     setLoading(true)
@@ -256,6 +412,13 @@ export default function AgentList() {
       )}
       {resetCreds && (
         <CredentialModal agentName={resetAgentName} creds={resetCreds} onClose={() => setResetCreds(null)} />
+      )}
+      {commissionTarget && (
+        <CommissionSplitModal
+          agent={commissionTarget}
+          onClose={() => setCommissionTarget(null)}
+          onSaved={load}
+        />
       )}
 
       <div className="flex items-center justify-between mb-6">
@@ -380,6 +543,15 @@ export default function AgentList() {
                         >
                           <Edit size={13} />
                         </button>
+                        {agent.parent_agent_id && (
+                          <button
+                            onClick={() => setCommissionTarget(agent)}
+                            className="btn btn-secondary btn-sm text-purple-600 border-purple-200 hover:bg-purple-50"
+                            title="Répartir les commissions"
+                          >
+                            <Percent size={13} />
+                          </button>
+                        )}
                         <button
                           onClick={() => setTransferTarget(agent)}
                           className="btn btn-secondary btn-sm" title="Transférer le portefeuille"

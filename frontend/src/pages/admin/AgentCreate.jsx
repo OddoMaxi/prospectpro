@@ -382,35 +382,95 @@ export default function AgentCreate() {
           )}
         </div>
 
-        {/* Commissions (toujours visible) */}
+        {/* Commissions */}
         <div className="card space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">Commissions</h2>
 
-          <Field label="Taux de commission de l'agent (%)">
-            <input className="input" type="number" min="0" max="100" step="0.1"
-              value={form.taux_commission}
-              onChange={e => f('taux_commission', e.target.value)}
-              placeholder="5" />
-            <p className="text-xs text-gray-400 mt-1">Commission que perçoit cet agent sur ses ventes</p>
-          </Field>
-
-          {/* Taux parent uniquement visible pour les sous-agents (en édition) */}
-          {isEdit && parentAgentId && (
-            <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">Sous-agent</span>
-                <p className="text-sm font-semibold text-purple-800">Répartition de la commission</p>
+          {isEdit && parentAgentId ? (
+            /* Sous-agent : afficher la répartition complète */
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">Sous-agent</span>
+                <p className="text-sm font-semibold text-gray-700">Répartition de la commission</p>
               </div>
-              <Field label="Taux reversé à l'agent parent (%)">
-                <input className="input" type="number" min="0" max="100" step="0.1"
-                  value={form.taux_commission_parent}
-                  onChange={e => f('taux_commission_parent', e.target.value)}
-                  placeholder="0" />
-                <p className="text-xs text-gray-400 mt-1">
-                  Commission additionnelle que perçoit l'agent parent sur les ventes de ce sous-agent
-                </p>
-              </Field>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Taux sous-agent (%)">
+                  <input className="input text-center font-bold" type="number" min="0" max="100" step="0.1"
+                    value={form.taux_commission}
+                    onChange={e => f('taux_commission', e.target.value)}
+                    placeholder="5" />
+                  <p className="text-xs text-blue-600 text-center mt-1">Revient au sous-agent</p>
+                </Field>
+                <Field label="Taux agent parent (%)">
+                  <input className="input text-center font-bold" type="number" min="0" max="100" step="0.1"
+                    value={form.taux_commission_parent}
+                    onChange={e => f('taux_commission_parent', e.target.value)}
+                    placeholder="0" />
+                  <p className="text-xs text-orange-600 text-center mt-1">Revient à l'agent parent</p>
+                </Field>
+              </div>
+
+              {/* Barre visuelle */}
+              {(() => {
+                const tc  = Math.max(0, Number(form.taux_commission) || 0)
+                const tcp = Math.max(0, Number(form.taux_commission_parent) || 0)
+                const tot = tc + tcp
+                const maxBar = tot > 0 ? tot : 1
+                return (
+                  <div>
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>Répartition visuelle</span>
+                      <span className="font-semibold text-gray-700">Total : {tot.toFixed(2)}%</span>
+                    </div>
+                    <div className="h-7 rounded-xl overflow-hidden flex bg-gray-100">
+                      {tc > 0 && (
+                        <div className="flex items-center justify-center text-xs font-bold text-white bg-blue-500"
+                          style={{ width: `${(tc / maxBar) * 100}%` }}>
+                          {tc}%
+                        </div>
+                      )}
+                      {tcp > 0 && (
+                        <div className="flex items-center justify-center text-xs font-bold text-white bg-orange-500"
+                          style={{ width: `${(tcp / maxBar) * 100}%` }}>
+                          {tcp}%
+                        </div>
+                      )}
+                      {tot === 0 && <div className="flex-1 flex items-center justify-center text-xs text-gray-400">Aucun taux</div>}
+                    </div>
+                    <div className="flex justify-between mt-1 text-xs">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Sous-agent</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />Agent parent</span>
+                    </div>
+                    {tot > 0 && (
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-center bg-gray-50 rounded-xl p-3">
+                        <div>
+                          <p className="text-xs text-gray-500">Pour 1 000 GNF prime</p>
+                          <p className="text-xs font-bold text-blue-700 mt-0.5">{Math.round(1000 * tc / 100).toLocaleString('fr-FR')} GNF → sous-agent</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Pour 1 000 GNF prime</p>
+                          <p className="text-xs font-bold text-orange-700 mt-0.5">{Math.round(1000 * tcp / 100).toLocaleString('fr-FR')} GNF → parent</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Total versé</p>
+                          <p className="text-xs font-bold text-gray-700 mt-0.5">{Math.round(1000 * tot / 100).toLocaleString('fr-FR')} GNF</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
+          ) : (
+            /* Agent normal : taux simple */
+            <Field label="Taux de commission (%)">
+              <input className="input" type="number" min="0" max="100" step="0.1"
+                value={form.taux_commission}
+                onChange={e => f('taux_commission', e.target.value)}
+                placeholder="5" />
+              <p className="text-xs text-gray-400 mt-1">Commission que perçoit cet agent sur ses ventes</p>
+            </Field>
           )}
         </div>
 
