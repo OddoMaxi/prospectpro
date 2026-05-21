@@ -12,6 +12,7 @@ const NIVEAUX_INTERET = ['Faible', 'Moyen', 'Élevé']
 const EMPTY = {
   type: 'physique',
   nom: '', prenom: '',
+  sexe: '',
   nom_contact: '', prenom_contact: '',
   telephone: '', email: '',
   lieu_residence_commune: '', lieu_residence_quartier: '',
@@ -19,7 +20,6 @@ const EMPTY = {
   siege_social_commune: '', siege_social_quartier: '',
   profession: '',
   secteur_activite: '',
-  niveau_interet: '',
   statut: 'prospect',
   date_prospection: new Date().toISOString().split('T')[0],
 }
@@ -88,6 +88,7 @@ export default function ProspectForm() {
             type: p.type || 'physique',
             nom: p.nom || '',
             prenom: p.prenom || '',
+            sexe: p.sexe || '',
             nom_contact: p.nom_contact || '',
             prenom_contact: p.prenom_contact || '',
             telephone: p.telephone || '',
@@ -100,7 +101,6 @@ export default function ProspectForm() {
             siege_social_quartier: p.siege_social_quartier || '',
             profession: p.profession || '',
             secteur_activite: p.secteur_activite || '',
-            niveau_interet: p.niveau_interet || '',
             statut: p.statut || 'prospect',
             date_prospection: p.date_prospection || new Date().toISOString().split('T')[0],
           })
@@ -243,6 +243,24 @@ export default function ProspectForm() {
         {isPhysique && (
           <div className="card space-y-4">
             <h2 className="text-sm font-semibold text-gray-700">Identité</h2>
+
+            {/* Sexe */}
+            <div>
+              <label className="label">Sexe</label>
+              <div className="flex gap-4">
+                {['Homme', 'Femme'].map(s => (
+                  <label key={s} className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all flex-1 justify-center
+                    ${form.sexe === s
+                      ? s === 'Homme' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-pink-500 bg-pink-50 text-pink-700'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-600'}`}>
+                    <input type="radio" name="sexe" value={s} checked={form.sexe === s}
+                      onChange={() => f('sexe', s)} className="sr-only" />
+                    <span className="text-sm font-semibold">{s}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <Field label="Prénom" required>
                 <input className="input" type="text" value={form.prenom}
@@ -341,20 +359,12 @@ export default function ProspectForm() {
         <div className="card space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">Informations commerciales</h2>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Statut">
-              <select className="input" value={form.statut} onChange={e => f('statut', e.target.value)}>
-                <option value="prospect">Prospect</option>
-                <option value="client">Client</option>
-              </select>
-            </Field>
-            <Field label="Niveau d'intérêt">
-              <select className="input" value={form.niveau_interet} onChange={e => f('niveau_interet', e.target.value)}>
-                <option value="">Sélectionner...</option>
-                {NIVEAUX_INTERET.map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </Field>
-          </div>
+          <Field label="Statut commercial">
+            <select className="input" value={form.statut} onChange={e => f('statut', e.target.value)}>
+              <option value="prospect">Prospect</option>
+              <option value="client">Client</option>
+            </select>
+          </Field>
 
           <Field label="Date de prospection">
             <input className="input" type="date" value={form.date_prospection}

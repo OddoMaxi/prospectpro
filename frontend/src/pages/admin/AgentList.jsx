@@ -13,8 +13,11 @@ const fmtCur = n => new Intl.NumberFormat('fr-FR', { style: 'currency', currency
 // Modal suppression avec transfert ou suppression des prospects
 function DeleteModal({ agent, agents, onConfirm, onClose }) {
   const [transferTo, setTransferTo] = useState('')
+  const [transferType, setTransferType] = useState('all')
   const [mode, setMode] = useState('transfer')
   const others = agents.filter(a => a.id !== agent.id)
+
+  const agentName = agent.type_agent === 'morale' ? (agent.raison_sociale || agent.nom) : `${agent.prenom} ${agent.nom}`
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
@@ -24,7 +27,7 @@ function DeleteModal({ agent, agents, onConfirm, onClose }) {
             <AlertTriangle size={20} className="text-red-600" />
           </div>
           <div>
-            <h3 className="font-bold text-gray-900">Supprimer {agent.prenom} {agent.nom}</h3>
+            <h3 className="font-bold text-gray-900">Supprimer {agentName}</h3>
             <p className="text-sm text-gray-500 mt-0.5">Cet agent a <strong>{fmt(agent.total_prospects)}</strong> prospect(s)</p>
           </div>
         </div>
@@ -50,12 +53,37 @@ function DeleteModal({ agent, agents, onConfirm, onClose }) {
             </label>
 
             {mode === 'transfer' && (
-              <div>
-                <label className="label">Transférer vers</label>
-                <select className="input" value={transferTo} onChange={e => setTransferTo(e.target.value)}>
-                  <option value="">Sélectionner un agent...</option>
-                  {others.map(a => <option key={a.id} value={a.id}>{a.prenom} {a.nom}</option>)}
-                </select>
+              <div className="space-y-3 pl-1">
+                <div>
+                  <label className="label">Prospects à transférer</label>
+                  <div className="flex gap-2">
+                    {[
+                      { value: 'all',      label: 'Tous' },
+                      { value: 'physique', label: 'Particuliers' },
+                      { value: 'morale',   label: 'Entreprises' },
+                    ].map(opt => (
+                      <label key={opt.value}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 cursor-pointer text-xs font-medium transition-all
+                          ${transferType === opt.value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                        <input type="radio" name="deleteTransferType" value={opt.value}
+                          checked={transferType === opt.value} onChange={() => setTransferType(opt.value)}
+                          className="sr-only" />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Transférer vers</label>
+                  <select className="input" value={transferTo} onChange={e => setTransferTo(e.target.value)}>
+                    <option value="">Sélectionner un agent...</option>
+                    {others.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.type_agent === 'morale' ? (a.raison_sociale || a.nom) : `${a.prenom} ${a.nom}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
           </div>
@@ -64,7 +92,11 @@ function DeleteModal({ agent, agents, onConfirm, onClose }) {
         <div className="flex gap-3">
           <button onClick={onClose} className="btn btn-secondary flex-1 justify-center">Annuler</button>
           <button
-            onClick={() => onConfirm(agent.id, mode === 'transfer' ? transferTo : null)}
+            onClick={() => onConfirm(
+              agent.id,
+              mode === 'transfer' ? transferTo : null,
+              mode === 'transfer' && transferType !== 'all' ? transferType : null
+            )}
             disabled={mode === 'transfer' && !transferTo && agent.total_prospects > 0}
             className="btn btn-danger flex-1 justify-center">
             <Trash2 size={15} />Supprimer
@@ -78,7 +110,16 @@ function DeleteModal({ agent, agents, onConfirm, onClose }) {
 // Modal transfert de portefeuille (sans suppression de l'agent)
 function TransferModal({ agent, agents, onConfirm, onClose }) {
   const [transferTo, setTransferTo] = useState('')
+  const [transferType, setTransferType] = useState('all')
   const others = agents.filter(a => a.id !== agent.id && a.is_active)
+
+  const agentName = agent.type_agent === 'morale' ? (agent.raison_sociale || agent.nom) : `${agent.prenom} ${agent.nom}`
+
+  const typeOptions = [
+    { value: 'all',      label: 'Tous les prospects',          count: agent.total_prospects },
+    { value: 'physique', label: 'Particuliers uniquement',      count: null },
+    { value: 'morale',   label: 'Entreprises uniquement',       count: null },
+  ]
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
@@ -90,10 +131,27 @@ function TransferModal({ agent, agents, onConfirm, onClose }) {
           <div>
             <h3 className="font-bold text-gray-900">Transférer le portefeuille</h3>
             <p className="text-sm text-gray-500 mt-0.5">
-              Transférer les <strong>{fmt(agent.total_prospects)}</strong> prospect(s) de{' '}
-              <strong>{agent.prenom} {agent.nom}</strong> vers un autre agent.
-              L'agent source sera conservé.
+              Portefeuille de <strong>{agentName}</strong> — L'agent source sera conservé.
             </p>
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label className="label">Prospects à transférer</label>
+          <div className="space-y-2">
+            {typeOptions.map(opt => (
+              <label key={opt.value}
+                className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all
+                  ${transferType === opt.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                <input type="radio" name="transferType" value={opt.value}
+                  checked={transferType === opt.value} onChange={() => setTransferType(opt.value)}
+                  className="accent-blue-600" />
+                <span className="text-sm font-medium text-gray-800">{opt.label}</span>
+                {opt.count !== null && (
+                  <span className="ml-auto text-xs text-gray-400">{fmt(opt.count)} prospect(s)</span>
+                )}
+              </label>
+            ))}
           </div>
         </div>
 
@@ -103,7 +161,7 @@ function TransferModal({ agent, agents, onConfirm, onClose }) {
             <option value="">Sélectionner un agent...</option>
             {others.map(a => (
               <option key={a.id} value={a.id}>
-                {a.prenom} {a.nom} ({fmt(a.total_prospects)} prospects)
+                {a.type_agent === 'morale' ? (a.raison_sociale || a.nom) : `${a.prenom} ${a.nom}`} ({fmt(a.total_prospects)} prospects)
               </option>
             ))}
           </select>
@@ -115,7 +173,7 @@ function TransferModal({ agent, agents, onConfirm, onClose }) {
         <div className="flex gap-3">
           <button onClick={onClose} className="btn btn-secondary flex-1 justify-center">Annuler</button>
           <button
-            onClick={() => onConfirm(agent.id, transferTo)}
+            onClick={() => onConfirm(agent.id, transferTo, transferType === 'all' ? null : transferType)}
             disabled={!transferTo}
             className="btn btn-primary flex-1 justify-center">
             <ArrowRight size={15} />Transférer
@@ -381,9 +439,12 @@ export default function AgentList() {
     }
   }
 
-  const handleTransferPortfolio = async (agentId, transferTo) => {
+  const handleTransferPortfolio = async (agentId, transferTo, type) => {
     try {
-      const r = await api.post(`/agents/${agentId}/transfer-portfolio`, { transfer_to: transferTo })
+      const r = await api.post(`/agents/${agentId}/transfer-portfolio`, {
+        transfer_to: transferTo,
+        ...(type ? { type } : {})
+      })
       toast.success(r.data.message)
       setTransferTarget(null)
       load()

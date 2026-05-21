@@ -41,12 +41,22 @@ router.get('/agent', authenticateToken, ah(async (req, res) => {
          WHERE u.parent_agent_id = ? AND p.statut = 'client'`, [id]),
   ]);
 
-  const [byStatus, byType, trend, daily, recents] = await Promise.all([
+  const [byStatus, byType, trend, daily, recents, byProduct] = await Promise.all([
     all("SELECT statut, COUNT(*) count FROM prospects WHERE agent_id=? GROUP BY statut", [id]),
     all("SELECT type, COUNT(*) count FROM prospects WHERE agent_id=? GROUP BY type", [id]),
     all("SELECT strftime('%Y-%m',date_prospection) month, COUNT(*) count FROM prospects WHERE agent_id=? GROUP BY month ORDER BY month DESC LIMIT 6", [id]),
     all("SELECT date_prospection day, COUNT(*) count FROM prospects WHERE agent_id=? AND date_prospection>=? GROUP BY day ORDER BY day", [id, monthStart]),
     all("SELECT id, type, nom, prenom, ville, statut, montant_potentiel, date_prospection FROM prospects WHERE agent_id=? ORDER BY created_at DESC LIMIT 5", [id]),
+    all(`SELECT pr.id as product_id, pr.nom as product_nom, pr.taux_commission as product_taux,
+              COUNT(DISTINCT p.id) as total_prospects,
+              SUM(CASE WHEN p.statut='client' THEN 1 ELSE 0 END) as total_clients,
+              COALESCE(SUM(pp.nb_beneficiaires * pr.prime_annuelle), 0) as prime_total,
+              COALESCE(SUM(pp.nb_beneficiaires * pr.prime_annuelle * pr.taux_commission / 100), 0) as commission_total
+         FROM products pr
+         JOIN prospect_products pp ON pp.product_id = pr.id
+         JOIN prospects p ON p.id = pp.prospect_id
+         WHERE p.agent_id = ?
+         GROUP BY pr.id ORDER BY prime_total DESC`, [id]),
   ]);
 
   const totalC = Number(total.c), monthlyC = Number(monthly.c), annualC = Number(annual.c), clientsC = Number(clients.c);
@@ -66,7 +76,7 @@ router.get('/agent', authenticateToken, ah(async (req, res) => {
     commission_sous_agents: Number(commSousAgents.v),
     commission_sous_agents_clients: Number(commSousAgentsClients.v),
     by_status: byStatus, by_type: byType, monthly_trend: [...trend].reverse(),
-    daily_this_month: daily, recents
+    daily_this_month: daily, recents, by_product: byProduct
   });
 }));
 

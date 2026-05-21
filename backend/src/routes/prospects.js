@@ -41,7 +41,7 @@ router.post('/', authenticateToken, ah(async (req, res) => {
     lieu_residence_commune, lieu_residence_quartier,
     lieu_activite_commune, lieu_activite_quartier,
     siege_social_commune, siege_social_quartier,
-    niveau_interet, profession,
+    niveau_interet, profession, sexe,
   } = req.body;
 
   if (!type || !nom) return res.status(400).json({ error: 'Type et nom requis' });
@@ -54,16 +54,16 @@ router.post('/', authenticateToken, ah(async (req, res) => {
     `INSERT INTO prospects (id, agent_id, type, nom, prenom, nom_contact, prenom_contact,
       telephone, email, secteur_activite, statut, montant_potentiel, taux_commission,
       lieu_residence_commune, lieu_residence_quartier, lieu_activite_commune, lieu_activite_quartier,
-      siege_social_commune, siege_social_quartier, niveau_interet, profession,
+      siege_social_commune, siege_social_quartier, niveau_interet, profession, sexe,
       date_prospection)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, req.user.id, type, nom, prenom||null, nom_contact||null, prenom_contact||null,
      telephone||null, email||null, secteur_activite||null, statut||'prospect',
      montant_potentiel, taux_commission,
      lieu_residence_commune||null, lieu_residence_quartier||null,
      lieu_activite_commune||null, lieu_activite_quartier||null,
      siege_social_commune||null, siege_social_quartier||null,
-     niveau_interet||null, profession||null,
+     niveau_interet||null, profession||null, sexe||null,
      date_prospection || new Date().toISOString().split('T')[0]]
   );
 
@@ -129,7 +129,7 @@ router.put('/:id', authenticateToken, ah(async (req, res) => {
     lieu_residence_commune, lieu_residence_quartier,
     lieu_activite_commune, lieu_activite_quartier,
     siege_social_commune, siege_social_quartier,
-    niveau_interet, profession,
+    niveau_interet, profession, sexe,
   } = req.body;
 
   const { montant_potentiel, taux_commission } = await computeTotalsFromProducts(prospect_products);
@@ -138,7 +138,7 @@ router.put('/:id', authenticateToken, ah(async (req, res) => {
     `UPDATE prospects SET type=?,nom=?,prenom=?,nom_contact=?,prenom_contact=?,
     telephone=?,email=?,secteur_activite=?,statut=?,montant_potentiel=?,taux_commission=?,
     lieu_residence_commune=?,lieu_residence_quartier=?,lieu_activite_commune=?,lieu_activite_quartier=?,
-    siege_social_commune=?,siege_social_quartier=?,niveau_interet=?,profession=?,
+    siege_social_commune=?,siege_social_quartier=?,niveau_interet=?,profession=?,sexe=?,
     date_prospection=?,updated_at=datetime('now') WHERE id=?`,
     [type, nom, prenom||null, nom_contact||null, prenom_contact||null,
      telephone||null, email||null, secteur_activite||null, statut||'prospect',
@@ -146,7 +146,7 @@ router.put('/:id', authenticateToken, ah(async (req, res) => {
      lieu_residence_commune||null, lieu_residence_quartier||null,
      lieu_activite_commune||null, lieu_activite_quartier||null,
      siege_social_commune||null, siege_social_quartier||null,
-     niveau_interet||null, profession||null,
+     niveau_interet||null, profession||null, sexe||null,
      date_prospection||new Date().toISOString().split('T')[0], req.params.id]
   );
 

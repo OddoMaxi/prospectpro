@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import StatCard from '../../components/StatCard'
-import { Users, UserCheck, TrendingUp, DollarSign, Target, Calendar, PlusCircle, ArrowRight, Banknote, UsersRound } from 'lucide-react'
+import { Users, UserCheck, TrendingUp, DollarSign, Target, Calendar, PlusCircle, ArrowRight, Banknote, UsersRound, Package } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 
 const STATUS_LABELS = { prospect: 'Prospect', en_cours: 'En cours', client: 'Client', perdu: 'Perdu' }
@@ -132,6 +132,62 @@ export default function AgentDashboard() {
           </ResponsiveContainer>
         ) : <p className="text-sm text-gray-400 text-center py-10">Aucune activité enregistrée</p>}
       </div>
+
+      {/* Statistiques par produit */}
+      {stats.by_product?.length > 0 && (
+        <div className="card">
+          <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <Package size={18} className="text-blue-500" />
+            Statistiques par produit
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left py-2 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Produit</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Prospects</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Clients</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Prime totale</th>
+                  <th className="text-right py-2 pl-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Commission</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {stats.by_product.map(p => (
+                  <tr key={p.product_id} className="hover:bg-gray-50 transition-colors">
+                    <td className="py-3 pr-4">
+                      <span className="font-medium text-gray-900">{p.product_nom}</span>
+                      <span className="ml-2 text-xs text-gray-400">{p.product_taux}%</span>
+                    </td>
+                    <td className="py-3 px-3 text-right font-medium text-gray-700">{fmt(p.total_prospects)}</td>
+                    <td className="py-3 px-3 text-right">
+                      <span className="font-medium text-emerald-600">{fmt(p.total_clients)}</span>
+                    </td>
+                    <td className="py-3 px-3 text-right font-medium text-gray-700">{fmtCur(p.prime_total)}</td>
+                    <td className="py-3 pl-3 text-right font-semibold text-blue-600">{fmtCur(p.commission_total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-200">
+                  <td className="pt-3 pr-4 text-xs font-semibold text-gray-500 uppercase">Total</td>
+                  <td className="pt-3 px-3 text-right font-bold text-gray-900">
+                    {fmt(stats.by_product.reduce((s, p) => s + Number(p.total_prospects), 0))}
+                  </td>
+                  <td className="pt-3 px-3 text-right font-bold text-emerald-600">
+                    {fmt(stats.by_product.reduce((s, p) => s + Number(p.total_clients), 0))}
+                  </td>
+                  <td className="pt-3 px-3 text-right font-bold text-gray-900">
+                    {fmtCur(stats.by_product.reduce((s, p) => s + Number(p.prime_total), 0))}
+                  </td>
+                  <td className="pt-3 pl-3 text-right font-bold text-blue-600">
+                    {fmtCur(stats.by_product.reduce((s, p) => s + Number(p.commission_total), 0))}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Section sous-agents (uniquement si l'agent a des sous-agents) */}
       {stats.sous_agent_count > 0 && (

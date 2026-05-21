@@ -383,21 +383,35 @@ router.put('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
 
 // Admin: supprimer un agent
 router.delete('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
-  const { transfer_to } = req.body;
+  const { transfer_to, type } = req.body;
   const agent = await get("SELECT id FROM users WHERE id = ? AND role = 'agent'", [req.params.id]);
   if (!agent) return res.status(404).json({ error: 'Agent non trouvé' });
+
+  const typeFilter = type && ['physique', 'morale'].includes(type) ? type : null;
 
   if (transfer_to) {
     const target = await get("SELECT id FROM users WHERE id = ? AND role = 'agent' AND is_active = 1", [transfer_to]);
     if (!target) return res.status(400).json({ error: 'Agent cible introuvable' });
+
+    if (typeFilter) {
+      // Transférer les prospects du type sélectionné, supprimer les autres
+      await run(
+        'UPDATE prospects SET agent_id = ? WHERE agent_id = ? AND type = ?',
+        [transfer_to, req.params.id, typeFilter]
+      );
+      await run('DELETE FROM prospect_products WHERE prospect_id IN (SELECT id FROM prospects WHERE agent_id = ?)', [req.params.id]);
+      await run('DELETE FROM prospects WHERE agent_id = ?', [req.params.id]);
+    } else {
+      await run('UPDATE prospects SET agent_id = ? WHERE agent_id = ?', [transfer_to, req.params.id]);
+    }
     await db.batch([
-      { sql: 'UPDATE prospects SET agent_id = ? WHERE agent_id = ?', args: [transfer_to, req.params.id] },
       { sql: 'UPDATE users SET parent_agent_id = NULL WHERE parent_agent_id = ?', args: [req.params.id] },
       { sql: 'DELETE FROM agent_product_objectives WHERE agent_id = ?', args: [req.params.id] },
       { sql: 'DELETE FROM users WHERE id = ?', args: [req.params.id] }
     ], 'write');
   } else {
     await db.batch([
+      { sql: 'DELETE FROM prospect_products WHERE prospect_id IN (SELECT id FROM prospects WHERE agent_id = ?)', args: [req.params.id] },
       { sql: 'DELETE FROM prospects WHERE agent_id = ?', args: [req.params.id] },
       { sql: 'UPDATE users SET parent_agent_id = NULL WHERE parent_agent_id = ?', args: [req.params.id] },
       { sql: 'DELETE FROM agent_product_objectives WHERE agent_id = ?', args: [req.params.id] },
@@ -440,23 +454,32 @@ router.post('/:id/reset-password', authenticateToken, requireAdmin, ah(async (re
   res.json({ message: 'Mot de passe réinitialisé', credentials: { temp_password: tempPassword } });
 }));
 
-// Admin: transférer tout le portefeuille vers un autre agent sans supprimer la source
+// Admin: transférer le portefeuille vers un autre agent (avec filtre optionnel par type)
 router.post('/:id/transfer-portfolio', authenticateToken, requireAdmin, ah(async (req, res) => {
-  const { transfer_to } = req.body;
+  const { transfer_to, type } = req.body;
   if (!transfer_to) return res.status(400).json({ error: 'Agent cible requis' });
   if (req.params.id === transfer_to) return res.status(400).json({ error: 'Source et cible identiques' });
 
-  const source = await get("SELECT id, nom, prenom FROM users WHERE id=? AND role='agent'", [req.params.id]);
+  const source = await get("SELECT id, nom, prenom, raison_sociale, type_agent FROM users WHERE id=? AND role='agent'", [req.params.id]);
   if (!source) return res.status(404).json({ error: 'Agent source introuvable' });
 
-  const target = await get("SELECT id, nom, prenom FROM users WHERE id=? AND role='agent' AND is_active=1", [transfer_to]);
+  const target = await get("SELECT id, nom, prenom, raison_sociale, type_agent FROM users WHERE id=? AND role='agent' AND is_active=1", [transfer_to]);
   if (!target) return res.status(400).json({ error: 'Agent cible introuvable ou inactif' });
 
-  const result = await run("UPDATE prospects SET agent_id=? WHERE agent_id=?", [transfer_to, req.params.id]);
+  const typeFilter = type && ['physique', 'morale'].includes(type) ? type : null;
+  let sql = "UPDATE prospects SET agent_id=? WHERE agent_id=?";
+  const args = [transfer_to, req.params.id];
+  if (typeFilter) { sql += " AND type=?"; args.push(typeFilter); }
+
+  const result = await run(sql, args);
   const count = Number(result.rowsAffected) || 0;
 
+  const sourceName = source.type_agent === 'morale' ? source.raison_sociale : `${source.prenom} ${source.nom}`;
+  const targetName = target.type_agent === 'morale' ? target.raison_sociale : `${target.prenom} ${target.nom}`;
+  const typeLabel  = typeFilter === 'physique' ? ' particuliers' : typeFilter === 'morale' ? ' entreprises' : '';
+
   res.json({
-    message: `${count} prospect(s) transféré(s) de ${source.prenom} ${source.nom} vers ${target.prenom} ${target.nom}`,
+    message: `${count} prospect(s)${typeLabel} transféré(s) de ${sourceName} vers ${targetName}`,
     count
   });
 }));
