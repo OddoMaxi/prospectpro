@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
-import { Search, Filter, Download, Trash2, Eye, ChevronDown } from 'lucide-react'
+import { Search, Filter, Trash2, Eye, ChevronDown, UserCheck, X } from 'lucide-react'
 import Pagination from '../../components/Pagination'
 
 const PAGE_SIZE = 10
@@ -10,6 +10,7 @@ const STATUTS = { prospect: 'Prospect', en_cours: 'En cours', client: 'Client', 
 const TYPES   = { physique: 'Particulier', morale: 'Entreprise' }
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
 const fmtDate = d => d ? new Date(d).toLocaleDateString('fr-FR') : '-'
+const fmtCur = n => `${fmt(n)} GNF`
 
 function ProspectModal({ prospect, onClose }) {
   if (!prospect) return null
@@ -19,6 +20,11 @@ function ProspectModal({ prospect, onClose }) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg my-4">
         <div className="p-5 border-b border-gray-100 flex items-start justify-between">
           <div>
+            {prospect.numero && (
+              <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full mb-1 inline-block">
+                #{prospect.numero}
+              </span>
+            )}
             <h3 className="font-bold text-gray-900">{prospect.nom}{prospect.prenom ? ` ${prospect.prenom}` : ''}</h3>
             <p className="text-sm text-gray-500 mt-0.5">Agent : {prospect.agent_prenom} {prospect.agent_nom}</p>
           </div>
@@ -31,19 +37,175 @@ function ProspectModal({ prospect, onClose }) {
               ['Statut', STATUTS[prospect.statut]],
               ['Téléphone', prospect.telephone || '-'],
               ['Email', prospect.email || '-'],
-              ['Ville', prospect.ville || '-'],
-              ['Code postal', prospect.code_postal || '-'],
               ['Secteur', prospect.secteur_activite || '-'],
               ['Date prospection', fmtDate(prospect.date_prospection)],
-              ['Montant potentiel', `${fmt(prospect.montant_potentiel)} GNF`],
-              ['Commission prév.', `${fmt(comm)} GNF`],
+              ['Montant potentiel', fmtCur(prospect.montant_potentiel)],
+              ['Commission prév.', fmtCur(comm)],
             ].map(([k, v]) => (
               <div key={k}><p className="text-xs text-gray-400">{k}</p><p className="font-medium text-gray-800">{v}</p></div>
             ))}
           </div>
-          {prospect.siret && <div><p className="text-xs text-gray-400">SIRET</p><p className="font-medium">{prospect.siret}</p></div>}
-          {prospect.notes && <div><p className="text-xs text-gray-400">Notes</p><p className="text-gray-700 bg-gray-50 rounded-lg p-3">{prospect.notes}</p></div>}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function ConvertModal({ prospectId, onClose, onDone }) {
+  const [data, setData] = useState(null)
+  const [form, setForm] = useState({ numero_contrat: '', date_effet: '', date_fin: '' })
+  const [primes, setPrimes] = useState({})
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    api.get(`/prospects/${prospectId}`).then(r => {
+      setData(r.data)
+      const init = {}
+      ;(r.data.prospect_products || []).forEach(p => {
+        init[p.product_id] = String(p.nb_beneficiaires * (p.prime_annuelle || 0))
+      })
+      setPrimes(init)
+    })
+  }, [prospectId])
+
+  const setF = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const primeTotale = Object.values(primes).reduce((s, v) => s + (Number(v) || 0), 0)
+  const commTotale  = data?.prospect_products?.reduce((s, p) => {
+    const pp = Number(primes[p.product_id]) || 0
+    return s + pp * (p.product_taux || 0) / 100
+  }, 0) || 0
+
+  const handleSubmit = async e => {
+    e.preventDefault()
+    if (!form.numero_contrat || !form.date_effet || !form.date_fin) {
+      toast.error('Veuillez remplir tous les champs du contrat')
+      return
+    }
+    setSaving(true)
+    try {
+      const products = (data?.prospect_products || []).map(p => ({
+        product_id: p.product_id,
+        prime_payee: Number(primes[p.product_id]) || 0,
+      }))
+      await api.post(`/prospects/${prospectId}/convert`, { ...form, products })
+      toast.success('Prospect converti en client !')
+      onDone()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de la conversion')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!data) return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl p-8"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>
+    </div>
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl my-4">
+        <div className="p-5 border-b border-gray-100 flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <UserCheck size={18} className="text-emerald-600" />
+              <span className="font-bold text-gray-900">Convertir en client</span>
+            </div>
+            <p className="text-sm text-gray-500">
+              {data.numero && <span className="font-mono text-blue-600 mr-2">#{data.numero}</span>}
+              {data.type === 'physique' ? `${data.prenom || ''} ${data.nom}`.trim() : data.nom}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none">×</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-5">
+          {/* Infos contrat */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Informations du contrat</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-3">
+                <label className="label">N° du contrat d'assurance *</label>
+                <input className="input" placeholder="ex: C-2024-001" value={form.numero_contrat}
+                  onChange={e => setF('numero_contrat', e.target.value)} required />
+              </div>
+              <div>
+                <label className="label">Date d'effet *</label>
+                <input className="input" type="date" value={form.date_effet}
+                  onChange={e => setF('date_effet', e.target.value)} required />
+              </div>
+              <div>
+                <label className="label">Date de fin *</label>
+                <input className="input" type="date" value={form.date_fin}
+                  onChange={e => setF('date_fin', e.target.value)} required />
+              </div>
+            </div>
+          </div>
+
+          {/* Primes par produit */}
+          {data.prospect_products?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Primes payées par produit</p>
+              <div className="space-y-3">
+                {data.prospect_products.map(p => {
+                  const prime = Number(primes[p.product_id]) || 0
+                  const comm  = prime * (p.product_taux || 0) / 100
+                  return (
+                    <div key={p.product_id} className="bg-gray-50 rounded-xl p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-gray-800 text-sm">{p.product_nom}</span>
+                        <span className="text-xs text-gray-400">{p.nb_beneficiaires} bénéf. · taux {p.product_taux}%</span>
+                      </div>
+                      <div className="flex gap-3 items-center">
+                        <div className="flex-1">
+                          <label className="label text-xs">Prime payée (GNF)</label>
+                          <input
+                            className="input"
+                            type="number"
+                            min="0"
+                            value={primes[p.product_id] ?? ''}
+                            onChange={e => setPrimes(pr => ({ ...pr, [p.product_id]: e.target.value }))}
+                          />
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs text-gray-400">Commission</p>
+                          <p className="font-bold text-emerald-600">{fmtCur(comm)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Totaux */}
+              <div className="mt-3 bg-blue-50 rounded-xl p-3 flex justify-between items-center">
+                <div>
+                  <p className="text-xs text-blue-600 font-medium">Prime totale</p>
+                  <p className="font-bold text-blue-900">{fmtCur(primeTotale)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-emerald-600 font-medium">Commission totale</p>
+                  <p className="font-bold text-emerald-700">{fmtCur(commTotale)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {data.prospect_products?.length === 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
+              Ce prospect n'a pas de produits associés. La prime et la commission seront à zéro.
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn btn-secondary flex-1">Annuler</button>
+            <button type="submit" disabled={saving} className="btn btn-primary flex-1">
+              {saving ? 'Conversion...' : 'Confirmer la conversion'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )
@@ -54,6 +216,7 @@ export default function ProspectsAdmin() {
   const [agents, setAgents] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+  const [converting, setConverting] = useState(null)
   const [filters, setFilters] = useState({ search: '', type: '', statut: '', agent_id: '', date_debut: '', date_fin: '' })
   const [showFilters, setShowFilters] = useState(false)
   const [page, setPage] = useState(1)
@@ -83,6 +246,13 @@ export default function ProspectsAdmin() {
   return (
     <div>
       {selected && <ProspectModal prospect={selected} onClose={() => setSelected(null)} />}
+      {converting && (
+        <ConvertModal
+          prospectId={converting}
+          onClose={() => setConverting(null)}
+          onDone={() => { setConverting(null); load() }}
+        />
+      )}
 
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -147,7 +317,7 @@ export default function ProspectsAdmin() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  {['Nom / Raison sociale','Type','Statut','Agent','Ville','Montant potentiel','Commission','Date','Actions'].map(h => (
+                  {['N°','Nom / Raison sociale','Type','Statut','Agent','Montant potentiel','Commission','Date','Actions'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -155,6 +325,12 @@ export default function ProspectsAdmin() {
               <tbody className="divide-y divide-gray-50">
                 {prospects.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(p => (
                   <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      {p.numero
+                        ? <span className="font-mono text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">#{p.numero}</span>
+                        : <span className="text-gray-300 text-xs">—</span>
+                      }
+                    </td>
                     <td className="px-4 py-3 font-medium text-gray-900">
                       {p.nom}{p.prenom ? ` ${p.prenom}` : ''}
                       {p.nom_contact && <span className="block text-xs text-gray-400">{p.prenom_contact} {p.nom_contact}</span>}
@@ -168,7 +344,6 @@ export default function ProspectsAdmin() {
                       <span className={`badge-${p.statut}`}>{STATUTS[p.statut]}</span>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{p.agent_prenom} {p.agent_nom}</td>
-                    <td className="px-4 py-3 text-gray-600">{p.ville || '-'}</td>
                     <td className="px-4 py-3 text-right font-medium">{fmt(p.montant_potentiel)}</td>
                     <td className="px-4 py-3 text-right text-blue-600 font-medium">{fmt(p.montant_potentiel * p.taux_commission / 100)}</td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(p.date_prospection)}</td>
@@ -176,6 +351,13 @@ export default function ProspectsAdmin() {
                       <div className="flex items-center gap-1">
                         <button onClick={() => setSelected(p)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500 transition-colors" title="Voir">
                           <Eye size={15} />
+                        </button>
+                        <button
+                          onClick={() => setConverting(p.id)}
+                          className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors"
+                          title="Convertir en client"
+                        >
+                          <UserCheck size={15} />
                         </button>
                         <button onClick={() => handleDelete(p.id)} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title="Supprimer">
                           <Trash2 size={15} />

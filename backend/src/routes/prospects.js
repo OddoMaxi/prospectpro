@@ -50,13 +50,19 @@ router.post('/', authenticateToken, ah(async (req, res) => {
   const { montant_potentiel, taux_commission } = await computeTotalsFromProducts(prospect_products);
   const id = uuidv4();
 
+  const [lastP, lastC] = await Promise.all([
+    get("SELECT MAX(CAST(numero AS INTEGER)) v FROM prospects"),
+    get("SELECT MAX(CAST(numero AS INTEGER)) v FROM clients"),
+  ]);
+  const numero = String(Math.max(Number(lastP?.v || 0), Number(lastC?.v || 0)) + 1).padStart(6, '0');
+
   await run(
     `INSERT INTO prospects (id, agent_id, type, nom, prenom, nom_contact, prenom_contact,
       telephone, email, secteur_activite, statut, montant_potentiel, taux_commission,
       lieu_residence_commune, lieu_residence_quartier, lieu_activite_commune, lieu_activite_quartier,
       siege_social_commune, siege_social_quartier, niveau_interet, profession, sexe,
-      date_prospection)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      date_prospection, numero)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, req.user.id, type, nom, prenom||null, nom_contact||null, prenom_contact||null,
      telephone||null, email||null, secteur_activite||null, statut||'prospect',
      montant_potentiel, taux_commission,
@@ -64,7 +70,7 @@ router.post('/', authenticateToken, ah(async (req, res) => {
      lieu_activite_commune||null, lieu_activite_quartier||null,
      siege_social_commune||null, siege_social_quartier||null,
      niveau_interet||null, profession||null, sexe||null,
-     date_prospection || new Date().toISOString().split('T')[0]]
+     date_prospection || new Date().toISOString().split('T')[0], numero]
   );
 
   await saveProspectProducts(id, prospect_products);
@@ -165,6 +171,70 @@ router.put('/:id', authenticateToken, ah(async (req, res) => {
   await saveProspectProducts(req.params.id, prospect_products);
 
   res.json({ message: 'Prospect mis à jour avec succès' });
+}));
+
+router.post('/:id/convert', authenticateToken, requireAdmin, ah(async (req, res) => {
+  const { numero_contrat, date_effet, date_fin, products } = req.body;
+  if (!numero_contrat || !date_effet || !date_fin)
+    return res.status(400).json({ error: 'N° contrat, date d\'effet et date de fin requis' });
+
+  const prospect = await get('SELECT * FROM prospects WHERE id = ?', [req.params.id]);
+  if (!prospect) return res.status(404).json({ error: 'Prospect non trouvé' });
+
+  const pp = await all(
+    `SELECT pp.*, p.nom as product_nom, p.taux_commission as product_taux
+     FROM prospect_products pp
+     LEFT JOIN products p ON p.id = pp.product_id
+     WHERE pp.prospect_id = ?`,
+    [req.params.id]
+  );
+
+  let prime_totale = 0, commission_totale = 0;
+  const items = pp.map(item => {
+    const inp = (products || []).find(x => x.product_id === item.product_id);
+    const prime_payee = inp ? Number(inp.prime_payee) || 0 : 0;
+    const commission = prime_payee * Number(item.product_taux || 0) / 100;
+    prime_totale += prime_payee;
+    commission_totale += commission;
+    return { product_id: item.product_id, product_nom: item.product_nom, nb_beneficiaires: item.nb_beneficiaires, prime_payee, commission };
+  });
+
+  const taux_eff = prime_totale > 0 ? (commission_totale / prime_totale * 100) : 0;
+  const clientId = uuidv4();
+
+  await run(
+    `INSERT INTO clients (id, numero, agent_id, type, nom, prenom, nom_contact, prenom_contact,
+      telephone, email, secteur_activite,
+      lieu_residence_commune, lieu_residence_quartier, lieu_activite_commune, lieu_activite_quartier,
+      siege_social_commune, siege_social_quartier, profession, sexe,
+      numero_contrat, date_effet, date_fin,
+      prime_totale, commission_totale, taux_commission, date_prospection)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [clientId, prospect.numero, prospect.agent_id,
+     prospect.type, prospect.nom, prospect.prenom || null,
+     prospect.nom_contact || null, prospect.prenom_contact || null,
+     prospect.telephone || null, prospect.email || null,
+     prospect.secteur_activite || null,
+     prospect.lieu_residence_commune || null, prospect.lieu_residence_quartier || null,
+     prospect.lieu_activite_commune || null, prospect.lieu_activite_quartier || null,
+     prospect.siege_social_commune || null, prospect.siege_social_quartier || null,
+     prospect.profession || null, prospect.sexe || null,
+     numero_contrat, date_effet, date_fin,
+     prime_totale, commission_totale, taux_eff, prospect.date_prospection]
+  );
+
+  for (const item of items) {
+    await run(
+      `INSERT INTO client_products (id, client_id, product_id, product_nom, nb_beneficiaires, prime_payee, commission)
+       VALUES (?,?,?,?,?,?,?)`,
+      [uuidv4(), clientId, item.product_id, item.product_nom, item.nb_beneficiaires, item.prime_payee, item.commission]
+    );
+  }
+
+  await run('DELETE FROM prospect_products WHERE prospect_id = ?', [req.params.id]);
+  await run('DELETE FROM prospects WHERE id = ?', [req.params.id]);
+
+  res.json({ message: 'Prospect converti en client avec succès', client_id: clientId });
 }));
 
 router.delete('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {

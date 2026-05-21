@@ -182,6 +182,7 @@ export default function ProspectList() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs text-gray-500 uppercase tracking-wide">
+                <th className="pb-3 font-medium">N°</th>
                 <th className="pb-3 font-medium">Nom</th>
                 <th className="pb-3 font-medium">Type</th>
                 <th className="pb-3 font-medium">Téléphone</th>
@@ -198,6 +199,12 @@ export default function ProspectList() {
             <tbody className="divide-y divide-gray-50">
               {paginated.map(p => (
                 <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="py-3 pr-3">
+                    {p.numero
+                      ? <span className="font-mono text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">#{p.numero}</span>
+                      : <span className="text-gray-300 text-xs">—</span>
+                    }
+                  </td>
                   <td className="py-3 font-medium text-gray-900">
                     {p.type === 'physique'
                       ? `${p.prenom || ''} ${p.nom}`.trim()

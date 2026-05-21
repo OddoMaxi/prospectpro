@@ -108,6 +108,48 @@ async function initializeSchema() {
   try { await db.execute("ALTER TABLE users ADD COLUMN parent_agent_id TEXT"); } catch(_) {}
   try { await db.execute("ALTER TABLE users ADD COLUMN taux_commission_parent REAL DEFAULT 0"); } catch(_) {}
   try { await db.execute("ALTER TABLE prospects ADD COLUMN sexe TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE prospects ADD COLUMN numero TEXT"); } catch(_) {}
+
+  await db.execute(`CREATE TABLE IF NOT EXISTS clients (
+    id TEXT PRIMARY KEY,
+    numero TEXT UNIQUE,
+    agent_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    nom TEXT NOT NULL,
+    prenom TEXT,
+    nom_contact TEXT,
+    prenom_contact TEXT,
+    telephone TEXT,
+    email TEXT,
+    secteur_activite TEXT,
+    lieu_residence_commune TEXT,
+    lieu_residence_quartier TEXT,
+    lieu_activite_commune TEXT,
+    lieu_activite_quartier TEXT,
+    siege_social_commune TEXT,
+    siege_social_quartier TEXT,
+    profession TEXT,
+    sexe TEXT,
+    numero_contrat TEXT,
+    date_effet TEXT,
+    date_fin TEXT,
+    prime_totale REAL DEFAULT 0,
+    commission_totale REAL DEFAULT 0,
+    taux_commission REAL DEFAULT 0,
+    date_prospection TEXT,
+    converted_at TEXT DEFAULT (datetime('now')),
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+
+  await db.execute(`CREATE TABLE IF NOT EXISTS client_products (
+    id TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    product_id TEXT,
+    product_nom TEXT,
+    nb_beneficiaires INTEGER DEFAULT 1,
+    prime_payee REAL DEFAULT 0,
+    commission REAL DEFAULT 0
+  )`);
 
   const r = await db.execute("SELECT id FROM users WHERE role = 'admin'");
   if (r.rows.length === 0) {
