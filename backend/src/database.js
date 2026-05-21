@@ -105,6 +105,8 @@ async function initializeSchema() {
   try { await db.execute("ALTER TABLE prospects ADD COLUMN siege_social_quartier TEXT"); } catch(_) {}
   try { await db.execute("ALTER TABLE prospects ADD COLUMN niveau_interet TEXT"); } catch(_) {}
   try { await db.execute("ALTER TABLE prospects ADD COLUMN profession TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE users ADD COLUMN parent_agent_id TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE users ADD COLUMN taux_commission_parent REAL DEFAULT 0"); } catch(_) {}
 
   const r = await db.execute("SELECT id FROM users WHERE role = 'admin'");
   if (r.rows.length === 0) {

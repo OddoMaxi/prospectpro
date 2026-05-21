@@ -1,13 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LayoutDashboard, List, PlusCircle, LogOut, Menu, X, User } from 'lucide-react'
+import { LayoutDashboard, List, PlusCircle, LogOut, Menu, X, User, Users } from 'lucide-react'
 import { useState } from 'react'
-
-const nav = [
-  { to: '/agent', label: 'Tableau de bord', icon: LayoutDashboard, end: true },
-  { to: '/agent/prospects', label: 'Mes prospects', icon: List },
-  { to: '/agent/prospects/create', label: 'Nouveau prospect', icon: PlusCircle },
-]
 
 export default function AgentLayout() {
   const { user, logout } = useAuth()
@@ -15,6 +9,16 @@ export default function AgentLayout() {
   const [open, setOpen] = useState(false)
 
   const handleLogout = () => { logout(); navigate('/login') }
+
+  // Les sous-agents ne peuvent pas créer de sous-agents
+  const isSousAgent = !!user?.parent_agent_id
+
+  const nav = [
+    { to: '/agent', label: 'Tableau de bord', icon: LayoutDashboard, end: true },
+    { to: '/agent/prospects', label: 'Mes prospects', icon: List },
+    { to: '/agent/prospects/create', label: 'Nouveau prospect', icon: PlusCircle },
+    ...(!isSousAgent ? [{ to: '/agent/sous-agents', label: 'Mes sous-agents', icon: Users }] : []),
+  ]
 
   const SideNav = ({ onClick }) => (
     <nav className="flex flex-col gap-1 p-3 flex-1">
@@ -35,7 +39,9 @@ export default function AgentLayout() {
       <aside className="hidden md:flex flex-col w-60 bg-white border-r border-gray-200 shrink-0">
         <div className="p-4 border-b border-gray-200">
           <h1 className="font-bold text-blue-600 text-lg">ProspectPro</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Espace Commercial</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {isSousAgent ? 'Sous-agent commercial' : 'Espace Commercial'}
+          </p>
         </div>
         <SideNav />
         <div className="p-4 border-t border-gray-200">
@@ -87,7 +93,7 @@ export default function AgentLayout() {
 
         {/* Mobile bottom navigation */}
         <nav className="md:hidden flex bg-white border-t border-gray-200">
-          {nav.map(({ to, label, icon: Icon, end }) => (
+          {nav.filter(n => n.to !== '/agent/prospects/create').map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end}
               className={({ isActive }) =>
                 `flex-1 flex flex-col items-center gap-1 py-2.5 text-xs font-medium transition-colors

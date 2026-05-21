@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
-import { UserPlus, ArrowLeft, Copy, CheckCircle, User, Building2, Plus, Trash2 } from 'lucide-react'
+import { UserPlus, ArrowLeft, Copy, CheckCircle, User, Building2 } from 'lucide-react'
 
 const PERIODES = [
   { value: 'annuel',    label: 'Annuel',      multiplier: 12 },
@@ -22,7 +22,7 @@ function Field({ label, children, required }) {
   )
 }
 
-export default function AgentCreate() {
+export default function SousAgentCreate() {
   const { id } = useParams()
   const navigate = useNavigate()
   const isEdit = !!id
@@ -32,22 +32,16 @@ export default function AgentCreate() {
     nom: '', prenom: '',
     raison_sociale: '', representant_legal: '',
     email: '', telephone: '',
-    taux_commission: '5',
-    taux_commission_parent: '0',
-    is_active: true,
   })
-  const [parentAgentId, setParentAgentId] = useState(null)
   const [objectives, setObjectives] = useState([])
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(false)
   const [credentials, setCredentials] = useState(null)
   const [copied, setCopied] = useState(false)
 
-  // Charger la liste des produits actifs
   useEffect(() => {
     api.get('/products/active').then(r => {
       setProducts(r.data)
-      // Initialiser les objectifs vides pour chaque produit (création)
       if (!isEdit) {
         setObjectives(r.data.map(p => ({
           product_id: p.id,
@@ -60,13 +54,11 @@ export default function AgentCreate() {
     }).catch(() => {})
   }, [isEdit])
 
-  // Charger les données de l'agent en mode édition
   useEffect(() => {
     if (isEdit) {
-      api.get(`/agents/${id}`).then(r => {
+      api.get(`/agents/sous-agents/${id}`).then(r => {
         const a = r.data
         setTypeAgent(a.type_agent || 'physique')
-        setParentAgentId(a.parent_agent_id || null)
         setForm({
           nom: a.nom || '',
           prenom: a.prenom || '',
@@ -74,25 +66,15 @@ export default function AgentCreate() {
           representant_legal: a.representant_legal || '',
           email: a.email || '',
           telephone: a.telephone || '',
-          taux_commission: String(a.taux_commission || '5'),
-          taux_commission_parent: String(a.taux_commission_parent || '0'),
-          is_active: Boolean(a.is_active),
         })
-        // Fusionner les objectifs existants avec la liste de produits
-        setProducts(prev => {
-          if (prev.length === 0) return prev // sera géré après le chargement des produits
-          return prev
-        })
-        // Stocker les objectifs existants pour fusion ultérieure
-        sessionStorage.setItem('_editObjectives', JSON.stringify(a.product_objectives || []))
-      }).catch(() => toast.error('Agent introuvable'))
+        sessionStorage.setItem('_editSousAgentObjectives', JSON.stringify(a.product_objectives || []))
+      }).catch(() => toast.error('Sous-agent introuvable'))
     }
   }, [id, isEdit])
 
-  // Fusionner les objectifs existants une fois produits chargés (mode édition)
   useEffect(() => {
     if (isEdit && products.length > 0) {
-      const existing = JSON.parse(sessionStorage.getItem('_editObjectives') || '[]')
+      const existing = JSON.parse(sessionStorage.getItem('_editSousAgentObjectives') || '[]')
       setObjectives(products.map(p => {
         const ex = existing.find(o => o.product_id === p.id)
         return {
@@ -103,24 +85,19 @@ export default function AgentCreate() {
           periode: ex ? ex.periode : 'annuel',
         }
       }))
-      sessionStorage.removeItem('_editObjectives')
+      sessionStorage.removeItem('_editSousAgentObjectives')
     }
   }, [products, isEdit])
 
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   const updateObjective = (productId, key, value) => {
-    setObjectives(prev => prev.map(obj => {
-      if (obj.product_id !== productId) return obj
-      return { ...obj, [key]: value }
-    }))
+    setObjectives(prev => prev.map(obj =>
+      obj.product_id !== productId ? obj : { ...obj, [key]: value }
+    ))
   }
 
-  // Calcul de l'objectif annuel affiché (lecture seule)
-  const getAnnuel = obj => {
-    const m = Number(obj.objectif_mensuel) || 0
-    return m * multiplier(obj.periode)
-  }
+  const getAnnuel = obj => (Number(obj.objectif_mensuel) || 0) * multiplier(obj.periode)
 
   const handleSubmit = async e => {
     e.preventDefault()
@@ -140,11 +117,8 @@ export default function AgentCreate() {
         prenom: typeAgent === 'physique' ? form.prenom.trim() : '',
         raison_sociale: typeAgent === 'morale' ? form.raison_sociale.trim() : null,
         representant_legal: typeAgent === 'morale' ? form.representant_legal.trim() || null : null,
-        email: typeAgent === 'morale' ? form.email.trim() || null : null,
+        email: form.email.trim() || null,
         telephone: form.telephone.trim() || null,
-        taux_commission: Number(form.taux_commission) || 5,
-        taux_commission_parent: Number(form.taux_commission_parent) || 0,
-        is_active: form.is_active,
         product_objectives: objectives
           .filter(o => Number(o.objectif_mensuel) > 0)
           .map(o => ({
@@ -156,12 +130,12 @@ export default function AgentCreate() {
       }
 
       if (isEdit) {
-        await api.put(`/agents/${id}`, payload)
-        toast.success('Agent mis à jour')
-        navigate('/admin/agents')
+        await api.put(`/agents/sous-agents/${id}`, payload)
+        toast.success('Sous-agent mis à jour')
+        navigate('/agent/sous-agents')
       } else {
-        const r = await api.post('/agents', payload)
-        toast.success('Agent créé avec succès')
+        const r = await api.post('/agents/sous-agents', payload)
+        toast.success('Sous-agent créé avec succès')
         setCredentials(r.data.credentials)
       }
     } catch (err) {
@@ -176,7 +150,6 @@ export default function AgentCreate() {
     navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
   }
 
-  // Affichage des identifiants après création
   if (credentials) {
     return (
       <div className="max-w-md mx-auto">
@@ -186,8 +159,8 @@ export default function AgentCreate() {
               <CheckCircle size={22} className="text-emerald-600" />
             </div>
             <div>
-              <h2 className="font-bold text-emerald-800">Agent créé avec succès</h2>
-              <p className="text-sm text-emerald-600">Communiquez ces identifiants à l'agent</p>
+              <h2 className="font-bold text-emerald-800">Sous-agent créé avec succès</h2>
+              <p className="text-sm text-emerald-600">Communiquez ces identifiants à votre sous-agent</p>
             </div>
           </div>
           <div className="bg-white rounded-xl border border-emerald-200 p-4 mb-4 space-y-3">
@@ -201,15 +174,16 @@ export default function AgentCreate() {
             </div>
           </div>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 mb-4">
-            Ces informations ne seront plus affichées. L'agent devra changer son mot de passe à la première connexion.
+            Ces informations ne seront plus affichées. Le sous-agent devra changer son mot de passe à la première connexion.
+            La répartition des commissions sera définie par l'administrateur.
           </div>
           <div className="flex gap-3">
             <button onClick={copyCredentials} className="btn btn-secondary flex-1 justify-center">
               {copied ? <CheckCircle size={15} className="text-emerald-600" /> : <Copy size={15} />}
               {copied ? 'Copié !' : 'Copier'}
             </button>
-            <button onClick={() => navigate('/admin/agents')} className="btn btn-primary flex-1 justify-center">
-              Voir les agents
+            <button onClick={() => navigate('/agent/sous-agents')} className="btn btn-primary flex-1 justify-center">
+              Voir mes sous-agents
             </button>
           </div>
         </div>
@@ -223,21 +197,24 @@ export default function AgentCreate() {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/admin/agents')} className="btn btn-secondary btn-sm">
+        <button onClick={() => navigate('/agent/sous-agents')} className="btn btn-secondary btn-sm">
           <ArrowLeft size={15} />Retour
         </button>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">{isEdit ? 'Modifier l\'agent' : 'Créer un agent'}</h1>
-          <p className="text-sm text-gray-500">{isEdit ? 'Modifier les informations' : 'Nouvel agent commercial'}</p>
+          <h1 className="text-xl font-bold text-gray-900">{isEdit ? 'Modifier le sous-agent' : 'Créer un sous-agent'}</h1>
+          <p className="text-sm text-gray-500">{isEdit ? 'Modifier les objectifs' : 'Nouveau sous-agent commercial'}</p>
         </div>
+      </div>
+
+      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
+        <strong>Note :</strong> La répartition des commissions entre vous et votre sous-agent est définie par l'administrateur.
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
 
-        {/* Sélecteur de type (uniquement à la création) */}
         {!isEdit && (
           <div className="card">
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">Type d'agent</h2>
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">Type de sous-agent</h2>
             <div className="grid grid-cols-2 gap-3">
               <button type="button"
                 onClick={() => setTypeAgent('physique')}
@@ -265,7 +242,6 @@ export default function AgentCreate() {
           </div>
         )}
 
-        {/* Identité */}
         <div className="card space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">
             {typeAgent === 'morale' ? 'Informations de la structure' : 'Identité'}
@@ -294,13 +270,14 @@ export default function AgentCreate() {
                   onChange={e => f('representant_legal', e.target.value)}
                   placeholder="Prénom NOM du représentant" />
               </Field>
-              <Field label="Email" required>
-                <input className="input" type="email" value={form.email}
-                  onChange={e => f('email', e.target.value)}
-                  required placeholder="contact@entreprise.com" />
-              </Field>
             </>
           )}
+
+          <Field label="Email">
+            <input className="input" type="email" value={form.email}
+              onChange={e => f('email', e.target.value)}
+              placeholder="email@exemple.com" />
+          </Field>
 
           <Field label="Téléphone">
             <input className="input" type="tel" value={form.telephone}
@@ -309,17 +286,15 @@ export default function AgentCreate() {
           </Field>
         </div>
 
-        {/* Objectifs par produit */}
         <div className="card">
           <h2 className="text-sm font-semibold text-gray-700 mb-1">Objectifs par produit</h2>
           <p className="text-xs text-gray-400 mb-4">
-            L'objectif annuel est calculé automatiquement selon la période choisie.
+            Définissez les objectifs de prospection pour chaque produit. L'objectif annuel est calculé automatiquement.
           </p>
 
           {products.length === 0 ? (
             <div className="text-center py-6 text-gray-400">
               <p className="text-sm">Aucun produit d'assurance actif.</p>
-              <p className="text-xs mt-1">Créez des produits dans <strong>Produits d'assurance</strong> pour définir des objectifs.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -382,57 +357,8 @@ export default function AgentCreate() {
           )}
         </div>
 
-        {/* Commissions (toujours visible) */}
-        <div className="card space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700">Commissions</h2>
-
-          <Field label="Taux de commission de l'agent (%)">
-            <input className="input" type="number" min="0" max="100" step="0.1"
-              value={form.taux_commission}
-              onChange={e => f('taux_commission', e.target.value)}
-              placeholder="5" />
-            <p className="text-xs text-gray-400 mt-1">Commission que perçoit cet agent sur ses ventes</p>
-          </Field>
-
-          {/* Taux parent uniquement visible pour les sous-agents (en édition) */}
-          {isEdit && parentAgentId && (
-            <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">Sous-agent</span>
-                <p className="text-sm font-semibold text-purple-800">Répartition de la commission</p>
-              </div>
-              <Field label="Taux reversé à l'agent parent (%)">
-                <input className="input" type="number" min="0" max="100" step="0.1"
-                  value={form.taux_commission_parent}
-                  onChange={e => f('taux_commission_parent', e.target.value)}
-                  placeholder="0" />
-                <p className="text-xs text-gray-400 mt-1">
-                  Commission additionnelle que perçoit l'agent parent sur les ventes de ce sous-agent
-                </p>
-              </Field>
-            </div>
-          )}
-        </div>
-
-        {/* Statut (édition seulement) */}
-        {isEdit && (
-          <div className="card">
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">Statut du compte</h2>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" checked={form.is_active}
-                onChange={e => f('is_active', e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <div>
-                <p className="text-sm font-medium text-gray-700">Agent actif</p>
-                <p className="text-xs text-gray-400">Un agent inactif ne peut plus se connecter</p>
-              </div>
-            </label>
-          </div>
-        )}
-
         <div className="flex gap-3 pb-6">
-          <button type="button" onClick={() => navigate('/admin/agents')} className="btn btn-secondary flex-1 justify-center">
+          <button type="button" onClick={() => navigate('/agent/sous-agents')} className="btn btn-secondary flex-1 justify-center">
             Annuler
           </button>
           <button type="submit" disabled={loading} className="btn btn-primary flex-1 justify-center">
@@ -440,7 +366,7 @@ export default function AgentCreate() {
               ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               : <UserPlus size={16} />
             }
-            {loading ? 'En cours...' : (isEdit ? 'Enregistrer' : 'Créer l\'agent')}
+            {loading ? 'En cours...' : (isEdit ? 'Enregistrer' : 'Créer le sous-agent')}
           </button>
         </div>
       </form>

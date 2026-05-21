@@ -25,7 +25,8 @@ router.post('/login', ah(async (req, res) => {
     user: {
       id: user.id, nom: user.nom, prenom: user.prenom, username: user.username,
       role: user.role, must_change_password: Number(user.must_change_password) === 1,
-      email: user.email, telephone: user.telephone
+      email: user.email, telephone: user.telephone,
+      parent_agent_id: user.parent_agent_id || null
     }
   });
 }));
@@ -53,11 +54,11 @@ router.post('/change-password', authenticateToken, ah(async (req, res) => {
 
 router.get('/me', authenticateToken, ah(async (req, res) => {
   const user = await get(
-    'SELECT id, nom, prenom, email, telephone, role, username, must_change_password, objectif_mensuel, objectif_annuel, taux_commission, created_at FROM users WHERE id = ?',
+    'SELECT id, nom, prenom, email, telephone, role, username, must_change_password, objectif_mensuel, objectif_annuel, taux_commission, parent_agent_id, created_at FROM users WHERE id = ?',
     [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
-  res.json({ ...user, must_change_password: Number(user.must_change_password) === 1 });
+  res.json({ ...user, must_change_password: Number(user.must_change_password) === 1, parent_agent_id: user.parent_agent_id || null });
 }));
 
 module.exports = router;

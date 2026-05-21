@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import StatCard from '../../components/StatCard'
-import { Users, UserCheck, TrendingUp, DollarSign, Target, Calendar, PlusCircle, ArrowRight, Banknote } from 'lucide-react'
+import { Users, UserCheck, TrendingUp, DollarSign, Target, Calendar, PlusCircle, ArrowRight, Banknote, UsersRound } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 
 const STATUS_LABELS = { prospect: 'Prospect', en_cours: 'En cours', client: 'Client', perdu: 'Perdu' }
@@ -132,6 +132,39 @@ export default function AgentDashboard() {
           </ResponsiveContainer>
         ) : <p className="text-sm text-gray-400 text-center py-10">Aucune activité enregistrée</p>}
       </div>
+
+      {/* Section sous-agents (uniquement si l'agent a des sous-agents) */}
+      {stats.sous_agent_count > 0 && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+              <UsersRound size={18} className="text-purple-500" />
+              Mon équipe de sous-agents
+            </h2>
+            <Link to="/agent/sous-agents" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+              Gérer <ArrowRight size={14} />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-purple-50 rounded-xl p-4">
+              <p className="text-xs text-purple-600 font-medium">Sous-agents actifs</p>
+              <p className="text-2xl font-bold text-purple-900 mt-1">{fmt(stats.sous_agent_count)}</p>
+            </div>
+            <div className="bg-green-50 rounded-xl p-4">
+              <p className="text-xs text-green-600 font-medium">Ma commission (tous)</p>
+              <p className="text-xl font-bold text-green-900 mt-1">{fmtCur(stats.commission_sous_agents)}</p>
+              <p className="text-xs text-green-600 mt-0.5">Clients : {fmtCur(stats.commission_sous_agents_clients)}</p>
+            </div>
+            <div className="bg-blue-50 rounded-xl p-4 flex flex-col justify-between">
+              <p className="text-xs text-blue-600 font-medium">Taux de commission</p>
+              <p className="text-xs text-blue-500 mt-1">Défini par l'administrateur pour chaque sous-agent</p>
+              <Link to="/agent/sous-agents" className="mt-2 text-xs text-blue-600 font-medium hover:underline flex items-center gap-1">
+                Voir le détail <ArrowRight size={12} />
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {stats.recents?.length > 0 && (
         <div className="card">

@@ -261,7 +261,10 @@ export default function AgentList() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Agents commerciaux</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{agents.length} agent(s) enregistré(s)</p>
+          <p className="text-gray-500 text-sm mt-0.5">
+            {agents.filter(a => !a.parent_agent_id).length} agent(s) —{' '}
+            {agents.filter(a => a.parent_agent_id).length} sous-agent(s)
+          </p>
         </div>
         <button onClick={() => navigate('/admin/agents/create')} className="btn btn-primary">
           <Plus size={16} />Nouvel agent
@@ -301,20 +304,40 @@ export default function AgentList() {
                   ? ((agent.total_clients / agent.total_prospects) * 100).toFixed(0)
                   : 0
                 return (
-                  <tr key={agent.id} className="hover:bg-gray-50">
+                  <tr key={agent.id} className={`hover:bg-gray-50 ${agent.parent_agent_id ? 'bg-purple-50/30' : ''}`}>
                     <td className="py-3">
                       {agent.type_agent === 'morale' ? (
                         <div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-semibold text-gray-900">{agent.raison_sociale || agent.nom}</span>
                             <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">Morale</span>
+                            {agent.parent_agent_id && (
+                              <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">Sous-agent</span>
+                            )}
                           </div>
                           {agent.representant_legal && (
                             <p className="text-xs text-gray-400 mt-0.5">Rép. : {agent.representant_legal}</p>
                           )}
+                          {agent.parent_agent_id && (
+                            <p className="text-xs text-orange-500 mt-0.5">
+                              Agent : {agent.parent_prenom} {agent.parent_nom || agent.parent_raison_sociale}
+                            </p>
+                          )}
                         </div>
                       ) : (
-                        <span className="font-semibold text-gray-900">{agent.nom}</span>
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-gray-900">{agent.nom}</span>
+                            {agent.parent_agent_id && (
+                              <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">Sous-agent</span>
+                            )}
+                          </div>
+                          {agent.parent_agent_id && (
+                            <p className="text-xs text-orange-500 mt-0.5">
+                              Agent : {agent.parent_prenom} {agent.parent_nom || agent.parent_raison_sociale}
+                            </p>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="py-3 text-gray-700">
@@ -338,6 +361,9 @@ export default function AgentList() {
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
                         {agent.taux_commission}%
                       </span>
+                      {agent.parent_agent_id && Number(agent.taux_commission_parent) > 0 && (
+                        <div className="text-xs text-orange-600 mt-0.5">+{agent.taux_commission_parent}% parent</div>
+                      )}
                     </td>
                     <td className="py-3 text-center">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${

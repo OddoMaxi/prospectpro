@@ -13,6 +13,8 @@ import ProductForm from './pages/admin/ProductForm'
 import AgentDashboard from './pages/agent/AgentDashboard'
 import ProspectList from './pages/agent/ProspectList'
 import ProspectForm from './pages/agent/ProspectForm'
+import SousAgentList from './pages/agent/SousAgentList'
+import SousAgentCreate from './pages/agent/SousAgentCreate'
 
 function Spinner() {
   return (
@@ -63,6 +65,9 @@ function AppRoutes() {
         <Route path="prospects" element={<ProspectList />} />
         <Route path="prospects/create" element={<ProspectForm />} />
         <Route path="prospects/:id/edit" element={<ProspectForm />} />
+        <Route path="sous-agents" element={<SousAgentList />} />
+        <Route path="sous-agents/create" element={<SousAgentCreate />} />
+        <Route path="sous-agents/:id/edit" element={<SousAgentCreate />} />
       </Route>
       <Route path="*" element={<Navigate to="/agent" replace />} />
     </Routes>
