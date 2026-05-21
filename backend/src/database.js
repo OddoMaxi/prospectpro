@@ -110,6 +110,7 @@ async function initializeSchema() {
   try { await db.execute("ALTER TABLE users ADD COLUMN taux_commission_parent REAL DEFAULT 0"); } catch(_) {}
   try { await db.execute("ALTER TABLE prospects ADD COLUMN sexe TEXT"); } catch(_) {}
   try { await db.execute("ALTER TABLE prospects ADD COLUMN numero TEXT"); } catch(_) {}
+  try { await db.execute("ALTER TABLE products ADD COLUMN taux_commission_sous_agent REAL DEFAULT 0"); } catch(_) {}
 
   await db.execute(`CREATE TABLE IF NOT EXISTS clients (
     id TEXT PRIMARY KEY,

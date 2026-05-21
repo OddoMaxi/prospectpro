@@ -103,7 +103,8 @@ export default function ProductList() {
                 <th className="pb-3 font-medium">Produit</th>
                 <th className="pb-3 font-medium">Description</th>
                 <th className="pb-3 font-medium text-right">Prime annuelle</th>
-                <th className="pb-3 font-medium text-right">Commission</th>
+                <th className="pb-3 font-medium text-right">Taux agent</th>
+                <th className="pb-3 font-medium text-right">Taux sous-agent</th>
                 <th className="pb-3 font-medium text-center">Statut</th>
                 <th className="pb-3 font-medium text-right">Actions</th>
               </tr>
@@ -115,8 +116,13 @@ export default function ProductList() {
                   <td className="py-3 text-gray-500 max-w-xs truncate">{p.description || '—'}</td>
                   <td className="py-3 text-right font-medium text-blue-700">{fmtCur(p.prime_annuelle)}</td>
                   <td className="py-3 text-right">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                       {p.taux_commission}%
+                    </span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                      {p.taux_commission_sous_agent ?? 0}%
                     </span>
                   </td>
                   <td className="py-3 text-center">

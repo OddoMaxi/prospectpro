@@ -181,24 +181,44 @@ router.post('/:id/convert', authenticateToken, requireAdmin, ah(async (req, res)
   const prospect = await get('SELECT * FROM prospects WHERE id = ?', [req.params.id]);
   if (!prospect) return res.status(404).json({ error: 'Prospect non trouvé' });
 
+  // Récupère les produits avec les deux taux (agent + sous-agent)
   const pp = await all(
-    `SELECT pp.*, p.nom as product_nom, p.taux_commission as product_taux
+    `SELECT pp.*, p.nom as product_nom, p.taux_commission as taux_agent, p.taux_commission_sous_agent as taux_sous_agent
      FROM prospect_products pp
      LEFT JOIN products p ON p.id = pp.product_id
      WHERE pp.prospect_id = ?`,
     [req.params.id]
   );
 
-  let prime_totale = 0, commission_totale = 0;
+  // Détermine si l'agent est un sous-agent
+  const agentInfo = await get('SELECT parent_agent_id FROM users WHERE id = ?', [prospect.agent_id]);
+  const isSousAgent = !!(agentInfo && agentInfo.parent_agent_id);
+
+  let prime_totale = 0;
+  let commission_agent_total = 0;   // commission au taux agent (pour l'agent direct ou parent)
+  let commission_sa_total = 0;      // commission au taux sous-agent (si sous-agent)
+
   const items = pp.map(item => {
     const inp = (products || []).find(x => x.product_id === item.product_id);
     const prime_payee = inp ? Number(inp.prime_payee) || 0 : 0;
-    const commission = prime_payee * Number(item.product_taux || 0) / 100;
+    const tauxA = Number(item.taux_agent || 0);
+    const tauxSA = Number(item.taux_sous_agent || 0);
+    const commAgent  = prime_payee * tauxA  / 100;
+    const commSA     = prime_payee * tauxSA / 100;
     prime_totale += prime_payee;
-    commission_totale += commission;
-    return { product_id: item.product_id, product_nom: item.product_nom, nb_beneficiaires: item.nb_beneficiaires, prime_payee, commission };
+    commission_agent_total += commAgent;
+    commission_sa_total    += commSA;
+    // commission stockée dans client_products = commission de l'acteur direct
+    const commissionActeur = isSousAgent ? commSA : commAgent;
+    return {
+      product_id: item.product_id, product_nom: item.product_nom,
+      nb_beneficiaires: item.nb_beneficiaires, prime_payee,
+      commission: commissionActeur, taux_agent: tauxA, taux_sous_agent: tauxSA
+    };
   });
 
+  // Commission totale = ce que l'acteur direct reçoit
+  const commission_totale = isSousAgent ? commission_sa_total : commission_agent_total;
   const taux_eff = prime_totale > 0 ? (commission_totale / prime_totale * 100) : 0;
   const clientId = uuidv4();
 
@@ -231,22 +251,31 @@ router.post('/:id/convert', authenticateToken, requireAdmin, ah(async (req, res)
     );
   }
 
-  // Commission directe pour l'agent
-  if (commission_totale > 0) {
-    await run(
-      `INSERT INTO commissions (id, agent_id, client_id, type, montant_du) VALUES (?,?,?,'direct',?)`,
-      [uuidv4(), prospect.agent_id, clientId, commission_totale]
-    );
-  }
-
-  // Commission parent si l'agent est un sous-agent
-  const agentInfo = await get('SELECT parent_agent_id, taux_commission_parent FROM users WHERE id = ?', [prospect.agent_id]);
-  if (agentInfo && agentInfo.parent_agent_id && Number(agentInfo.taux_commission_parent) > 0 && prime_totale > 0) {
-    const parentComm = prime_totale * Number(agentInfo.taux_commission_parent) / 100;
-    await run(
-      `INSERT INTO commissions (id, agent_id, client_id, type, source_agent_id, montant_du) VALUES (?,?,?,'parent',?,?)`,
-      [uuidv4(), agentInfo.parent_agent_id, clientId, prospect.agent_id, parentComm]
-    );
+  // Enregistrement des commissions selon le rôle
+  if (!isSousAgent) {
+    // Agent direct : reçoit le taux agent
+    if (commission_agent_total > 0) {
+      await run(
+        `INSERT INTO commissions (id, agent_id, client_id, type, montant_du) VALUES (?,?,?,'direct',?)`,
+        [uuidv4(), prospect.agent_id, clientId, commission_agent_total]
+      );
+    }
+  } else {
+    // Sous-agent : reçoit le taux sous-agent
+    if (commission_sa_total > 0) {
+      await run(
+        `INSERT INTO commissions (id, agent_id, client_id, type, montant_du) VALUES (?,?,?,'direct',?)`,
+        [uuidv4(), prospect.agent_id, clientId, commission_sa_total]
+      );
+    }
+    // Agent parent : reçoit la différence (taux_agent - taux_sous_agent)
+    const commParent = commission_agent_total - commission_sa_total;
+    if (agentInfo.parent_agent_id && commParent > 0) {
+      await run(
+        `INSERT INTO commissions (id, agent_id, client_id, type, source_agent_id, montant_du) VALUES (?,?,?,'parent',?,?)`,
+        [uuidv4(), agentInfo.parent_agent_id, clientId, prospect.agent_id, commParent]
+      );
+    }
   }
 
   await run('DELETE FROM prospect_products WHERE prospect_id = ?', [req.params.id]);

@@ -4,15 +4,20 @@ import { api } from '../../api'
 import toast from 'react-hot-toast'
 import { Save, ArrowLeft, Package } from 'lucide-react'
 
-const fmtCur = n => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'GNF', minimumFractionDigits: 0 }).format(Math.round(n || 0))
+const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
+const fmtCur = n => `${fmt(n)} GNF`
 
-const EMPTY = { nom: '', description: '', prime_annuelle: '', taux_commission: '5', is_active: true }
+const EMPTY = {
+  nom: '', description: '', prime_annuelle: '',
+  taux_commission: '0', taux_commission_sous_agent: '0', is_active: true
+}
 
-function Field({ label, children, required }) {
+function Field({ label, children, hint }) {
   return (
     <div>
-      <label className="label">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+      <label className="label">{label}</label>
       {children}
+      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
     </div>
   )
 }
@@ -28,13 +33,15 @@ export default function ProductForm() {
 
   useEffect(() => {
     if (isEdit) {
-      api.get(`/products`).then(r => {
+      api.get('/products').then(r => {
         const p = r.data.find(x => x.id === id)
         if (!p) { toast.error('Produit introuvable'); navigate('/admin/products'); return }
         setForm({
-          nom: p.nom, description: p.description || '',
+          nom: p.nom,
+          description: p.description || '',
           prime_annuelle: String(p.prime_annuelle || ''),
-          taux_commission: String(p.taux_commission || '5'),
+          taux_commission: String(p.taux_commission ?? '0'),
+          taux_commission_sous_agent: String(p.taux_commission_sous_agent ?? '0'),
           is_active: Boolean(p.is_active)
         })
       }).catch(() => { toast.error('Erreur de chargement'); navigate('/admin/products') })
@@ -47,13 +54,17 @@ export default function ProductForm() {
   const handleSubmit = async e => {
     e.preventDefault()
     if (!form.nom.trim()) return toast.error('Le nom du produit est obligatoire')
+    const tauxA  = Number(form.taux_commission) || 0
+    const tauxSA = Number(form.taux_commission_sous_agent) || 0
+    if (tauxSA > tauxA) return toast.error('Le taux sous-agent ne peut pas dépasser le taux agent')
     setLoading(true)
     try {
       const payload = {
         nom: form.nom.trim(),
         description: form.description.trim() || null,
         prime_annuelle: Number(form.prime_annuelle) || 0,
-        taux_commission: Number(form.taux_commission) || 5,
+        taux_commission: tauxA,
+        taux_commission_sous_agent: tauxSA,
         is_active: form.is_active
       }
       if (isEdit) {
@@ -65,7 +76,7 @@ export default function ProductForm() {
       }
       navigate('/admin/products')
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erreur lors de l\'enregistrement')
+      toast.error(err.response?.data?.error || "Erreur lors de l'enregistrement")
     } finally {
       setLoading(false)
     }
@@ -77,9 +88,12 @@ export default function ProductForm() {
     </div>
   )
 
-  const commission = form.prime_annuelle && form.taux_commission
-    ? Number(form.prime_annuelle) * Number(form.taux_commission) / 100
-    : 0
+  const prime   = Number(form.prime_annuelle) || 0
+  const tauxA   = Number(form.taux_commission) || 0
+  const tauxSA  = Number(form.taux_commission_sous_agent) || 0
+  const commAgent  = prime * tauxA  / 100
+  const commSA     = prime * tauxSA / 100
+  const commParent = commAgent - commSA
 
   return (
     <div className="max-w-xl mx-auto">
@@ -89,22 +103,23 @@ export default function ProductForm() {
         </button>
         <div>
           <h1 className="text-xl font-bold text-gray-900">
-            {isEdit ? 'Modifier le produit' : 'Nouveau produit d\'assurance'}
+            {isEdit ? 'Modifier le produit' : "Nouveau produit d'assurance"}
           </h1>
           <p className="text-sm text-gray-500">
-            {isEdit ? 'Modifier les informations du produit' : 'Définir un produit avec sa prime et sa commission'}
+            {isEdit ? 'Modifier les informations du produit' : 'Définir un produit avec sa prime et ses commissions'}
           </p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Informations */}
         <div className="card space-y-4">
           <div className="flex items-center gap-2 mb-1">
             <Package size={18} className="text-blue-600" />
             <h2 className="text-sm font-semibold text-gray-700">Informations du produit</h2>
           </div>
 
-          <Field label="Nom du produit" required>
+          <Field label="Nom du produit *">
             <input
               className="input" type="text" value={form.nom}
               onChange={e => f('nom', e.target.value)}
@@ -121,42 +136,81 @@ export default function ProductForm() {
           </Field>
         </div>
 
+        {/* Tarification */}
         <div className="card space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">Tarification</h2>
 
+          <Field label="Prime annuelle (GNF) *">
+            <input
+              className="input" type="number" min="0" step="1000"
+              value={form.prime_annuelle}
+              onChange={e => f('prime_annuelle', e.target.value)}
+              required placeholder="0"
+            />
+          </Field>
+
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Prime annuelle (GNF)" required>
-              <input
-                className="input" type="number" min="0" step="1000"
-                value={form.prime_annuelle}
-                onChange={e => f('prime_annuelle', e.target.value)}
-                required placeholder="0"
-              />
-            </Field>
-            <Field label="Taux de commission (%)" required>
+            <Field
+              label="Taux commission agent (%)"
+              hint="Taux appliqué aux agents directs"
+            >
               <input
                 className="input" type="number" min="0" max="100" step="0.1"
                 value={form.taux_commission}
                 onChange={e => f('taux_commission', e.target.value)}
-                required placeholder="5"
+                placeholder="0"
+              />
+            </Field>
+            <Field
+              label="Taux commission sous-agent (%)"
+              hint="Taux appliqué aux sous-agents commerciaux"
+            >
+              <input
+                className="input" type="number" min="0" max="100" step="0.1"
+                value={form.taux_commission_sous_agent}
+                onChange={e => f('taux_commission_sous_agent', e.target.value)}
+                placeholder="0"
               />
             </Field>
           </div>
 
-          {form.prime_annuelle && form.taux_commission && (
-            <div className="bg-blue-50 rounded-lg p-4 grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-blue-600 mb-0.5">Prime annuelle</p>
-                <p className="text-base font-bold text-blue-900">{fmtCur(Number(form.prime_annuelle))}</p>
-              </div>
-              <div>
-                <p className="text-xs text-blue-600 mb-0.5">Commission par contrat</p>
-                <p className="text-base font-bold text-blue-900">{fmtCur(commission)}</p>
+          {/* Avertissement si taux SA > taux A */}
+          {tauxSA > tauxA && tauxA > 0 && (
+            <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">
+              Le taux sous-agent ne peut pas dépasser le taux agent.
+            </p>
+          )}
+
+          {/* Simulation */}
+          {prime > 0 && (
+            <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Simulation pour 1 bénéficiaire</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white rounded-lg p-3 border border-gray-100">
+                  <p className="text-xs text-gray-400 mb-0.5">Prime annuelle</p>
+                  <p className="font-bold text-gray-900">{fmtCur(prime)}</p>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                  <p className="text-xs text-blue-500 mb-0.5">Commission agent direct</p>
+                  <p className="font-bold text-blue-700">{fmtCur(commAgent)}</p>
+                  <p className="text-xs text-blue-400">{tauxA}%</p>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                  <p className="text-xs text-purple-500 mb-0.5">Commission sous-agent</p>
+                  <p className="font-bold text-purple-700">{fmtCur(commSA)}</p>
+                  <p className="text-xs text-purple-400">{tauxSA}%</p>
+                </div>
+                <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
+                  <p className="text-xs text-orange-500 mb-0.5">Part agent parent</p>
+                  <p className="font-bold text-orange-700">{fmtCur(Math.max(0, commParent))}</p>
+                  <p className="text-xs text-orange-400">{Math.max(0, tauxA - tauxSA).toFixed(1)}%</p>
+                </div>
               </div>
             </div>
           )}
         </div>
 
+        {/* Disponibilité */}
         <div className="card">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">Disponibilité</h2>
           <label className="flex items-center gap-3 cursor-pointer">

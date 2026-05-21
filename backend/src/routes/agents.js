@@ -421,27 +421,6 @@ router.delete('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
   res.json({ message: 'Agent supprimé avec succès' });
 }));
 
-// Admin: définir la répartition des commissions pour un sous-agent
-router.patch('/:id/commission', authenticateToken, requireAdmin, ah(async (req, res) => {
-  const { taux_commission, taux_commission_parent } = req.body;
-
-  const agent = await get("SELECT id, parent_agent_id FROM users WHERE id=? AND role='agent'", [req.params.id]);
-  if (!agent) return res.status(404).json({ error: 'Agent non trouvé' });
-  if (!agent.parent_agent_id) return res.status(400).json({ error: 'Cet agent n\'est pas un sous-agent' });
-
-  const tc  = Number(taux_commission);
-  const tcp = Number(taux_commission_parent);
-  if (isNaN(tc) || tc < 0 || tc > 100)  return res.status(400).json({ error: 'Taux sous-agent invalide (0-100)' });
-  if (isNaN(tcp) || tcp < 0 || tcp > 100) return res.status(400).json({ error: 'Taux parent invalide (0-100)' });
-
-  await run(
-    "UPDATE users SET taux_commission=?, taux_commission_parent=?, updated_at=datetime('now') WHERE id=?",
-    [tc, tcp, req.params.id]
-  );
-
-  res.json({ message: 'Répartition des commissions mise à jour', taux_commission: tc, taux_commission_parent: tcp });
-}));
-
 // Admin: réinitialiser le mot de passe d'un agent
 router.post('/:id/reset-password', authenticateToken, requireAdmin, ah(async (req, res) => {
   const agent = await get("SELECT id FROM users WHERE id = ? AND role = 'agent'", [req.params.id]);
