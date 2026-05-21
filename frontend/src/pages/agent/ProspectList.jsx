@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../api'
+import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 import { Plus, Search, Filter, Edit, Trash2, ChevronDown, X } from 'lucide-react'
 import Pagination from '../../components/Pagination'
@@ -28,11 +29,19 @@ function lieu(p) {
 
 export default function ProspectList() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [prospects, setProspects] = useState([])
+  const [sousAgents, setSousAgents] = useState([])
   const [loading, setLoading] = useState(true)
   const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState({ search: '', type: '', statut: '', date_debut: '', date_fin: '' })
+  const [filters, setFilters] = useState({ search: '', type: '', statut: '', date_debut: '', date_fin: '', agent_id: '' })
   const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    if (!user?.parent_agent_id) {
+      api.get('/agents/sous-agents').then(r => setSousAgents(r.data || [])).catch(() => {})
+    }
+  }, [user])
 
   const load = () => {
     setLoading(true)
@@ -42,6 +51,7 @@ export default function ProspectList() {
 
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t) }, [filters])
   const setF = (k, v) => { setFilters(p => ({ ...p, [k]: v })); setPage(1) }
+  const hasSubAgents = sousAgents.length > 0
 
   const handleDelete = async id => {
     if (!confirm('Supprimer ce prospect ?')) return
@@ -55,6 +65,7 @@ export default function ProspectList() {
   const totalPrime = prospects.reduce((s, p) => s + (p.montant_potentiel || 0), 0)
   const totalComm  = prospects.reduce((s, p) => s + (p.montant_potentiel || 0) * (p.taux_commission || 0) / 100, 0)
   const hasActiveFilters = Object.values(filters).some(Boolean)
+  const isOwnProspect = p => p.agent_id === user?.id
 
   const totalPages = Math.ceil(prospects.length / PAGE_SIZE)
   const paginated  = prospects.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -115,6 +126,20 @@ export default function ProspectList() {
                 <option value="client">Client</option>
               </select>
             </div>
+            {hasSubAgents && (
+              <div>
+                <label className="label">Agent</label>
+                <select className="input" value={filters.agent_id} onChange={e => setF('agent_id', e.target.value)}>
+                  <option value="">Tous</option>
+                  <option value={user?.id}>Moi uniquement</option>
+                  {sousAgents.map(sa => (
+                    <option key={sa.id} value={sa.id}>
+                      {sa.prenom ? `${sa.prenom} ${sa.nom}` : sa.nom}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="label">Du</label>
               <input className="input" type="date" value={filters.date_debut} onChange={e => setF('date_debut', e.target.value)} />
@@ -125,7 +150,7 @@ export default function ProspectList() {
             </div>
             {hasActiveFilters && (
               <button
-                onClick={() => setFilters({ search: '', type: '', statut: '', date_debut: '', date_fin: '' })}
+                onClick={() => setFilters({ search: '', type: '', statut: '', date_debut: '', date_fin: '', agent_id: '' })}
                 className="col-span-2 md:col-span-4 btn btn-secondary btn-sm justify-center"
               >
                 <X size={13} />Effacer les filtres
@@ -161,6 +186,7 @@ export default function ProspectList() {
                 <th className="pb-3 font-medium">Type</th>
                 <th className="pb-3 font-medium">Téléphone</th>
                 <th className="pb-3 font-medium">Localisation</th>
+                {hasSubAgents && <th className="pb-3 font-medium">Agent</th>}
                 <th className="pb-3 font-medium text-center">Intérêt</th>
                 <th className="pb-3 font-medium text-center">Statut</th>
                 <th className="pb-3 font-medium text-right">Prime prév.</th>
@@ -185,6 +211,15 @@ export default function ProspectList() {
                   </td>
                   <td className="py-3 text-gray-600">{fmtTel(p.telephone)}</td>
                   <td className="py-3 text-gray-500 max-w-[160px] truncate" title={lieu(p)}>{lieu(p)}</td>
+                  {hasSubAgents && (
+                    <td className="py-3">
+                      {!isOwnProspect(p) && (
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700">
+                          {p.agent_prenom ? `${p.agent_prenom} ${p.agent_nom}` : p.agent_nom}
+                        </span>
+                      )}
+                    </td>
+                  )}
                   <td className="py-3 text-center">
                     {p.niveau_interet ? (
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${NIVEAUX[p.niveau_interet] || 'bg-gray-100 text-gray-500'}`}>
@@ -203,20 +238,24 @@ export default function ProspectList() {
                   </td>
                   <td className="py-3 text-right text-gray-500 text-xs">{fmtDate(p.date_prospection)}</td>
                   <td className="py-3 text-right">
-                    <div className="flex items-center gap-1.5 justify-end">
-                      <button
-                        onClick={() => navigate(`/agent/prospects/${p.id}/edit`)}
-                        className="btn btn-secondary btn-sm" title="Modifier"
-                      >
-                        <Edit size={13} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(p.id)}
-                        className="btn btn-danger btn-sm" title="Supprimer"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                    {isOwnProspect(p) ? (
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <button
+                          onClick={() => navigate(`/agent/prospects/${p.id}/edit`)}
+                          className="btn btn-secondary btn-sm" title="Modifier"
+                        >
+                          <Edit size={13} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p.id)}
+                          className="btn btn-danger btn-sm" title="Supprimer"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400">Lecture seule</span>
+                    )}
                   </td>
                 </tr>
               ))}

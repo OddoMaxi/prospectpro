@@ -80,7 +80,14 @@ router.get('/', authenticateToken, ah(async (req, res) => {
   const args = [];
 
   if (req.user.role !== 'admin') {
-    sql += ' AND p.agent_id = ?'; args.push(req.user.id);
+    const subs = await all("SELECT id FROM users WHERE parent_agent_id=? AND role='agent'", [req.user.id]);
+    const ids = [req.user.id, ...subs.map(s => s.id)];
+    if (agent_id && ids.includes(agent_id)) {
+      sql += ' AND p.agent_id = ?'; args.push(agent_id);
+    } else {
+      sql += ` AND p.agent_id IN (${ids.map(() => '?').join(',')})`;
+      args.push(...ids);
+    }
   } else if (agent_id) {
     sql += ' AND p.agent_id = ?'; args.push(agent_id);
   }
@@ -101,7 +108,12 @@ router.get('/', authenticateToken, ah(async (req, res) => {
 router.get('/:id', authenticateToken, ah(async (req, res) => {
   let sql = 'SELECT p.*, u.nom as agent_nom, u.prenom as agent_prenom FROM prospects p JOIN users u ON u.id = p.agent_id WHERE p.id = ?';
   const args = [req.params.id];
-  if (req.user.role !== 'admin') { sql += ' AND p.agent_id = ?'; args.push(req.user.id); }
+  if (req.user.role !== 'admin') {
+    const subs = await all("SELECT id FROM users WHERE parent_agent_id=? AND role='agent'", [req.user.id]);
+    const ids = [req.user.id, ...subs.map(s => s.id)];
+    sql += ` AND p.agent_id IN (${ids.map(() => '?').join(',')})`;
+    args.push(...ids);
+  }
   const prospect = await get(sql, args);
   if (!prospect) return res.status(404).json({ error: 'Prospect non trouvé' });
 
