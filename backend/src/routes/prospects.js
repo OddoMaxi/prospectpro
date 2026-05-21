@@ -231,6 +231,24 @@ router.post('/:id/convert', authenticateToken, requireAdmin, ah(async (req, res)
     );
   }
 
+  // Commission directe pour l'agent
+  if (commission_totale > 0) {
+    await run(
+      `INSERT INTO commissions (id, agent_id, client_id, type, montant_du) VALUES (?,?,?,'direct',?)`,
+      [uuidv4(), prospect.agent_id, clientId, commission_totale]
+    );
+  }
+
+  // Commission parent si l'agent est un sous-agent
+  const agentInfo = await get('SELECT parent_agent_id, taux_commission_parent FROM users WHERE id = ?', [prospect.agent_id]);
+  if (agentInfo && agentInfo.parent_agent_id && Number(agentInfo.taux_commission_parent) > 0 && prime_totale > 0) {
+    const parentComm = prime_totale * Number(agentInfo.taux_commission_parent) / 100;
+    await run(
+      `INSERT INTO commissions (id, agent_id, client_id, type, source_agent_id, montant_du) VALUES (?,?,?,'parent',?,?)`,
+      [uuidv4(), agentInfo.parent_agent_id, clientId, prospect.agent_id, parentComm]
+    );
+  }
+
   await run('DELETE FROM prospect_products WHERE prospect_id = ?', [req.params.id]);
   await run('DELETE FROM prospects WHERE id = ?', [req.params.id]);
 

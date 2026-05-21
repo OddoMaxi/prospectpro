@@ -16,6 +16,8 @@ import ProspectForm from './pages/agent/ProspectForm'
 import SousAgentList from './pages/agent/SousAgentList'
 import SousAgentCreate from './pages/agent/SousAgentCreate'
 import ClientList from './pages/admin/ClientList'
+import CommissionList from './pages/admin/CommissionList'
+import CommissionBrouillard from './pages/agent/CommissionBrouillard'
 
 function Spinner() {
   return (
@@ -55,6 +57,7 @@ function AppRoutes() {
         <Route path="products/:id/edit" element={<ProductForm />} />
         <Route path="prospects" element={<ProspectsAdmin />} />
         <Route path="clients" element={<ClientList />} />
+        <Route path="commissions" element={<CommissionList />} />
       </Route>
       <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>
@@ -68,6 +71,7 @@ function AppRoutes() {
         <Route path="prospects/create" element={<ProspectForm />} />
         <Route path="prospects/:id/edit" element={<ProspectForm />} />
         <Route path="clients" element={<ClientList />} />
+        <Route path="commissions" element={<CommissionBrouillard />} />
         <Route path="sous-agents" element={<SousAgentList />} />
         <Route path="sous-agents/create" element={<SousAgentCreate />} />
         <Route path="sous-agents/:id/edit" element={<SousAgentCreate />} />

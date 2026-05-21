@@ -18,7 +18,8 @@ app.use('/api/agents',    require('./routes/agents'));
 app.use('/api/prospects', require('./routes/prospects'));
 app.use('/api/products',  require('./routes/products'));
 app.use('/api/stats',     require('./routes/stats'));
-app.use('/api/clients',   require('./routes/clients'));
+app.use('/api/clients',      require('./routes/clients'));
+app.use('/api/commissions',  require('./routes/commissions'));
 app.get('/api/health',    (_, res) => res.json({ status: 'ok' }));
 
 // Global error handler

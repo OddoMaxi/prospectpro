@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LayoutDashboard, List, PlusCircle, LogOut, Menu, X, User, Users, UserCheck } from 'lucide-react'
+import { LayoutDashboard, List, PlusCircle, LogOut, Menu, X, User, Users, UserCheck, FileText } from 'lucide-react'
 import { useState } from 'react'
 
 export default function AgentLayout() {
@@ -18,6 +18,7 @@ export default function AgentLayout() {
     { to: '/agent/prospects', label: 'Mes prospects', icon: List },
     { to: '/agent/prospects/create', label: 'Nouveau prospect', icon: PlusCircle },
     { to: '/agent/clients', label: 'Mes clients', icon: UserCheck },
+    { to: '/agent/commissions', label: 'Mes commissions', icon: FileText },
     ...(!isSousAgent ? [{ to: '/agent/sous-agents', label: 'Mes sous-agents', icon: Users }] : []),
   ]
 

@@ -151,6 +151,22 @@ async function initializeSchema() {
     commission REAL DEFAULT 0
   )`);
 
+  await db.execute(`CREATE TABLE IF NOT EXISTS commissions (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    client_id TEXT NOT NULL,
+    type TEXT DEFAULT 'direct',
+    source_agent_id TEXT,
+    montant_du REAL NOT NULL DEFAULT 0,
+    montant_paye REAL DEFAULT 0,
+    statut TEXT DEFAULT 'non_paye',
+    date_paiement TEXT,
+    reference_paiement TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+
   const r = await db.execute("SELECT id FROM users WHERE role = 'admin'");
   if (r.rows.length === 0) {
     const hash = bcrypt.hashSync('Admin@2024', 10);
