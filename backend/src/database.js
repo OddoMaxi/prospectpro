@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
+const LIEUX_DATA = require('./data/lieux');
 
 const DATA_DIR = path.join(__dirname, '../../data');
 const DB_PATH  = path.join(DATA_DIR, 'prospection.db');
@@ -151,6 +152,14 @@ async function initializeSchema() {
     commission REAL DEFAULT 0
   )`);
 
+  await db.execute(`CREATE TABLE IF NOT EXISTS lieux (
+    id TEXT PRIMARY KEY,
+    region TEXT NOT NULL,
+    commune TEXT NOT NULL,
+    quartier TEXT NOT NULL,
+    UNIQUE(region, commune, quartier)
+  )`);
+
   await db.execute(`CREATE TABLE IF NOT EXISTS commissions (
     id TEXT PRIMARY KEY,
     agent_id TEXT NOT NULL,
@@ -166,6 +175,22 @@ async function initializeSchema() {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
+
+  // Seed lieux (INSERT OR IGNORE = skip duplicates silently)
+  for (const [region, communes] of Object.entries(LIEUX_DATA)) {
+    for (const [commune, quartiers] of Object.entries(communes)) {
+      // Deduplicate quartiers within same commune
+      const unique = [...new Set(quartiers)];
+      for (const quartier of unique) {
+        try {
+          await db.execute({
+            sql: 'INSERT OR IGNORE INTO lieux (id, region, commune, quartier) VALUES (?,?,?,?)',
+            args: [uuidv4(), region, commune, quartier]
+          });
+        } catch(_) {}
+      }
+    }
+  }
 
   const r = await db.execute("SELECT id FROM users WHERE role = 'admin'");
   if (r.rows.length === 0) {
