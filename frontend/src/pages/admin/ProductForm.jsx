@@ -5,7 +5,6 @@ import toast from 'react-hot-toast'
 import { Save, ArrowLeft, Package } from 'lucide-react'
 
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
-const fmtCur = n => `${fmt(n)} GNF`
 
 const EMPTY = {
   nom: '', description: '', prime_annuelle: '',
@@ -188,21 +187,21 @@ export default function ProductForm() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white rounded-lg p-3 border border-gray-100">
                   <p className="text-xs text-gray-400 mb-0.5">Prime annuelle</p>
-                  <p className="font-bold text-gray-900">{fmtCur(prime)}</p>
+                  <p className="font-bold text-gray-900">{fmt(prime)}</p>
                 </div>
                 <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
                   <p className="text-xs text-blue-500 mb-0.5">Commission agent direct</p>
-                  <p className="font-bold text-blue-700">{fmtCur(commAgent)}</p>
+                  <p className="font-bold text-blue-700">{fmt(commAgent)}</p>
                   <p className="text-xs text-blue-400">{tauxA}%</p>
                 </div>
                 <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
                   <p className="text-xs text-purple-500 mb-0.5">Commission Agent Juniore</p>
-                  <p className="font-bold text-purple-700">{fmtCur(commSA)}</p>
+                  <p className="font-bold text-purple-700">{fmt(commSA)}</p>
                   <p className="text-xs text-purple-400">{tauxSA}%</p>
                 </div>
                 <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
                   <p className="text-xs text-orange-500 mb-0.5">Part agent parent</p>
-                  <p className="font-bold text-orange-700">{fmtCur(Math.max(0, commParent))}</p>
+                  <p className="font-bold text-orange-700">{fmt(Math.max(0, commParent))}</p>
                   <p className="text-xs text-orange-400">{Math.max(0, tauxA - tauxSA).toFixed(1)}%</p>
                 </div>
               </div>

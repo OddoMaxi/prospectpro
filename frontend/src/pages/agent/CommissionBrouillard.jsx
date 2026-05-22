@@ -3,9 +3,10 @@ import { api } from '../../api'
 import toast from 'react-hot-toast'
 import {
   Search, Filter, ChevronDown, X, CreditCard, CheckCircle,
-  Clock, AlertCircle, FileText, TrendingDown
+  Clock, AlertCircle, FileText, TrendingDown, Download
 } from 'lucide-react'
 import Pagination from '../../components/Pagination'
+import { exportCSV } from '../../utils/csv'
 
 const PAGE_SIZE = 15
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
@@ -61,6 +62,35 @@ export default function CommissionBrouillard() {
   const setSF = (k, v) => setSitFilters(p => ({ ...p, [k]: v }))
   const hasActiveFilters = Object.values(filters).some(Boolean)
   const paginated = commissions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  const handleExportBrouillard = () => {
+    exportCSV(commissions, [
+      { label: 'Date',           value: r => fmtDate(r.created_at) },
+      { label: 'Client',         value: r => r.client_type === 'physique' ? `${r.client_prenom || ''} ${r.client_nom}`.trim() : r.client_nom },
+      { label: 'N° Client',      value: 'client_numero' },
+      { label: 'N° Contrat',     value: 'numero_contrat' },
+      { label: 'Type',           value: r => r.type === 'parent' ? `Via ${r.source_prenom || ''} ${r.source_nom || ''}`.trim() : 'Directe' },
+      { label: 'Commission due', value: r => Math.round(r.montant_du || 0) },
+      { label: 'Montant reçu',   value: r => Math.round(r.montant_paye || 0) },
+      { label: 'Solde',          value: r => Math.round(Math.max(0, Number(r.montant_du) - Number(r.montant_paye))) },
+      { label: 'Statut',         value: r => STATUTS[r.statut]?.label || r.statut },
+      { label: 'Date paiement',  value: r => fmtDate(r.date_paiement) },
+      { label: 'Référence',      value: 'reference_paiement' },
+    ], `commissions_${new Date().toISOString().split('T')[0]}.csv`)
+  }
+
+  const handleExportSituation = () => {
+    if (!situation) return
+    exportCSV(situation.payments, [
+      { label: 'Date',      value: r => fmtDate(r.date_paiement) },
+      { label: 'Client',    value: r => r.client_type === 'physique' ? `${r.client_prenom || ''} ${r.client_nom}`.trim() : r.client_nom },
+      { label: 'N° Client', value: 'client_numero' },
+      { label: 'Référence', value: 'reference' },
+      { label: 'Libellé',   value: 'libelle' },
+      { label: 'Montant',   value: r => Math.round(r.montant || 0) },
+      { label: 'Solde',     value: r => Math.round(r.solde || 0) },
+    ], `situation_${sitFilters.date_debut || 'debut'}_${sitFilters.date_fin || 'fin'}.csv`)
+  }
 
   const loadSituation = () => {
     setSitLoading(true)
@@ -142,6 +172,11 @@ export default function CommissionBrouillard() {
                 <Filter size={15} />Filtres
                 <ChevronDown size={14} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
               </button>
+              {commissions.length > 0 && (
+                <button onClick={handleExportBrouillard} className="btn btn-secondary gap-2" title="Exporter en CSV">
+                  <Download size={15} />
+                </button>
+              )}
             </div>
 
             {showFilters && (
@@ -317,10 +352,15 @@ export default function CommissionBrouillard() {
                 <p className="text-sm font-semibold text-gray-700">
                   {situation.payments.length} paiement{situation.payments.length > 1 ? 's' : ''}
                 </p>
-                <span className="text-xs text-gray-500">
-                  Solde d'ouverture :{' '}
-                  <span className="font-semibold text-gray-900">{fmt(situation.initial_solde)}</span>
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-gray-500">
+                    Solde d'ouverture :{' '}
+                    <span className="font-semibold text-gray-900">{fmt(situation.initial_solde)}</span>
+                  </span>
+                  <button onClick={handleExportSituation} className="btn btn-secondary btn-sm gap-1.5" title="Exporter en CSV">
+                    <Download size={13} />CSV
+                  </button>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">

@@ -13,7 +13,7 @@ const PERIODES = [
 
 const multiplier = p => PERIODES.find(x => x.value === p)?.multiplier ?? 12
 const fmtNum = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
-const fmtCur = n => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'GNF', minimumFractionDigits: 0 }).format(Math.round(n || 0))
+const fmtCur = n => fmtNum(n)
 
 function Field({ label, children, required }) {
   return (

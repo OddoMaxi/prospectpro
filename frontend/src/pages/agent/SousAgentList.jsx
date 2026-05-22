@@ -10,13 +10,21 @@ import Pagination from '../../components/Pagination'
 
 const PAGE_SIZE = 10
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
-const fmtCur = n => `${fmt(n)} GNF`
 
-function DeleteModal({ agent, onConfirm, onClose, parentId }) {
+function DeleteModal({ agent, onConfirm, onClose, parentId, agents }) {
   const [mode, setMode] = useState('delete')
-  const [transferTo, setTransferTo] = useState('')
-  // On peut transférer vers l'agent parent lui-même
-  const transferOptions = [{ id: parentId, label: 'Me transférer (votre portefeuille)' }]
+  const [transferTo, setTransferTo] = useState(parentId || '')
+
+  const otherSousAgents = (agents || []).filter(a => a.id !== agent.id && a.is_active)
+  const transferOptions = [
+    { id: parentId, label: 'Me transférer (votre portefeuille)' },
+    ...otherSousAgents.map(a => ({
+      id: a.id,
+      label: a.type_agent === 'morale'
+        ? (a.raison_sociale || a.nom)
+        : `${a.prenom} ${a.nom}`,
+    })),
+  ]
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
@@ -37,10 +45,18 @@ function DeleteModal({ agent, onConfirm, onClose, parentId }) {
               style={{ borderColor: mode === 'transfer' ? '#3b82f6' : '#e5e7eb' }}>
               <input type="radio" name="mode" value="transfer" checked={mode === 'transfer'} onChange={() => setMode('transfer')} className="mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-gray-800">Me transférer les prospects</p>
-                <p className="text-xs text-gray-500">Les prospects seront ajoutés à votre portefeuille</p>
+                <p className="text-sm font-medium text-gray-800">Transférer les prospects</p>
+                <p className="text-xs text-gray-500">Les prospects seront transférés vers l'agent choisi</p>
               </div>
             </label>
+            {mode === 'transfer' && (
+              <div className="pl-7">
+                <label className="label">Transférer vers</label>
+                <select className="input" value={transferTo} onChange={e => setTransferTo(e.target.value)}>
+                  {transferOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </div>
+            )}
             <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border-2 transition-colors"
               style={{ borderColor: mode === 'delete' ? '#ef4444' : '#e5e7eb' }}>
               <input type="radio" name="mode" value="delete" checked={mode === 'delete'} onChange={() => setMode('delete')} className="mt-0.5" />
@@ -55,7 +71,7 @@ function DeleteModal({ agent, onConfirm, onClose, parentId }) {
         <div className="flex gap-3">
           <button onClick={onClose} className="btn btn-secondary flex-1 justify-center">Annuler</button>
           <button
-            onClick={() => onConfirm(agent.id, mode === 'transfer' ? parentId : null)}
+            onClick={() => onConfirm(agent.id, mode === 'transfer' ? (transferTo || parentId) : null)}
             className="btn btn-danger flex-1 justify-center">
             <Trash2 size={15} />Supprimer
           </button>
@@ -160,6 +176,7 @@ export default function SousAgentList() {
         <DeleteModal
           agent={deleteTarget}
           parentId={parentId}
+          agents={agents}
           onConfirm={handleDelete}
           onClose={() => setDeleteTarget(null)}
         />
@@ -208,7 +225,7 @@ export default function SousAgentList() {
             </div>
             <div>
               <p className="text-xs text-gray-500 font-medium">Ma commission sous-agents</p>
-              <p className="text-xl font-bold text-gray-900">{fmtCur(totalCommissionParent)}</p>
+              <p className="text-xl font-bold text-gray-900">{fmt(totalCommissionParent)}</p>
               <p className="text-xs text-gray-400">Part agent parent (admin définit le taux)</p>
             </div>
           </div>
@@ -277,15 +294,15 @@ export default function SousAgentList() {
                       <div className="text-xs text-gray-400">conv. {convRate}%</div>
                     </td>
                     <td className="py-3 text-right text-emerald-700 font-medium">{fmt(agent.total_clients)}</td>
-                    <td className="py-3 text-right text-gray-700 text-xs">{fmtCur(agent.prime_total)}</td>
+                    <td className="py-3 text-right text-gray-700 text-xs">{fmt(agent.prime_total)}</td>
                     <td className="py-3 text-right text-xs">
-                      <span className="text-blue-700 font-medium">{fmtCur(commAgent)}</span>
+                      <span className="text-blue-700 font-medium">{fmt(commAgent)}</span>
                       <div className="text-gray-400">taux {agent.taux_commission}%</div>
                     </td>
                     <td className="py-3 text-right text-xs">
                       {tauxParent > 0 ? (
                         <>
-                          <span className="text-purple-700 font-medium">{fmtCur(maCommission)}</span>
+                          <span className="text-purple-700 font-medium">{fmt(maCommission)}</span>
                           <div className="text-gray-400">taux {tauxParent}%</div>
                         </>
                       ) : (

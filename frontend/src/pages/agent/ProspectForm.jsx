@@ -3,10 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
 import { Save, ArrowLeft, User, Building2, Plus, Trash2 } from 'lucide-react'
-import { COMMUNES, getQuartiers, PROFESSIONS, SECTEURS_MORALE } from '../../data/guinea'
+import { COMMUNES, VILLES, getCommunes, getQuartiers, getVilleFromCommune, PROFESSIONS, SECTEURS_MORALE } from '../../data/guinea'
 
-const fmtGNF = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0)) + ' GNF'
-
+const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
 const NIVEAUX_INTERET = ['Faible', 'Moyen', 'Élevé']
 
 const EMPTY = {
@@ -20,6 +19,7 @@ const EMPTY = {
   siege_social_commune: '', siege_social_quartier: '',
   profession: '',
   secteur_activite: '',
+  niveau_interet: '',
   statut: 'prospect',
   date_prospection: new Date().toISOString().split('T')[0],
 }
@@ -64,12 +64,54 @@ function LocationSelect({ communeValue, quartierValue, onCommuneChange, onQuarti
   )
 }
 
+function LocationSelect3({ villeValue, communeValue, quartierValue, onVilleChange, onCommuneChange, onQuartierChange }) {
+  const communes = villeValue ? getCommunes(villeValue) : []
+  const quartiers = communeValue ? getQuartiers(communeValue) : []
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      <Field label="Ville">
+        <select
+          className="input"
+          value={villeValue}
+          onChange={e => { onVilleChange(e.target.value); onCommuneChange(''); onQuartierChange('') }}
+        >
+          <option value="">Ville...</option>
+          {VILLES.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+      </Field>
+      <Field label="Commune">
+        <select
+          className="input"
+          value={communeValue}
+          onChange={e => { onCommuneChange(e.target.value); onQuartierChange('') }}
+          disabled={!villeValue}
+        >
+          <option value="">Commune...</option>
+          {communes.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </Field>
+      <Field label="Quartier">
+        <select
+          className="input"
+          value={quartierValue}
+          onChange={e => onQuartierChange(e.target.value)}
+          disabled={!communeValue}
+        >
+          <option value="">Quartier...</option>
+          {quartiers.map(q => <option key={q} value={q}>{q}</option>)}
+        </select>
+      </Field>
+    </div>
+  )
+}
+
 export default function ProspectForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const isEdit = !!id
 
   const [form, setForm] = useState(EMPTY)
+  const [lieuResidenceVille, setLieuResidenceVille] = useState('')
   const [loading, setLoading] = useState(false)
   const [initLoading, setInitLoading] = useState(isEdit)
   const [availableProducts, setAvailableProducts] = useState([])
@@ -101,9 +143,13 @@ export default function ProspectForm() {
             siege_social_quartier: p.siege_social_quartier || '',
             profession: p.profession || '',
             secteur_activite: p.secteur_activite || '',
+            niveau_interet: p.niveau_interet || '',
             statut: p.statut || 'prospect',
             date_prospection: p.date_prospection || new Date().toISOString().split('T')[0],
           })
+          if (p.lieu_residence_commune) {
+            setLieuResidenceVille(getVilleFromCommune(p.lieu_residence_commune))
+          }
           if (p.prospect_products?.length > 0) {
             setSelectedProducts(p.prospect_products.map(pp => ({
               product_id: pp.product_id,
@@ -121,7 +167,6 @@ export default function ProspectForm() {
 
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  // Gestion de la table produits
   const addProduct = () => {
     setSelectedProducts(prev => [...prev, {
       product_id: '', product_nom: '', prime_annuelle: 0, taux_commission: 0, nb_beneficiaires: '1'
@@ -244,7 +289,6 @@ export default function ProspectForm() {
           <div className="card space-y-4">
             <h2 className="text-sm font-semibold text-gray-700">Identité</h2>
 
-            {/* Sexe */}
             <div>
               <label className="label">Sexe</label>
               <div className="flex gap-4">
@@ -313,12 +357,11 @@ export default function ProspectForm() {
         {/* ── Coordonnées ─────────────────────────────────────────────────── */}
         <div className="card space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">Coordonnées</h2>
-          <Field label="Téléphone">
-            <input className="input" type="tel" value={form.telephone}
+          <Field label="Téléphone" required>
+            <input className="input" type="tel" value={form.telephone} required
               onChange={e => f('telephone', e.target.value)} placeholder="+224 6XX XX XX XX" />
           </Field>
 
-          {/* Email uniquement pour les personnes morales */}
           {!isPhysique && (
             <Field label="Email">
               <input className="input" type="email" value={form.email}
@@ -328,14 +371,17 @@ export default function ProspectForm() {
 
           {isPhysique && (
             <>
-              <LocationSelect
-                communeValue={form.lieu_residence_commune}
-                quartierValue={form.lieu_residence_quartier}
-                onCommuneChange={v => f('lieu_residence_commune', v)}
-                onQuartierChange={v => f('lieu_residence_quartier', v)}
-                labelCommune="Lieu de résidence – Commune"
-                labelQuartier="Lieu de résidence – Quartier"
-              />
+              <div>
+                <label className="label">Lieu de résidence</label>
+                <LocationSelect3
+                  villeValue={lieuResidenceVille}
+                  communeValue={form.lieu_residence_commune}
+                  quartierValue={form.lieu_residence_quartier}
+                  onVilleChange={setLieuResidenceVille}
+                  onCommuneChange={v => f('lieu_residence_commune', v)}
+                  onQuartierChange={v => f('lieu_residence_quartier', v)}
+                />
+              </div>
               <LocationSelect
                 communeValue={form.lieu_activite_commune}
                 quartierValue={form.lieu_activite_quartier}
@@ -360,16 +406,29 @@ export default function ProspectForm() {
           <h2 className="text-sm font-semibold text-gray-700">Informations commerciales</h2>
 
           <Field label="Statut commercial">
-            <select className="input" value={form.statut} onChange={e => f('statut', e.target.value)}>
-              <option value="prospect">Prospect</option>
-              <option value="client">Client</option>
+            {isEdit ? (
+              <select className="input" value={form.statut} onChange={e => f('statut', e.target.value)}>
+                <option value="prospect">Prospect</option>
+                <option value="client">Client</option>
+              </select>
+            ) : (
+              <div className="input bg-gray-50 text-gray-500 cursor-default select-none">Prospect</div>
+            )}
+          </Field>
+
+          <Field label="Niveau d'intérêt">
+            <select className="input" value={form.niveau_interet} onChange={e => f('niveau_interet', e.target.value)}>
+              <option value="">Sélectionner...</option>
+              {NIVEAUX_INTERET.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
           </Field>
 
-          <Field label="Date de prospection">
-            <input className="input" type="date" value={form.date_prospection}
-              onChange={e => f('date_prospection', e.target.value)} />
-          </Field>
+          {isEdit && (
+            <Field label="Date de prospection">
+              <input className="input bg-gray-50 text-gray-500 cursor-default" type="date"
+                value={form.date_prospection} readOnly />
+            </Field>
+          )}
 
           {/* Table des produits */}
           <div>
@@ -426,10 +485,10 @@ export default function ProspectForm() {
                             />
                           </td>
                           <td className="px-3 py-2 text-right font-medium text-blue-700">
-                            {sp.product_id ? fmtGNF(primePrev) : '—'}
+                            {sp.product_id ? fmt(primePrev) : '—'}
                           </td>
                           <td className="px-3 py-2 text-right font-medium text-purple-700">
-                            {sp.product_id ? fmtGNF(commPrev) : '—'}
+                            {sp.product_id ? fmt(commPrev) : '—'}
                           </td>
                           <td className="px-3 py-2 text-center">
                             <button type="button" onClick={() => removeProduct(idx)}
@@ -445,8 +504,8 @@ export default function ProspectForm() {
                     <tfoot className="bg-gray-50 border-t-2 border-gray-200">
                       <tr className="text-sm font-bold">
                         <td className="px-3 py-2 text-gray-600 text-xs uppercase tracking-wide" colSpan={2}>Total</td>
-                        <td className="px-3 py-2 text-right text-blue-800">{fmtGNF(totalPrime)}</td>
-                        <td className="px-3 py-2 text-right text-purple-800">{fmtGNF(totalComm)}</td>
+                        <td className="px-3 py-2 text-right text-blue-800">{fmt(totalPrime)}</td>
+                        <td className="px-3 py-2 text-right text-purple-800">{fmt(totalComm)}</td>
                         <td></td>
                       </tr>
                     </tfoot>

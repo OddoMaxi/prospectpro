@@ -79,7 +79,7 @@ router.post('/', authenticateToken, ah(async (req, res) => {
 }));
 
 router.get('/', authenticateToken, ah(async (req, res) => {
-  const { type, statut, date_debut, date_fin, agent_id, search } = req.query;
+  const { type, statut, niveau_interet, date_debut, date_fin, agent_id, search } = req.query;
 
   let sql = `SELECT p.*, u.nom as agent_nom, u.prenom as agent_prenom
     FROM prospects p JOIN users u ON u.id = p.agent_id WHERE 1=1`;
@@ -97,10 +97,11 @@ router.get('/', authenticateToken, ah(async (req, res) => {
   } else if (agent_id) {
     sql += ' AND p.agent_id = ?'; args.push(agent_id);
   }
-  if (type)       { sql += ' AND p.type = ?';               args.push(type); }
-  if (statut)     { sql += ' AND p.statut = ?';             args.push(statut); }
-  if (date_debut) { sql += ' AND p.date_prospection >= ?';  args.push(date_debut); }
-  if (date_fin)   { sql += ' AND p.date_prospection <= ?';  args.push(date_fin); }
+  if (type)            { sql += ' AND p.type = ?';               args.push(type); }
+  if (statut)          { sql += ' AND p.statut = ?';             args.push(statut); }
+  if (niveau_interet)  { sql += ' AND p.niveau_interet = ?';     args.push(niveau_interet); }
+  if (date_debut)      { sql += ' AND p.date_prospection >= ?';  args.push(date_debut); }
+  if (date_fin)        { sql += ' AND p.date_prospection <= ?';  args.push(date_fin); }
   if (search) {
     sql += ' AND (p.nom LIKE ? OR p.prenom LIKE ? OR p.lieu_residence_commune LIKE ? OR p.telephone LIKE ?)';
     const s = `%${search}%`;
@@ -179,7 +180,21 @@ router.put('/:id', authenticateToken, ah(async (req, res) => {
   res.json({ message: 'Prospect mis à jour avec succès' });
 }));
 
-router.post('/:id/convert', authenticateToken, requireAdmin, ah(async (req, res) => {
+router.patch('/:id/statut', authenticateToken, ah(async (req, res) => {
+  const { statut } = req.body;
+  if (!['prospect', 'en_cours', 'perdu'].includes(statut))
+    return res.status(400).json({ error: 'Statut invalide' });
+
+  let cq = 'SELECT id FROM prospects WHERE id = ?';
+  const ca = [req.params.id];
+  if (req.user.role !== 'admin') { cq += ' AND agent_id = ?'; ca.push(req.user.id); }
+  if (!await get(cq, ca)) return res.status(404).json({ error: 'Prospect non trouvé' });
+
+  await run("UPDATE prospects SET statut=?, updated_at=datetime('now') WHERE id=?", [statut, req.params.id]);
+  res.json({ message: 'Statut mis à jour' });
+}));
+
+router.post('/:id/convert', authenticateToken, ah(async (req, res) => {
   const { numero_contrat, date_effet, duree, date_fin: date_fin_input, products } = req.body;
   if (!numero_contrat || !date_effet || (!duree && !date_fin_input))
     return res.status(400).json({ error: 'N° contrat, date d\'effet et durée (ou date de fin) requis' });
@@ -193,7 +208,11 @@ router.post('/:id/convert', authenticateToken, requireAdmin, ah(async (req, res)
   }
   if (!date_fin) return res.status(400).json({ error: 'Date de fin invalide' });
 
-  const prospect = await get('SELECT * FROM prospects WHERE id = ?', [req.params.id]);
+  // Agents can only convert their own prospects
+  let prospectQ = 'SELECT * FROM prospects WHERE id = ?';
+  const prospectA = [req.params.id];
+  if (req.user.role !== 'admin') { prospectQ += ' AND agent_id = ?'; prospectA.push(req.user.id); }
+  const prospect = await get(prospectQ, prospectA);
   if (!prospect) return res.status(404).json({ error: 'Prospect non trouvé' });
 
   // Récupère les produits avec les deux taux (agent + sous-agent)
@@ -306,10 +325,13 @@ router.post('/:id/convert', authenticateToken, requireAdmin, ah(async (req, res)
   res.json({ message: 'Prospect converti en client avec succès', client_id: clientId });
 }));
 
-router.delete('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
+router.delete('/:id', authenticateToken, ah(async (req, res) => {
+  let cq = 'SELECT id FROM prospects WHERE id = ?';
+  const ca = [req.params.id];
+  if (req.user.role !== 'admin') { cq += ' AND agent_id = ?'; ca.push(req.user.id); }
+  if (!await get(cq, ca)) return res.status(404).json({ error: 'Prospect non trouvé ou accès refusé' });
   await run("DELETE FROM prospect_products WHERE prospect_id=?", [req.params.id]);
-  const r = await run('DELETE FROM prospects WHERE id = ?', [req.params.id]);
-  if (r.rowsAffected === 0) return res.status(404).json({ error: 'Prospect non trouvé' });
+  await run('DELETE FROM prospects WHERE id = ?', [req.params.id]);
   res.json({ message: 'Prospect supprimé' });
 }));
 

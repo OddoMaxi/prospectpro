@@ -2,13 +2,68 @@ import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
-import { Search, Filter, Eye, Trash2, ChevronDown, X, UserCheck } from 'lucide-react'
+import { Search, Filter, Eye, Trash2, ChevronDown, X, UserCheck, Bell, Phone, Mail, Download } from 'lucide-react'
 import Pagination from '../../components/Pagination'
+import { exportCSV } from '../../utils/csv'
 
 const PAGE_SIZE = 10
 const TYPES = { physique: 'Particulier', morale: 'Entreprise' }
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
 const fmtDate = d => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
+
+const isExpiringSoon = dateFin => {
+  if (!dateFin) return false
+  const fin = new Date(dateFin)
+  const now = new Date()
+  const diffDays = (fin - now) / (1000 * 60 * 60 * 24)
+  return diffDays >= 0 && diffDays <= 30
+}
+
+function RelanceModal({ client, onClose }) {
+  if (!client) return null
+  const name = client.type === 'physique'
+    ? `${client.prenom || ''} ${client.nom}`.trim()
+    : client.nom
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <div className="flex items-start justify-between mb-1">
+          <h3 className="font-bold text-gray-900">Relancer {name}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none ml-4">×</button>
+        </div>
+        <p className="text-sm text-amber-600 font-medium mb-4">
+          Contrat expire le {fmtDate(client.date_fin)}
+        </p>
+        <div className="space-y-3">
+          {client.telephone && (
+            <a href={`tel:${client.telephone}`}
+              className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors">
+              <Phone size={18} className="text-blue-600 shrink-0" />
+              <div>
+                <p className="text-xs text-blue-500 font-medium">Téléphone</p>
+                <p className="font-semibold text-blue-900">{client.telephone}</p>
+              </div>
+            </a>
+          )}
+          {client.email && (
+            <a href={`mailto:${client.email}`}
+              className="flex items-center gap-3 p-3 bg-green-50 rounded-xl hover:bg-green-100 transition-colors">
+              <Mail size={18} className="text-green-600 shrink-0" />
+              <div>
+                <p className="text-xs text-green-500 font-medium">Email</p>
+                <p className="font-semibold text-green-900">{client.email}</p>
+              </div>
+            </a>
+          )}
+          {!client.telephone && !client.email && (
+            <p className="text-sm text-gray-400 text-center py-4">Aucune coordonnée disponible</p>
+          )}
+        </div>
+        <button onClick={onClose} className="btn btn-secondary w-full justify-center mt-4">Fermer</button>
+      </div>
+    </div>
+  )
+}
 
 function ClientModal({ client, onClose }) {
   if (!client) return null
@@ -114,8 +169,9 @@ export default function ClientList() {
   const [agents, setAgents] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+  const [relanceTarget, setRelanceTarget] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState({ search: '', agent_id: '', date_debut: '', date_fin: '' })
+  const [filters, setFilters] = useState({ search: '', agent_id: '', date_debut: '', date_fin: '', expiring_soon: false })
   const [page, setPage] = useState(1)
 
   const load = () => {
@@ -150,13 +206,31 @@ export default function ClientList() {
   }
 
   const hasActiveFilters = Object.values(filters).some(Boolean)
-  const primeTotale = clients.reduce((s, c) => s + Number(c.prime_totale || 0), 0)
-  const commTotale  = clients.reduce((s, c) => s + Number(c.commission_totale || 0), 0)
-  const paginated   = clients.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const displayClients = filters.expiring_soon ? clients.filter(c => isExpiringSoon(c.date_fin)) : clients
+
+  const handleExport = () => {
+    exportCSV(displayClients, [
+      { label: 'N°',           value: 'numero' },
+      { label: 'Nom',          value: r => r.type === 'physique' ? `${r.prenom || ''} ${r.nom}`.trim() : r.nom },
+      { label: 'Type',         value: r => TYPES[r.type] },
+      { label: 'Agent',        value: r => `${r.agent_prenom} ${r.agent_nom}` },
+      { label: 'N° Contrat',   value: 'numero_contrat' },
+      { label: 'Prime payée',  value: r => Math.round(r.prime_totale || 0) },
+      { label: 'Commission',   value: r => Math.round(r.commission_totale || 0) },
+      { label: 'Date effet',   value: r => fmtDate(r.date_effet) },
+      { label: 'Date fin',     value: r => fmtDate(r.date_fin) },
+      { label: 'Téléphone',    value: 'telephone' },
+      { label: 'Email',        value: 'email' },
+    ], `clients_${new Date().toISOString().split('T')[0]}.csv`)
+  }
+  const primeTotale = displayClients.reduce((s, c) => s + Number(c.prime_totale || 0), 0)
+  const commTotale  = displayClients.reduce((s, c) => s + Number(c.commission_totale || 0), 0)
+  const paginated   = displayClients.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <div>
       {selected && <ClientModal client={selected} onClose={() => setSelected(null)} />}
+      {relanceTarget && <RelanceModal client={relanceTarget} onClose={() => setRelanceTarget(null)} />}
 
       <div className="flex items-center justify-between mb-5">
         <div>
@@ -170,6 +244,9 @@ export default function ClientList() {
             {commTotale  > 0 && <> · Commissions : <span className="font-medium">{fmt(commTotale)}</span></>}
           </p>
         </div>
+        <button onClick={handleExport} className="btn btn-secondary gap-2" title="Exporter en CSV">
+          <Download size={15} />Exporter
+        </button>
       </div>
 
       <div className="card mb-5 space-y-3">
@@ -211,9 +288,19 @@ export default function ClientList() {
               <label className="label">Jusqu'au</label>
               <input className="input" type="date" value={filters.date_fin} onChange={e => setF('date_fin', e.target.value)} />
             </div>
+            <div>
+              <label className="label">Échéance</label>
+              <button
+                type="button"
+                onClick={() => setF('expiring_soon', !filters.expiring_soon)}
+                className={`btn btn-sm w-full justify-center gap-1.5 ${filters.expiring_soon ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600' : 'btn-secondary'}`}
+              >
+                <Bell size={13} />Échéance &lt; 1 mois
+              </button>
+            </div>
             {hasActiveFilters && (
               <button
-                onClick={() => setFilters({ search: '', agent_id: '', date_debut: '', date_fin: '' })}
+                onClick={() => setFilters({ search: '', agent_id: '', date_debut: '', date_fin: '', expiring_soon: false })}
                 className="col-span-2 md:col-span-4 btn btn-secondary btn-sm justify-center"
               >
                 <X size={13} />Effacer les filtres
@@ -227,7 +314,7 @@ export default function ClientList() {
         <div className="flex justify-center py-16">
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
         </div>
-      ) : clients.length === 0 ? (
+      ) : displayClients.length === 0 ? (
         <div className="card text-center py-14">
           <UserCheck size={40} className="text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 font-medium">
@@ -249,7 +336,7 @@ export default function ClientList() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {paginated.map(c => (
-                  <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={c.id} className={`transition-colors hover:bg-gray-50 ${isExpiringSoon(c.date_fin) ? 'bg-amber-50/60' : ''}`}>
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
                         #{c.numero}
@@ -271,7 +358,12 @@ export default function ClientList() {
                     <td className="px-4 py-3 text-right font-medium text-blue-700">{fmt(c.prime_totale)}</td>
                     <td className="px-4 py-3 text-right font-medium text-emerald-700">{fmt(c.commission_totale)}</td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{fmtDate(c.date_effet)}</td>
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{fmtDate(c.date_fin)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs">
+                      {isExpiringSoon(c.date_fin)
+                        ? <span className="font-semibold text-amber-600">{fmtDate(c.date_fin)}</span>
+                        : <span className="text-gray-500">{fmtDate(c.date_fin)}</span>
+                      }
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button
@@ -280,6 +372,14 @@ export default function ClientList() {
                         >
                           <Eye size={15} />
                         </button>
+                        {isExpiringSoon(c.date_fin) && (
+                          <button
+                            onClick={() => setRelanceTarget(c)}
+                            className="p-1.5 hover:bg-amber-50 rounded-lg text-amber-500 transition-colors" title="Relancer"
+                          >
+                            <Bell size={15} />
+                          </button>
+                        )}
                         {isAdmin && (
                           <button
                             onClick={() => handleDelete(c.id)}
@@ -296,7 +396,7 @@ export default function ClientList() {
             </table>
           </div>
           <div className="px-4 pb-4">
-            <Pagination page={page} totalPages={Math.ceil(clients.length / PAGE_SIZE)} total={clients.length} onPageChange={setPage} />
+            <Pagination page={page} totalPages={Math.ceil(displayClients.length / PAGE_SIZE)} total={displayClients.length} onPageChange={setPage} />
           </div>
         </div>
       )}

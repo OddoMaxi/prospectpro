@@ -9,64 +9,107 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 const STATUS_LABELS = { prospect: 'Prospect', en_cours: 'En cours', client: 'Client', perdu: 'Perdu' }
 const STATUS_COLORS = { prospect: '#3b82f6', en_cours: '#f59e0b', client: '#10b981', perdu: '#ef4444' }
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
-const fmtCur = n => `${fmt(n)} GNF`
 const fmtDate = d => d ? new Date(d).toLocaleDateString('fr-FR') : '-'
 
-function ProgressBar({ label, value, max, colorClass = 'bg-blue-500' }) {
+const PERIODS = [
+  { value: 'semaine',   label: 'Semaine' },
+  { value: 'mois',      label: 'Mois' },
+  { value: 'trimestre', label: 'Trimestre' },
+  { value: 'semestre',  label: 'Semestre' },
+  { value: 'annee',     label: 'Année' },
+]
+
+function getLevel(pct) {
+  if (pct >= 100) return { label: 'Objectif dépassé !', color: 'text-emerald-600', bg: 'bg-emerald-500' }
+  if (pct >= 80)  return { label: 'Excellent',          color: 'text-blue-600',    bg: 'bg-blue-500' }
+  if (pct >= 60)  return { label: 'En bonne voie',      color: 'text-amber-600',   bg: 'bg-amber-500' }
+  if (pct >= 30)  return { label: 'À améliorer',        color: 'text-orange-600',  bg: 'bg-orange-500' }
+  return                  { label: 'Insuffisant',        color: 'text-red-600',     bg: 'bg-red-500' }
+}
+
+function AchievementBar({ label, value, max, fmtFn = fmt }) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
   const over = max > 0 && value > max
+  const level = getLevel(over ? 100 : pct)
   return (
     <div>
       <div className="flex justify-between items-center mb-1.5">
         <span className="text-sm font-medium text-gray-700">{label}</span>
-        <span className={`text-sm font-bold ${over ? 'text-emerald-600' : 'text-gray-900'}`}>
-          {fmt(value)}<span className="text-gray-400 font-normal"> / {fmt(max)}</span>
+        <span className="text-sm font-bold text-gray-900">
+          {fmtFn(value)}<span className="text-gray-400 font-normal"> / {fmtFn(max)}</span>
         </span>
       </div>
       <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all ${over ? 'bg-emerald-500' : colorClass}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full rounded-full transition-all ${level.bg}`} style={{ width: `${Math.min(over ? 100 : pct, 100)}%` }} />
       </div>
       <div className="flex justify-between mt-1">
-        <span className="text-xs text-gray-400">Progression</span>
-        <span className={`text-xs font-semibold ${over ? 'text-emerald-600' : pct >= 80 ? 'text-blue-600' : 'text-gray-600'}`}>
-          {pct.toFixed(0)}% {over ? '— Objectif dépassé !' : ''}
-        </span>
+        <span className={`text-xs font-semibold ${level.color}`}>{level.label}</span>
+        <span className="text-xs text-gray-500">{over ? '≥ 100%' : `${pct.toFixed(0)}%`}</span>
       </div>
     </div>
   )
 }
 
+const fmtAxisDay   = d => { if (!d) return ''; const [,, day] = d.split('-'); return day }
+const fmtAxisMonth = m => { if (!m) return ''; const [y, mo] = m.split('-'); return `${mo}/${String(y).slice(2)}` }
+
 export default function AgentDashboard() {
   const { user } = useAuth()
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [period, setPeriod] = useState('mois')
 
   useEffect(() => {
-    api.get('/stats/agent').then(r => setStats(r.data)).finally(() => setLoading(false))
-  }, [])
+    setLoading(true)
+    api.get('/stats/agent', { params: { period } })
+      .then(r => setStats(r.data))
+      .finally(() => setLoading(false))
+  }, [period])
 
   if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>
   if (!stats) return null
 
   const pieData = stats.by_status.map(s => ({ name: STATUS_LABELS[s.statut] || s.statut, value: s.count, color: STATUS_COLORS[s.statut] || '#6b7280' }))
 
+  const isDaily = period === 'semaine' || period === 'mois'
+  const trendData = stats.period_trend || []
+
+  const hasObjectives = stats.objectif_period_prospects > 0 || stats.objectif_period_primes > 0 || stats.objectif_period_commissions > 0
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Bonjour, {user?.prenom} !</h1>
           <p className="text-gray-500 text-sm mt-0.5">Voici votre tableau de bord commercial</p>
         </div>
-        <Link to="/agent/prospects/create" className="btn btn-primary hidden sm:inline-flex">
-          <PlusCircle size={16} />Nouveau prospect
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+            {PERIODS.map(p => (
+              <button
+                key={p.value}
+                onClick={() => setPeriod(p.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  period === p.value
+                    ? 'bg-white text-blue-700 shadow-sm font-semibold'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <Link to="/agent/prospects/create" className="btn btn-primary hidden sm:inline-flex">
+            <PlusCircle size={16} />Nouveau prospect
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        <StatCard title="Total prospects"   value={fmt(stats.total_prospects)}    icon={Users}      color="blue" />
-        <StatCard title="Ce mois"           value={fmt(stats.monthly_prospects)}  icon={Calendar}   color="orange" />
-        <StatCard title="Clients"           value={fmt(stats.total_clients)}      icon={UserCheck}  color="green" />
-        <StatCard title="Taux conversion"   value={`${stats.conversion_rate}%`}   icon={TrendingUp} color="purple" />
+        <StatCard title="Total prospects"  value={fmt(stats.total_prospects)}   icon={Users}      color="blue" />
+        <StatCard title="Période en cours" value={fmt(stats.period_prospects)}  icon={Calendar}   color="orange" />
+        <StatCard title="Clients"          value={fmt(stats.total_clients)}     icon={UserCheck}  color="green" />
+        <StatCard title="Taux conversion"  value={`${stats.conversion_rate}%`}  icon={TrendingUp} color="purple" />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -75,9 +118,9 @@ export default function AgentDashboard() {
             <Banknote size={22} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-gray-500 font-medium">Total primes prévisionnelles</p>
-            <p className="text-lg font-bold text-gray-900 mt-0.5">{fmtCur(stats.prime_total)}</p>
-            <p className="text-xs text-emerald-600 mt-0.5">Clients : {fmtCur(stats.prime_clients)}</p>
+            <p className="text-xs text-gray-500 font-medium">Primes prévisionnelles (période)</p>
+            <p className="text-lg font-bold text-gray-900 mt-0.5">{fmt(stats.period_prime_total)}</p>
+            <p className="text-xs text-emerald-600 mt-0.5">Clients (total) : {fmt(stats.prime_clients)}</p>
           </div>
         </div>
         <div className="card flex items-start gap-3">
@@ -85,22 +128,48 @@ export default function AgentDashboard() {
             <DollarSign size={22} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-gray-500 font-medium">Commission prévisionnelle</p>
-            <p className="text-lg font-bold text-gray-900 mt-0.5">{fmtCur(stats.commission_total)}</p>
-            <p className="text-xs text-emerald-600 mt-0.5">Clients : {fmtCur(stats.commission_clients)}</p>
+            <p className="text-xs text-gray-500 font-medium">Commission prévisionnelle (période)</p>
+            <p className="text-lg font-bold text-gray-900 mt-0.5">{fmt(stats.period_commission_total)}</p>
+            <p className="text-xs text-emerald-600 mt-0.5">Clients (total) : {fmt(stats.commission_clients)}</p>
           </div>
         </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-5">
+        {/* Objectifs */}
         <div className="card">
-          <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><Target size={18} className="text-blue-500" />Objectifs</h2>
-          <div className="space-y-5">
-            <ProgressBar label="Objectif mensuel" value={stats.monthly_prospects} max={stats.objectif_mensuel} colorClass="bg-blue-500" />
-            <ProgressBar label="Objectif annuel"  value={stats.annual_prospects}  max={stats.objectif_annuel}  colorClass="bg-purple-500" />
-          </div>
+          <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <Target size={18} className="text-blue-500" />
+            Atteinte des objectifs — {PERIODS.find(p => p.value === period)?.label}
+          </h2>
+          {hasObjectives ? (
+            <div className="space-y-5">
+              <AchievementBar
+                label="Prospects"
+                value={stats.period_prospects}
+                max={stats.objectif_period_prospects}
+              />
+              <AchievementBar
+                label="Primes prévisionnelles"
+                value={stats.period_prime_total}
+                max={stats.objectif_period_primes}
+                fmtFn={fmt}
+              />
+              <AchievementBar
+                label="Commissions prévisionnelles"
+                value={stats.period_commission_total}
+                max={stats.objectif_period_commissions}
+                fmtFn={fmt}
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-6">
+              Aucun objectif défini. Contactez l'administrateur.
+            </p>
+          )}
         </div>
 
+        {/* Répartition par statut */}
         <div className="card">
           <h2 className="font-semibold text-gray-800 mb-4">Répartition par statut</h2>
           {pieData.length > 0 ? (
@@ -118,19 +187,31 @@ export default function AgentDashboard() {
         </div>
       </div>
 
+      {/* Activité */}
       <div className="card">
-        <h2 className="font-semibold text-gray-800 mb-4">Activité des 6 derniers mois</h2>
-        {stats.monthly_trend.length > 0 ? (
+        <h2 className="font-semibold text-gray-800 mb-4">
+          Activité — {PERIODS.find(p => p.value === period)?.label}
+        </h2>
+        {trendData.length > 0 ? (
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={stats.monthly_trend}>
+            <BarChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+              <XAxis
+                dataKey={isDaily ? 'day' : 'month'}
+                tick={{ fontSize: 11 }}
+                tickFormatter={isDaily ? fmtAxisDay : fmtAxisMonth}
+              />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip />
+              <Tooltip
+                labelFormatter={v => isDaily
+                  ? new Date(v).toLocaleDateString('fr-FR')
+                  : fmtAxisMonth(v)
+                }
+              />
               <Bar dataKey="count" fill="#3b82f6" radius={[4,4,0,0]} name="Prospects" />
             </BarChart>
           </ResponsiveContainer>
-        ) : <p className="text-sm text-gray-400 text-center py-10">Aucune activité enregistrée</p>}
+        ) : <p className="text-sm text-gray-400 text-center py-10">Aucune activité sur cette période</p>}
       </div>
 
       {/* Statistiques par produit */}
@@ -162,8 +243,8 @@ export default function AgentDashboard() {
                     <td className="py-3 px-3 text-right">
                       <span className="font-medium text-emerald-600">{fmt(p.total_clients)}</span>
                     </td>
-                    <td className="py-3 px-3 text-right font-medium text-gray-700">{fmtCur(p.prime_total)}</td>
-                    <td className="py-3 pl-3 text-right font-semibold text-blue-600">{fmtCur(p.commission_total)}</td>
+                    <td className="py-3 px-3 text-right font-medium text-gray-700">{fmt(p.prime_total)}</td>
+                    <td className="py-3 pl-3 text-right font-semibold text-blue-600">{fmt(p.commission_total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -177,10 +258,10 @@ export default function AgentDashboard() {
                     {fmt(stats.by_product.reduce((s, p) => s + Number(p.total_clients), 0))}
                   </td>
                   <td className="pt-3 px-3 text-right font-bold text-gray-900">
-                    {fmtCur(stats.by_product.reduce((s, p) => s + Number(p.prime_total), 0))}
+                    {fmt(stats.by_product.reduce((s, p) => s + Number(p.prime_total), 0))}
                   </td>
                   <td className="pt-3 pl-3 text-right font-bold text-blue-600">
-                    {fmtCur(stats.by_product.reduce((s, p) => s + Number(p.commission_total), 0))}
+                    {fmt(stats.by_product.reduce((s, p) => s + Number(p.commission_total), 0))}
                   </td>
                 </tr>
               </tfoot>
@@ -189,7 +270,7 @@ export default function AgentDashboard() {
         </div>
       )}
 
-      {/* Section sous-agents (uniquement si l'agent a des sous-agents) */}
+      {/* Section sous-agents */}
       {stats.sous_agent_count > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
@@ -208,8 +289,8 @@ export default function AgentDashboard() {
             </div>
             <div className="bg-green-50 rounded-xl p-4">
               <p className="text-xs text-green-600 font-medium">Ma commission (tous)</p>
-              <p className="text-xl font-bold text-green-900 mt-1">{fmtCur(stats.commission_sous_agents)}</p>
-              <p className="text-xs text-green-600 mt-0.5">Clients : {fmtCur(stats.commission_sous_agents_clients)}</p>
+              <p className="text-xl font-bold text-green-900 mt-1">{fmt(stats.commission_sous_agents)}</p>
+              <p className="text-xs text-green-600 mt-0.5">Clients : {fmt(stats.commission_sous_agents_clients)}</p>
             </div>
             <div className="bg-blue-50 rounded-xl p-4 flex flex-col justify-between">
               <p className="text-xs text-blue-600 font-medium">Taux de commission</p>
@@ -236,9 +317,9 @@ export default function AgentDashboard() {
                 <div className={`w-2 h-2 rounded-full shrink-0 ${p.statut === 'client' ? 'bg-emerald-500' : p.statut === 'perdu' ? 'bg-red-400' : p.statut === 'en_cours' ? 'bg-yellow-400' : 'bg-blue-400'}`} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{p.nom}{p.prenom ? ` ${p.prenom}` : ''}</p>
-                  <p className="text-xs text-gray-400">{p.ville || 'Ville non renseignée'} • {fmtDate(p.date_prospection)}</p>
+                  <p className="text-xs text-gray-400">{fmtDate(p.date_prospection)}</p>
                 </div>
-                <span className="text-xs font-medium text-gray-500 shrink-0">{fmt(p.montant_potentiel)} GNF</span>
+                <span className="text-xs font-medium text-gray-500 shrink-0">{fmt(p.montant_potentiel)}</span>
               </div>
             ))}
           </div>

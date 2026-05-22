@@ -9,18 +9,44 @@ router.get('/agent', authenticateToken, ah(async (req, res) => {
   const id = req.user.id;
   const now = new Date();
   const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const mn = now.getMonth() + 1;
+  const m = String(mn).padStart(2, '0');
   const monthStart = `${y}-${m}-01`;
   const yearStart  = `${y}-01-01`;
 
+  const period = ['semaine','mois','trimestre','semestre','annee'].includes(req.query.period) ? req.query.period : 'mois';
+  const PERIOD_MONTHS = { semaine: 0.25, mois: 1, trimestre: 3, semestre: 6, annee: 12 };
+  const periodMonths = PERIOD_MONTHS[period];
+  let periodStart;
+  if (period === 'semaine') {
+    const day = now.getDay();
+    const diff = day === 0 ? 6 : day - 1;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - diff);
+    periodStart = monday.toISOString().split('T')[0];
+  } else if (period === 'mois') {
+    periodStart = monthStart;
+  } else if (period === 'trimestre') {
+    const qm = Math.floor((mn - 1) / 3) * 3 + 1;
+    periodStart = `${y}-${String(qm).padStart(2,'0')}-01`;
+  } else if (period === 'semestre') {
+    periodStart = `${y}-${mn <= 6 ? '01' : '07'}-01`;
+  } else {
+    periodStart = yearStart;
+  }
+
   const agent = await get('SELECT objectif_mensuel, objectif_annuel, taux_commission FROM users WHERE id = ?', [id]);
 
-  const [total, monthly, annual, clients, clientsMonth] = await Promise.all([
+  const [total, monthly, annual, clients, clientsMonth, periodRow] = await Promise.all([
     get("SELECT COUNT(*) c FROM prospects WHERE agent_id=?", [id]),
     get("SELECT COUNT(*) c FROM prospects WHERE agent_id=? AND date_prospection>=?", [id, monthStart]),
     get("SELECT COUNT(*) c FROM prospects WHERE agent_id=? AND date_prospection>=?", [id, yearStart]),
     get("SELECT COUNT(*) c FROM prospects WHERE agent_id=? AND statut='client'", [id]),
     get("SELECT COUNT(*) c FROM prospects WHERE agent_id=? AND statut='client' AND date_prospection>=?", [id, monthStart]),
+    get(`SELECT COUNT(*) c,
+          COALESCE(SUM(montant_potentiel),0) pt,
+          COALESCE(SUM(montant_potentiel*taux_commission/100),0) ct
+         FROM prospects WHERE agent_id=? AND date_prospection>=?`, [id, periodStart]),
   ]);
 
   const [commAll, commClients, primesAll, primesClients] = await Promise.all([
@@ -30,7 +56,6 @@ router.get('/agent', authenticateToken, ah(async (req, res) => {
     get("SELECT COALESCE(SUM(montant_potentiel),0) v FROM prospects WHERE agent_id=? AND statut='client'", [id]),
   ]);
 
-  // Commission et stats provenant des sous-agents
   const [sousAgentCount, commSousAgents, commSousAgentsClients] = await Promise.all([
     get("SELECT COUNT(*) c FROM users WHERE parent_agent_id=? AND role='agent'", [id]),
     get(`SELECT COALESCE(SUM(p.montant_potentiel * u.taux_commission_parent / 100), 0) v
@@ -41,12 +66,54 @@ router.get('/agent', authenticateToken, ah(async (req, res) => {
          WHERE u.parent_agent_id = ? AND p.statut = 'client'`, [id]),
   ]);
 
-  const [byStatus, byType, trend, daily, recents, byProduct] = await Promise.all([
+  // Objectives scaled to selected period
+  const agentObj = await get(`
+    SELECT
+      COALESCE(SUM(CASE apo.periode
+        WHEN 'mensuel'   THEN apo.objectif_mensuel * ?
+        WHEN 'trimestre' THEN apo.objectif_mensuel * ? / 3.0
+        WHEN 'semestre'  THEN apo.objectif_mensuel * ? / 6.0
+        WHEN 'annuel'    THEN apo.objectif_mensuel * ? / 12.0
+        ELSE apo.objectif_mensuel * ?
+      END), 0) objectif_period_prospects,
+      COALESCE(SUM(CASE apo.periode
+        WHEN 'mensuel'   THEN apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ?
+        WHEN 'trimestre' THEN apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ? / 3.0
+        WHEN 'semestre'  THEN apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ? / 6.0
+        WHEN 'annuel'    THEN apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ? / 12.0
+        ELSE apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ?
+      END), 0) objectif_period_primes,
+      COALESCE(SUM(CASE apo.periode
+        WHEN 'mensuel'   THEN apo.objectif_mensuel * pr.prime_annuelle * pr.taux_commission / 100.0 / 12.0 * ?
+        WHEN 'trimestre' THEN apo.objectif_mensuel * pr.prime_annuelle * pr.taux_commission / 100.0 / 12.0 * ? / 3.0
+        WHEN 'semestre'  THEN apo.objectif_mensuel * pr.prime_annuelle * pr.taux_commission / 100.0 / 12.0 * ? / 6.0
+        WHEN 'annuel'    THEN apo.objectif_mensuel * pr.prime_annuelle * pr.taux_commission / 100.0 / 12.0 * ? / 12.0
+        ELSE apo.objectif_mensuel * pr.prime_annuelle * pr.taux_commission / 100.0 / 12.0 * ?
+      END), 0) objectif_period_commissions
+    FROM agent_product_objectives apo
+    JOIN products pr ON pr.id = apo.product_id
+    WHERE apo.agent_id = ?
+  `, [...Array(15).fill(periodMonths), id]);
+
+  // Activity trend — daily for semaine/mois, monthly otherwise
+  let periodTrend;
+  if (period === 'semaine' || period === 'mois') {
+    periodTrend = await all(
+      "SELECT date_prospection day, COUNT(*) count FROM prospects WHERE agent_id=? AND date_prospection>=? GROUP BY day ORDER BY day",
+      [id, periodStart]
+    );
+  } else {
+    periodTrend = await all(
+      "SELECT strftime('%Y-%m',date_prospection) month, COUNT(*) count FROM prospects WHERE agent_id=? AND date_prospection>=? GROUP BY month ORDER BY month",
+      [id, periodStart]
+    );
+  }
+
+  const [byStatus, byType, trend, recents, byProduct] = await Promise.all([
     all("SELECT statut, COUNT(*) count FROM prospects WHERE agent_id=? GROUP BY statut", [id]),
     all("SELECT type, COUNT(*) count FROM prospects WHERE agent_id=? GROUP BY type", [id]),
     all("SELECT strftime('%Y-%m',date_prospection) month, COUNT(*) count FROM prospects WHERE agent_id=? GROUP BY month ORDER BY month DESC LIMIT 6", [id]),
-    all("SELECT date_prospection day, COUNT(*) count FROM prospects WHERE agent_id=? AND date_prospection>=? GROUP BY day ORDER BY day", [id, monthStart]),
-    all("SELECT id, type, nom, prenom, ville, statut, montant_potentiel, date_prospection FROM prospects WHERE agent_id=? ORDER BY created_at DESC LIMIT 5", [id]),
+    all("SELECT id, type, nom, prenom, statut, montant_potentiel, date_prospection FROM prospects WHERE agent_id=? ORDER BY created_at DESC LIMIT 5", [id]),
     all(`SELECT pr.id as product_id, pr.nom as product_nom, pr.taux_commission as product_taux,
               COUNT(DISTINCT p.id) as total_prospects,
               SUM(CASE WHEN p.statut='client' THEN 1 ELSE 0 END) as total_clients,
@@ -71,12 +138,20 @@ router.get('/agent', authenticateToken, ah(async (req, res) => {
     objectif_mensuel: objM, objectif_annuel: objA,
     monthly_progress: objM > 0 ? parseFloat((monthlyC / objM * 100).toFixed(1)) : 0,
     annual_progress:  objA > 0 ? parseFloat((annualC  / objA * 100).toFixed(1)) : 0,
+    // Période sélectionnée
+    period, period_start: periodStart,
+    period_prospects: Number(periodRow.c),
+    period_prime_total: Number(periodRow.pt),
+    period_commission_total: Number(periodRow.ct),
+    objectif_period_prospects:    Number(agentObj?.objectif_period_prospects    || 0),
+    objectif_period_primes:       Number(agentObj?.objectif_period_primes       || 0),
+    objectif_period_commissions:  Number(agentObj?.objectif_period_commissions  || 0),
     // Données sous-agents
     sous_agent_count: Number(sousAgentCount.c),
     commission_sous_agents: Number(commSousAgents.v),
     commission_sous_agents_clients: Number(commSousAgentsClients.v),
     by_status: byStatus, by_type: byType, monthly_trend: [...trend].reverse(),
-    daily_this_month: daily, recents, by_product: byProduct
+    period_trend: periodTrend, recents, by_product: byProduct
   });
 }));
 

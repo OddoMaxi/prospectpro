@@ -7,7 +7,8 @@ import Pagination from '../../components/Pagination'
 
 const PAGE_SIZE = 10
 
-const fmtCur = n => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'GNF', minimumFractionDigits: 0 }).format(Math.round(n || 0))
+const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
+const fmtCur = n => fmt(n)
 
 function DeleteModal({ product, onConfirm, onClose }) {
   return (

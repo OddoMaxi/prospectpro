@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
-import { Search, Filter, Trash2, Eye, ChevronDown, UserCheck, X } from 'lucide-react'
+import { Search, Filter, Trash2, Eye, ChevronDown, UserCheck, X, Download } from 'lucide-react'
 import Pagination from '../../components/Pagination'
+import { exportCSV } from '../../utils/csv'
 
 const PAGE_SIZE = 10
 
@@ -10,7 +11,6 @@ const STATUTS = { prospect: 'Prospect', en_cours: 'En cours', client: 'Client', 
 const TYPES   = { physique: 'Particulier', morale: 'Entreprise' }
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
 const fmtDate = d => d ? new Date(d).toLocaleDateString('fr-FR') : '-'
-const fmtCur = n => `${fmt(n)} GNF`
 
 function ProspectModal({ prospect, onClose }) {
   if (!prospect) return null
@@ -39,8 +39,8 @@ function ProspectModal({ prospect, onClose }) {
               ['Email', prospect.email || '-'],
               ['Secteur', prospect.secteur_activite || '-'],
               ['Date prospection', fmtDate(prospect.date_prospection)],
-              ['Montant potentiel', fmtCur(prospect.montant_potentiel)],
-              ['Commission prév.', fmtCur(comm)],
+              ['Montant potentiel', fmt(prospect.montant_potentiel)],
+              ['Commission prév.', fmt(comm)],
             ].map(([k, v]) => (
               <div key={k}><p className="text-xs text-gray-400">{k}</p><p className="font-medium text-gray-800">{v}</p></div>
             ))}
@@ -211,7 +211,7 @@ function ConvertModal({ prospectId, onClose, onDone }) {
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-xs text-gray-400">Commission</p>
-                          <p className="font-bold text-emerald-600">{fmtCur(comm)}</p>
+                          <p className="font-bold text-emerald-600">{fmt(comm)}</p>
                         </div>
                       </div>
                     </div>
@@ -224,22 +224,22 @@ function ConvertModal({ prospectId, onClose, onDone }) {
                 <div className="bg-blue-50 p-3 flex justify-between items-center">
                   <div>
                     <p className="text-xs text-blue-600 font-medium">Prime totale</p>
-                    <p className="font-bold text-blue-900">{fmtCur(primeTotale)}</p>
+                    <p className="font-bold text-blue-900">{fmt(primeTotale)}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-emerald-600 font-medium">Commission totale</p>
-                    <p className="font-bold text-emerald-700">{fmtCur(commTotale)}</p>
+                    <p className="font-bold text-emerald-700">{fmt(commTotale)}</p>
                   </div>
                 </div>
                 {isSousAgent && (
                   <div className="bg-white p-3 grid grid-cols-2 gap-3 border-t border-blue-100">
                     <div className="bg-orange-50 rounded-lg p-2.5">
                       <p className="text-xs text-orange-600 font-medium mb-0.5">Agent Commercial Juniore</p>
-                      <p className="font-bold text-orange-800">{fmtCur(commJunior)}</p>
+                      <p className="font-bold text-orange-800">{fmt(commJunior)}</p>
                     </div>
                     <div className="bg-blue-50 rounded-lg p-2.5">
                       <p className="text-xs text-blue-600 font-medium mb-0.5">Agent Commercial Séniore</p>
-                      <p className="font-bold text-blue-800">{fmtCur(commSenior)}</p>
+                      <p className="font-bold text-blue-800">{fmt(commSenior)}</p>
                     </div>
                   </div>
                 )}
@@ -297,6 +297,21 @@ export default function ProspectsAdmin() {
 
   const totalCommission = prospects.reduce((s, p) => s + (p.montant_potentiel * p.taux_commission / 100), 0)
 
+  const handleExport = () => {
+    exportCSV(prospects, [
+      { label: 'N°',                value: 'numero' },
+      { label: 'Nom',               value: r => `${r.nom}${r.prenom ? ` ${r.prenom}` : ''}` },
+      { label: 'Type',              value: r => TYPES[r.type] },
+      { label: 'Statut',            value: r => STATUTS[r.statut] },
+      { label: 'Agent',             value: r => `${r.agent_prenom} ${r.agent_nom}` },
+      { label: 'Téléphone',         value: 'telephone' },
+      { label: 'Email',             value: 'email' },
+      { label: 'Montant potentiel', value: r => Math.round(r.montant_potentiel || 0) },
+      { label: 'Commission',        value: r => Math.round(r.montant_potentiel * r.taux_commission / 100) },
+      { label: 'Date prospection',  value: r => fmtDate(r.date_prospection) },
+    ], `prospects_${new Date().toISOString().split('T')[0]}.csv`)
+  }
+
   return (
     <div>
       {selected && <ProspectModal prospect={selected} onClose={() => setSelected(null)} />}
@@ -311,8 +326,11 @@ export default function ProspectsAdmin() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Tous les prospects</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{prospects.length} prospect(s) — Commission prévisionnelle : {fmt(totalCommission)} GNF</p>
+          <p className="text-gray-500 text-sm mt-0.5">{prospects.length} prospect(s) — Commission prévisionnelle : {fmt(totalCommission)}</p>
         </div>
+        <button onClick={handleExport} className="btn btn-secondary gap-2" title="Exporter en CSV">
+          <Download size={15} />Exporter
+        </button>
       </div>
 
       <div className="card mb-5 space-y-3">
