@@ -179,6 +179,16 @@ async function initializeSchema() {
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
 
+  await db.execute(`CREATE TABLE IF NOT EXISTS commission_payments (
+    id TEXT PRIMARY KEY,
+    commission_id TEXT NOT NULL,
+    date_paiement TEXT NOT NULL,
+    reference TEXT,
+    libelle TEXT,
+    montant REAL NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+
   // Seed lieux (INSERT OR IGNORE = skip duplicates silently)
   for (const [region, communes] of Object.entries(LIEUX_DATA)) {
     for (const [commune, quartiers] of Object.entries(communes)) {

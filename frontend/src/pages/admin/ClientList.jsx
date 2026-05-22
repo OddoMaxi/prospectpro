@@ -9,7 +9,6 @@ const PAGE_SIZE = 10
 const TYPES = { physique: 'Particulier', morale: 'Entreprise' }
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
 const fmtDate = d => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
-const fmtCur = n => `${fmt(n)} GNF`
 
 function ClientModal({ client, onClose }) {
   if (!client) return null
@@ -58,11 +57,11 @@ function ClientModal({ client, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-blue-50 rounded-xl p-4">
               <p className="text-xs text-blue-600 font-medium">Prime totale payée</p>
-              <p className="text-xl font-bold text-blue-900 mt-0.5">{fmtCur(client.prime_totale)}</p>
+              <p className="text-xl font-bold text-blue-900 mt-0.5">{fmt(client.prime_totale)}</p>
             </div>
             <div className="bg-green-50 rounded-xl p-4">
               <p className="text-xs text-green-600 font-medium">Commission totale</p>
-              <p className="text-xl font-bold text-green-900 mt-0.5">{fmtCur(client.commission_totale)}</p>
+              <p className="text-xl font-bold text-green-900 mt-0.5">{fmt(client.commission_totale)}</p>
             </div>
           </div>
 
@@ -84,8 +83,8 @@ function ClientModal({ client, onClose }) {
                     <tr key={i}>
                       <td className="px-3 py-2 font-medium text-gray-800">{p.product_nom || '—'}</td>
                       <td className="px-3 py-2 text-right text-gray-600">{p.nb_beneficiaires}</td>
-                      <td className="px-3 py-2 text-right font-medium text-blue-700">{fmtCur(p.prime_payee)}</td>
-                      <td className="px-3 py-2 text-right font-medium text-green-700">{fmtCur(p.commission)}</td>
+                      <td className="px-3 py-2 text-right font-medium text-blue-700">{fmt(p.prime_payee)}</td>
+                      <td className="px-3 py-2 text-right font-medium text-green-700">{fmt(p.commission)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -167,8 +166,8 @@ export default function ClientList() {
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
             {clients.length} client(s)
-            {primeTotale > 0 && <> · Primes : <span className="font-medium">{fmtCur(primeTotale)}</span></>}
-            {commTotale  > 0 && <> · Commissions : <span className="font-medium">{fmtCur(commTotale)}</span></>}
+            {primeTotale > 0 && <> · Primes : <span className="font-medium">{fmt(primeTotale)}</span></>}
+            {commTotale  > 0 && <> · Commissions : <span className="font-medium">{fmt(commTotale)}</span></>}
           </p>
         </div>
       </div>
@@ -269,8 +268,8 @@ export default function ClientList() {
                       <td className="px-4 py-3 text-gray-600">{c.agent_prenom} {c.agent_nom}</td>
                     )}
                     <td className="px-4 py-3 font-mono text-gray-700 text-xs">{c.numero_contrat || '—'}</td>
-                    <td className="px-4 py-3 text-right font-medium text-blue-700">{fmtCur(c.prime_totale)}</td>
-                    <td className="px-4 py-3 text-right font-medium text-emerald-700">{fmtCur(c.commission_totale)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-blue-700">{fmt(c.prime_totale)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-emerald-700">{fmt(c.commission_totale)}</td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{fmtDate(c.date_effet)}</td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{fmtDate(c.date_fin)}</td>
                     <td className="px-4 py-3">
