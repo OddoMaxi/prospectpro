@@ -51,9 +51,16 @@ function ProspectModal({ prospect, onClose }) {
   )
 }
 
+function addMonths(dateStr, months) {
+  if (!dateStr || !months) return ''
+  const d = new Date(dateStr)
+  d.setMonth(d.getMonth() + Number(months))
+  return d.toISOString().split('T')[0]
+}
+
 function ConvertModal({ prospectId, onClose, onDone }) {
   const [data, setData] = useState(null)
-  const [form, setForm] = useState({ numero_contrat: '', date_effet: '', date_fin: '' })
+  const [form, setForm] = useState({ numero_contrat: '', date_effet: '', duree: '' })
   const [primes, setPrimes] = useState({})
   const [saving, setSaving] = useState(false)
 
@@ -70,16 +77,31 @@ function ConvertModal({ prospectId, onClose, onDone }) {
 
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  const dateFin = addMonths(form.date_effet, form.duree)
+
   const primeTotale = Object.values(primes).reduce((s, v) => s + (Number(v) || 0), 0)
-  const commTotale  = data?.prospect_products?.reduce((s, p) => {
+
+  // Commission selon le rôle de l'agent
+  const isSousAgent = data?.is_sous_agent
+  const commJunior = data?.prospect_products?.reduce((s, p) => {
+    const pp = Number(primes[p.product_id]) || 0
+    return s + pp * (p.product_taux_sa || 0) / 100
+  }, 0) || 0
+  const commAgentTaux = data?.prospect_products?.reduce((s, p) => {
     const pp = Number(primes[p.product_id]) || 0
     return s + pp * (p.product_taux || 0) / 100
   }, 0) || 0
+  const commSenior = isSousAgent ? commAgentTaux - commJunior : commAgentTaux
+  const commTotale = isSousAgent ? commAgentTaux : commAgentTaux
 
   const handleSubmit = async e => {
     e.preventDefault()
-    if (!form.numero_contrat || !form.date_effet || !form.date_fin) {
+    if (!form.numero_contrat || !form.date_effet || !form.duree) {
       toast.error('Veuillez remplir tous les champs du contrat')
+      return
+    }
+    if (!dateFin) {
+      toast.error('Date d\'effet ou durée invalide')
       return
     }
     setSaving(true)
@@ -88,7 +110,13 @@ function ConvertModal({ prospectId, onClose, onDone }) {
         product_id: p.product_id,
         prime_payee: Number(primes[p.product_id]) || 0,
       }))
-      await api.post(`/prospects/${prospectId}/convert`, { ...form, products })
+      await api.post(`/prospects/${prospectId}/convert`, {
+        numero_contrat: form.numero_contrat,
+        date_effet: form.date_effet,
+        duree: form.duree,
+        date_fin: dateFin,
+        products,
+      })
       toast.success('Prospect converti en client !')
       onDone()
     } catch (err) {
@@ -125,8 +153,8 @@ function ConvertModal({ prospectId, onClose, onDone }) {
           {/* Infos contrat */}
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Informations du contrat</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
                 <label className="label">N° du contrat d'assurance *</label>
                 <input className="input" placeholder="ex: C-2024-001" value={form.numero_contrat}
                   onChange={e => setF('numero_contrat', e.target.value)} required />
@@ -137,9 +165,15 @@ function ConvertModal({ prospectId, onClose, onDone }) {
                   onChange={e => setF('date_effet', e.target.value)} required />
               </div>
               <div>
-                <label className="label">Date de fin *</label>
-                <input className="input" type="date" value={form.date_fin}
-                  onChange={e => setF('date_fin', e.target.value)} required />
+                <label className="label">Durée du contrat (mois) *</label>
+                <input className="input" type="number" min="1" max="120" placeholder="ex: 12"
+                  value={form.duree} onChange={e => setF('duree', e.target.value)} required />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label">Date de fin (calculée automatiquement)</label>
+                <div className={`input bg-gray-50 text-gray-600 ${dateFin ? 'text-gray-900 font-medium' : 'text-gray-400 italic'}`}>
+                  {dateFin ? new Date(dateFin).toLocaleDateString('fr-FR') : 'Renseignez la date d\'effet et la durée'}
+                </div>
               </div>
             </div>
           </div>
@@ -150,13 +184,19 @@ function ConvertModal({ prospectId, onClose, onDone }) {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Primes payées par produit</p>
               <div className="space-y-3">
                 {data.prospect_products.map(p => {
-                  const prime = Number(primes[p.product_id]) || 0
-                  const comm  = prime * (p.product_taux || 0) / 100
+                  const prime    = Number(primes[p.product_id]) || 0
+                  const tauxShow = isSousAgent ? (p.product_taux_sa || 0) : (p.product_taux || 0)
+                  const comm     = prime * tauxShow / 100
                   return (
                     <div key={p.product_id} className="bg-gray-50 rounded-xl p-3">
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-medium text-gray-800 text-sm">{p.product_nom}</span>
-                        <span className="text-xs text-gray-400">{p.nb_beneficiaires} bénéf. · taux {p.product_taux}%</span>
+                        <span className="text-xs text-gray-400">
+                          {p.nb_beneficiaires} bénéf.
+                          {isSousAgent
+                            ? ` · Ag. Juniore ${p.product_taux_sa}% / Ag. Séniore ${p.product_taux - p.product_taux_sa}%`
+                            : ` · taux ${p.product_taux}%`}
+                        </span>
                       </div>
                       <div className="flex gap-3 items-center">
                         <div className="flex-1">
@@ -179,16 +219,30 @@ function ConvertModal({ prospectId, onClose, onDone }) {
                 })}
               </div>
 
-              {/* Totaux */}
-              <div className="mt-3 bg-blue-50 rounded-xl p-3 flex justify-between items-center">
-                <div>
-                  <p className="text-xs text-blue-600 font-medium">Prime totale</p>
-                  <p className="font-bold text-blue-900">{fmtCur(primeTotale)}</p>
+              {/* Totaux avec répartition des commissions */}
+              <div className="mt-3 rounded-xl overflow-hidden border border-blue-100">
+                <div className="bg-blue-50 p-3 flex justify-between items-center">
+                  <div>
+                    <p className="text-xs text-blue-600 font-medium">Prime totale</p>
+                    <p className="font-bold text-blue-900">{fmtCur(primeTotale)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-emerald-600 font-medium">Commission totale</p>
+                    <p className="font-bold text-emerald-700">{fmtCur(commTotale)}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-emerald-600 font-medium">Commission totale</p>
-                  <p className="font-bold text-emerald-700">{fmtCur(commTotale)}</p>
-                </div>
+                {isSousAgent && (
+                  <div className="bg-white p-3 grid grid-cols-2 gap-3 border-t border-blue-100">
+                    <div className="bg-orange-50 rounded-lg p-2.5">
+                      <p className="text-xs text-orange-600 font-medium mb-0.5">Agent Commercial Juniore</p>
+                      <p className="font-bold text-orange-800">{fmtCur(commJunior)}</p>
+                    </div>
+                    <div className="bg-blue-50 rounded-lg p-2.5">
+                      <p className="text-xs text-blue-600 font-medium mb-0.5">Agent Commercial Séniore</p>
+                      <p className="font-bold text-blue-800">{fmtCur(commSenior)}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -201,7 +255,7 @@ function ConvertModal({ prospectId, onClose, onDone }) {
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn btn-secondary flex-1">Annuler</button>
-            <button type="submit" disabled={saving} className="btn btn-primary flex-1">
+            <button type="submit" disabled={saving || !dateFin} className="btn btn-primary flex-1">
               {saving ? 'Conversion...' : 'Confirmer la conversion'}
             </button>
           </div>

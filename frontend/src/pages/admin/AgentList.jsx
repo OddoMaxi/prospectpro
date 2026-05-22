@@ -320,14 +320,14 @@ export default function AgentList() {
       )}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Agents commerciaux</h1>
+          <h1 className="text-xl font-bold text-gray-900">Agents Commerciaux Séniores</h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            {agents.filter(a => !a.parent_agent_id).length} agent(s) —{' '}
-            {agents.filter(a => a.parent_agent_id).length} sous-agent(s)
+            {agents.filter(a => !a.parent_agent_id).length} Agent(s) Séniore(s) —{' '}
+            {agents.filter(a => a.parent_agent_id).length} Agent(s) Juniore(s)
           </p>
         </div>
         <button onClick={() => navigate('/admin/agents/create')} className="btn btn-primary">
-          <Plus size={16} />Nouvel agent
+          <Plus size={16} />Nouvel Agent Séniore
         </button>
       </div>
 
@@ -371,7 +371,7 @@ export default function AgentList() {
                             <span className="font-semibold text-gray-900">{agent.raison_sociale || agent.nom}</span>
                             <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">Morale</span>
                             {agent.parent_agent_id && (
-                              <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">Sous-agent</span>
+                              <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">Agent Juniore</span>
                             )}
                           </div>
                           {agent.representant_legal && (
@@ -388,7 +388,7 @@ export default function AgentList() {
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-semibold text-gray-900">{agent.nom}</span>
                             {agent.parent_agent_id && (
-                              <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">Sous-agent</span>
+                              <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">Agent Juniore</span>
                             )}
                           </div>
                           {agent.parent_agent_id && (
@@ -427,7 +427,9 @@ export default function AgentList() {
                       <div className="flex items-center gap-1.5 justify-end">
                         <button
                           onClick={() => navigate(`/admin/agents/${agent.id}/edit`)}
-                          className="btn btn-secondary btn-sm" title="Modifier"
+                          className="btn btn-secondary btn-sm"
+                          title={agent.parent_agent_id ? 'Modification réservée à l\'agent parent' : 'Modifier'}
+                          disabled={!!agent.parent_agent_id}
                         >
                           <Edit size={13} />
                         </button>

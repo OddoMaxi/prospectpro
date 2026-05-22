@@ -104,7 +104,7 @@ export default function ProductList() {
                 <th className="pb-3 font-medium">Description</th>
                 <th className="pb-3 font-medium text-right">Prime annuelle</th>
                 <th className="pb-3 font-medium text-right">Taux agent</th>
-                <th className="pb-3 font-medium text-right">Taux sous-agent</th>
+                <th className="pb-3 font-medium text-right">Taux Ag. Juniore</th>
                 <th className="pb-3 font-medium text-center">Statut</th>
                 <th className="pb-3 font-medium text-right">Actions</th>
               </tr>

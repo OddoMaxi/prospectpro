@@ -12,6 +12,8 @@ const PERIODES = [
 ]
 
 const multiplier = p => PERIODES.find(x => x.value === p)?.multiplier ?? 12
+const fmtNum = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
+const fmtCur = n => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'GNF', minimumFractionDigits: 0 }).format(Math.round(n || 0))
 
 function Field({ label, children, required }) {
   return (
@@ -29,7 +31,7 @@ export default function SousAgentCreate() {
 
   const [typeAgent, setTypeAgent] = useState('physique')
   const [form, setForm] = useState({
-    nom: '', prenom: '',
+    nom: '', prenom: '', sexe: '',
     raison_sociale: '', representant_legal: '',
     email: '', telephone: '',
   })
@@ -62,13 +64,14 @@ export default function SousAgentCreate() {
         setForm({
           nom: a.nom || '',
           prenom: a.prenom || '',
+          sexe: a.sexe || '',
           raison_sociale: a.raison_sociale || a.nom || '',
           representant_legal: a.representant_legal || '',
           email: a.email || '',
           telephone: a.telephone || '',
         })
         sessionStorage.setItem('_editSousAgentObjectives', JSON.stringify(a.product_objectives || []))
-      }).catch(() => toast.error('Sous-agent introuvable'))
+      }).catch(() => toast.error('Agent Juniore introuvable'))
     }
   }, [id, isEdit])
 
@@ -97,16 +100,19 @@ export default function SousAgentCreate() {
     ))
   }
 
-  const getAnnuel = obj => (Number(obj.objectif_mensuel) || 0) * multiplier(obj.periode)
+  const getObjectifProspect = obj => (Number(obj.objectif_mensuel) || 0) * multiplier(obj.periode)
+  const getObjectifPrime    = obj => (Number(obj.objectif_mensuel) || 0) * (Number(obj.prime_annuelle) || 0)
 
   const handleSubmit = async e => {
     e.preventDefault()
 
-    if (typeAgent === 'morale' && !form.raison_sociale.trim()) {
-      return toast.error('La raison sociale est obligatoire')
-    }
-    if (typeAgent === 'physique' && (!form.nom.trim() || !form.prenom.trim())) {
-      return toast.error('Nom et prénom obligatoires')
+    if (typeAgent === 'morale') {
+      if (!form.raison_sociale.trim())     return toast.error('La raison sociale est obligatoire')
+      if (!form.representant_legal.trim()) return toast.error('Le représentant légal est obligatoire')
+      if (!form.telephone.trim())          return toast.error('Le numéro de téléphone est obligatoire')
+    } else {
+      if (!form.nom.trim() || !form.prenom.trim()) return toast.error('Nom et prénom obligatoires')
+      if (!form.telephone.trim())                  return toast.error('Le numéro de téléphone est obligatoire')
     }
 
     setLoading(true)
@@ -115,9 +121,10 @@ export default function SousAgentCreate() {
         type_agent: typeAgent,
         nom: typeAgent === 'physique' ? form.nom.trim() : form.raison_sociale.trim(),
         prenom: typeAgent === 'physique' ? form.prenom.trim() : '',
+        sexe: typeAgent === 'physique' ? (form.sexe || null) : null,
         raison_sociale: typeAgent === 'morale' ? form.raison_sociale.trim() : null,
-        representant_legal: typeAgent === 'morale' ? form.representant_legal.trim() || null : null,
-        email: form.email.trim() || null,
+        representant_legal: typeAgent === 'morale' ? form.representant_legal.trim() : null,
+        email: typeAgent === 'morale' ? (form.email.trim() || null) : null,
         telephone: form.telephone.trim() || null,
         product_objectives: objectives
           .filter(o => Number(o.objectif_mensuel) > 0)
@@ -125,17 +132,17 @@ export default function SousAgentCreate() {
             product_id: o.product_id,
             objectif_mensuel: Number(o.objectif_mensuel),
             periode: o.periode,
-            objectif_annuel: getAnnuel(o),
+            objectif_annuel: getObjectifProspect(o),
           })),
       }
 
       if (isEdit) {
         await api.put(`/agents/sous-agents/${id}`, payload)
-        toast.success('Sous-agent mis à jour')
+        toast.success('Agent Juniore mis à jour')
         navigate('/agent/sous-agents')
       } else {
         const r = await api.post('/agents/sous-agents', payload)
-        toast.success('Sous-agent créé avec succès')
+        toast.success('Agent Juniore créé avec succès')
         setCredentials(r.data.credentials)
       }
     } catch (err) {
@@ -159,8 +166,8 @@ export default function SousAgentCreate() {
               <CheckCircle size={22} className="text-emerald-600" />
             </div>
             <div>
-              <h2 className="font-bold text-emerald-800">Sous-agent créé avec succès</h2>
-              <p className="text-sm text-emerald-600">Communiquez ces identifiants à votre sous-agent</p>
+              <h2 className="font-bold text-emerald-800">Agent Commercial Juniore créé avec succès</h2>
+              <p className="text-sm text-emerald-600">Communiquez ces identifiants à votre Agent Juniore</p>
             </div>
           </div>
           <div className="bg-white rounded-xl border border-emerald-200 p-4 mb-4 space-y-3">
@@ -174,7 +181,7 @@ export default function SousAgentCreate() {
             </div>
           </div>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 mb-4">
-            Ces informations ne seront plus affichées. Le sous-agent devra changer son mot de passe à la première connexion.
+            Ces informations ne seront plus affichées. L'Agent Juniore devra changer son mot de passe à la première connexion.
             La répartition des commissions sera définie par l'administrateur.
           </div>
           <div className="flex gap-3">
@@ -183,7 +190,7 @@ export default function SousAgentCreate() {
               {copied ? 'Copié !' : 'Copier'}
             </button>
             <button onClick={() => navigate('/agent/sous-agents')} className="btn btn-primary flex-1 justify-center">
-              Voir mes sous-agents
+              Voir mes Agents Juniors
             </button>
           </div>
         </div>
@@ -191,8 +198,8 @@ export default function SousAgentCreate() {
     )
   }
 
-  const totalMensuel = objectives.reduce((s, o) => s + (Number(o.objectif_mensuel) || 0), 0)
-  const totalAnnuel  = objectives.reduce((s, o) => s + getAnnuel(o), 0)
+  const totalMensuel        = objectives.reduce((s, o) => s + (Number(o.objectif_mensuel) || 0), 0)
+  const totalObjectifPrimes = objectives.reduce((s, o) => s + getObjectifPrime(o), 0)
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -201,20 +208,24 @@ export default function SousAgentCreate() {
           <ArrowLeft size={15} />Retour
         </button>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">{isEdit ? 'Modifier le sous-agent' : 'Créer un sous-agent'}</h1>
-          <p className="text-sm text-gray-500">{isEdit ? 'Modifier les objectifs' : 'Nouveau sous-agent commercial'}</p>
+          <h1 className="text-xl font-bold text-gray-900">
+            {isEdit ? 'Modifier l\'Agent Commercial Juniore' : 'Créer un Agent Commercial Juniore'}
+          </h1>
+          <p className="text-sm text-gray-500">
+            {isEdit ? 'Modifier les objectifs' : 'Nouvel Agent Commercial Juniore'}
+          </p>
         </div>
       </div>
 
       <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
-        <strong>Note :</strong> La répartition des commissions entre vous et votre sous-agent est définie par l'administrateur.
+        <strong>Note :</strong> La répartition des commissions entre vous et votre Agent Juniore est définie par l'administrateur.
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
 
         {!isEdit && (
           <div className="card">
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">Type de sous-agent</h2>
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">Type d'agent</h2>
             <div className="grid grid-cols-2 gap-3">
               <button type="button"
                 onClick={() => setTypeAgent('physique')}
@@ -248,16 +259,31 @@ export default function SousAgentCreate() {
           </h2>
 
           {typeAgent === 'physique' ? (
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Prénom" required>
-                <input className="input" type="text" value={form.prenom}
-                  onChange={e => f('prenom', e.target.value)} required placeholder="Jean" />
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Prénom" required>
+                  <input className="input" type="text" value={form.prenom}
+                    onChange={e => f('prenom', e.target.value)} required placeholder="Jean" />
+                </Field>
+                <Field label="Nom" required>
+                  <input className="input" type="text" value={form.nom}
+                    onChange={e => f('nom', e.target.value)} required placeholder="DUPONT" />
+                </Field>
+              </div>
+              <Field label="Sexe">
+                <div className="flex gap-3 mt-1">
+                  {['Homme', 'Femme'].map(s => (
+                    <label key={s}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 cursor-pointer text-sm font-medium transition-all
+                        ${form.sexe === s ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                      <input type="radio" name="sexe_junior" value={s} checked={form.sexe === s}
+                        onChange={() => f('sexe', s)} className="sr-only" />
+                      {s}
+                    </label>
+                  ))}
+                </div>
               </Field>
-              <Field label="Nom" required>
-                <input className="input" type="text" value={form.nom}
-                  onChange={e => f('nom', e.target.value)} required placeholder="DUPONT" />
-              </Field>
-            </div>
+            </>
           ) : (
             <>
               <Field label="Raison sociale" required>
@@ -265,32 +291,28 @@ export default function SousAgentCreate() {
                   onChange={e => f('raison_sociale', e.target.value)}
                   required placeholder="Entreprise SARL" />
               </Field>
-              <Field label="Représentant légal">
+              <Field label="Représentant légal" required>
                 <input className="input" type="text" value={form.representant_legal}
                   onChange={e => f('representant_legal', e.target.value)}
-                  placeholder="Prénom NOM du représentant" />
+                  required placeholder="Prénom NOM du représentant" />
+              </Field>
+              <Field label="Email">
+                <input className="input" type="email" value={form.email}
+                  onChange={e => f('email', e.target.value)}
+                  placeholder="contact@entreprise.com" />
               </Field>
             </>
           )}
 
-          <Field label="Email">
-            <input className="input" type="email" value={form.email}
-              onChange={e => f('email', e.target.value)}
-              placeholder="email@exemple.com" />
-          </Field>
-
-          <Field label="Téléphone">
+          <Field label="Téléphone" required>
             <input className="input" type="tel" value={form.telephone}
               onChange={e => f('telephone', e.target.value)}
-              placeholder="+224 6XX XX XX XX" />
+              required placeholder="+224 6XX XX XX XX" />
           </Field>
         </div>
 
         <div className="card">
-          <h2 className="text-sm font-semibold text-gray-700 mb-1">Objectifs par produit</h2>
-          <p className="text-xs text-gray-400 mb-4">
-            Définissez les objectifs de prospection pour chaque produit. L'objectif annuel est calculé automatiquement.
-          </p>
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">Objectifs</h2>
 
           {products.length === 0 ? (
             <div className="text-center py-6 text-gray-400">
@@ -302,14 +324,16 @@ export default function SousAgentCreate() {
                 <thead>
                   <tr className="border-b border-gray-100 text-xs text-gray-500 uppercase tracking-wide">
                     <th className="pb-2 text-left font-medium">Produit</th>
-                    <th className="pb-2 text-right font-medium w-28">Objectif/mois</th>
-                    <th className="pb-2 text-right font-medium w-36">Période</th>
-                    <th className="pb-2 text-right font-medium w-28">Objectif annuel</th>
+                    <th className="pb-2 text-right font-medium w-28">Obj. mensuel</th>
+                    <th className="pb-2 text-right font-medium w-32">Période</th>
+                    <th className="pb-2 text-right font-medium w-28">Obj. Prospect</th>
+                    <th className="pb-2 text-right font-medium w-32">Obj. Prime</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {objectives.map(obj => {
-                    const annuel = getAnnuel(obj)
+                    const objProspect = getObjectifProspect(obj)
+                    const objPrime    = getObjectifPrime(obj)
                     return (
                       <tr key={obj.product_id} className="hover:bg-gray-50">
                         <td className="py-2.5 font-medium text-gray-800">{obj.product_nom}</td>
@@ -334,8 +358,13 @@ export default function SousAgentCreate() {
                           </select>
                         </td>
                         <td className="py-2.5 text-right">
-                          <span className={`font-bold tabular-nums ${annuel > 0 ? 'text-blue-700' : 'text-gray-300'}`}>
-                            {annuel > 0 ? annuel.toLocaleString('fr-FR') : '—'}
+                          <span className={`font-bold tabular-nums ${objProspect > 0 ? 'text-blue-700' : 'text-gray-300'}`}>
+                            {objProspect > 0 ? fmtNum(objProspect) : '—'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-right">
+                          <span className={`font-bold tabular-nums ${objPrime > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>
+                            {objPrime > 0 ? fmtCur(objPrime) : '—'}
                           </span>
                         </td>
                       </tr>
@@ -346,9 +375,10 @@ export default function SousAgentCreate() {
                   <tfoot>
                     <tr className="border-t-2 border-gray-200 text-xs font-semibold text-gray-700">
                       <td className="pt-2 uppercase text-gray-500 tracking-wide">Total</td>
-                      <td className="pt-2 text-right text-blue-700">{totalMensuel.toLocaleString('fr-FR')}</td>
+                      <td className="pt-2 text-right text-blue-700">{fmtNum(totalMensuel)}</td>
                       <td className="pt-2"></td>
-                      <td className="pt-2 text-right text-blue-700">{totalAnnuel.toLocaleString('fr-FR')}</td>
+                      <td className="pt-2 text-right text-blue-700">{fmtNum(objectives.reduce((s,o) => s + getObjectifProspect(o), 0))}</td>
+                      <td className="pt-2 text-right text-emerald-700">{fmtCur(totalObjectifPrimes)}</td>
                     </tr>
                   </tfoot>
                 )}
@@ -366,7 +396,7 @@ export default function SousAgentCreate() {
               ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               : <UserPlus size={16} />
             }
-            {loading ? 'En cours...' : (isEdit ? 'Enregistrer' : 'Créer le sous-agent')}
+            {loading ? 'En cours...' : (isEdit ? 'Enregistrer' : 'Créer l\'Agent Juniore')}
           </button>
         </div>
       </form>

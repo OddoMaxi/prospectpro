@@ -111,8 +111,23 @@ router.get('/sous-agents', authenticateToken, ah(async (req, res) => {
 router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
   const now = new Date();
   const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const monthStart = `${y}-${m}-01`;
+  const mn = now.getMonth() + 1;
+  const monthStart = `${y}-${String(mn).padStart(2,'0')}-01`;
+
+  // Period filter
+  const period = ['mois','trimestre','semestre','annee'].includes(req.query.period) ? req.query.period : 'mois';
+  const periodMonths = { mois:1, trimestre:3, semestre:6, annee:12 }[period];
+  let periodStart;
+  if (period === 'mois') {
+    periodStart = monthStart;
+  } else if (period === 'trimestre') {
+    const qm = Math.floor((mn - 1) / 3) * 3 + 1;
+    periodStart = `${y}-${String(qm).padStart(2,'0')}-01`;
+  } else if (period === 'semestre') {
+    periodStart = `${y}-${mn <= 6 ? '01' : '07'}-01`;
+  } else {
+    periodStart = `${y}-01-01`;
+  }
 
   const [totalAgents, totalSousAgents, totalProspects, monthly, totalClients, commTotal, primesTotal, primesClients, commClients] = await Promise.all([
     get("SELECT COUNT(*) c FROM users WHERE role='agent' AND is_active=1 AND (parent_agent_id IS NULL OR parent_agent_id='')"),
@@ -127,24 +142,75 @@ router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
   ]);
 
   const agentStats = await all(`
-    SELECT u.id, u.nom, u.prenom, u.username, u.objectif_mensuel, u.taux_commission,
+    SELECT u.id, u.nom, u.prenom, u.username, u.objectif_mensuel, u.objectif_annuel, u.taux_commission,
            u.type_agent, u.raison_sociale, u.parent_agent_id,
            COUNT(p.id) total_prospects,
            SUM(CASE WHEN p.statut='client' THEN 1 ELSE 0 END) total_clients,
-           SUM(CASE WHEN p.date_prospection>=? THEN 1 ELSE 0 END) monthly_prospects,
+           SUM(CASE WHEN p.date_prospection>=? THEN 1 ELSE 0 END) period_prospects,
+           SUM(CASE WHEN p.date_prospection>=? AND p.statut='client' THEN 1 ELSE 0 END) period_clients,
            COALESCE(SUM(p.montant_potentiel*p.taux_commission/100),0) commission_total,
            COALESCE(SUM(p.montant_potentiel),0) prime_total,
+           COALESCE(SUM(CASE WHEN p.date_prospection>=? THEN p.montant_potentiel ELSE 0 END),0) period_prime_total,
+           COALESCE(SUM(CASE WHEN p.date_prospection>=? THEN p.montant_potentiel*p.taux_commission/100 ELSE 0 END),0) period_commission_total,
            COALESCE(SUM(CASE WHEN p.statut='client' THEN p.montant_potentiel ELSE 0 END),0) prime_clients,
            COALESCE(SUM(CASE WHEN p.statut='client' THEN p.montant_potentiel*p.taux_commission/100 ELSE 0 END),0) commission_clients
     FROM users u LEFT JOIN prospects p ON p.agent_id=u.id
     WHERE u.role='agent' AND u.is_active=1
     GROUP BY u.id ORDER BY total_prospects DESC
-  `, [monthStart]);
+  `, [periodStart, periodStart, periodStart, periodStart]);
 
-  const [bySector, trend] = await Promise.all([
+  // Objectives per agent scaled to selected period
+  const objectives = await all(`
+    SELECT apo.agent_id,
+      COALESCE(SUM(
+        CASE apo.periode
+          WHEN 'mensuel'   THEN apo.objectif_mensuel * ?
+          WHEN 'trimestre' THEN apo.objectif_mensuel * ? / 3.0
+          WHEN 'semestre'  THEN apo.objectif_mensuel * ? / 6.0
+          WHEN 'annuel'    THEN apo.objectif_mensuel * ? / 12.0
+          ELSE apo.objectif_mensuel * ?
+        END
+      ), 0) objectif_period_prospects,
+      COALESCE(SUM(
+        CASE apo.periode
+          WHEN 'mensuel'   THEN apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ?
+          WHEN 'trimestre' THEN apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ? / 3.0
+          WHEN 'semestre'  THEN apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ? / 6.0
+          WHEN 'annuel'    THEN apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ? / 12.0
+          ELSE apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ?
+        END
+      ), 0) objectif_period_primes
+    FROM agent_product_objectives apo
+    JOIN products pr ON pr.id = apo.product_id
+    GROUP BY apo.agent_id
+  `, Array(10).fill(periodMonths));
+
+  const [byProduct, bySector, trend] = await Promise.all([
+    all(`
+      SELECT pr.id, pr.nom, pr.prime_annuelle, pr.taux_commission,
+        COUNT(DISTINCT pp.prospect_id) total_prospects,
+        COALESCE(SUM(pp.nb_beneficiaires), 0) total_beneficiaires,
+        SUM(CASE WHEN p2.statut='client' THEN 1 ELSE 0 END) total_clients,
+        COALESCE(SUM(pp.nb_beneficiaires * pr.prime_annuelle), 0) total_primes,
+        COALESCE(SUM(pp.nb_beneficiaires * pr.prime_annuelle * pr.taux_commission / 100.0), 0) total_commissions
+      FROM products pr
+      LEFT JOIN prospect_products pp ON pp.product_id = pr.id
+      LEFT JOIN prospects p2 ON p2.id = pp.prospect_id
+      WHERE pr.is_active = 1
+      GROUP BY pr.id
+      ORDER BY total_primes DESC
+    `),
     all("SELECT secteur_activite, COUNT(*) count FROM prospects WHERE secteur_activite IS NOT NULL GROUP BY secteur_activite ORDER BY count DESC LIMIT 10"),
     all("SELECT strftime('%Y-%m',date_prospection) month, COUNT(*) count FROM prospects GROUP BY month ORDER BY month DESC LIMIT 6"),
   ]);
+
+  const objMap = {};
+  for (const o of objectives) objMap[o.agent_id] = o;
+  const enrichedAgentStats = agentStats.map(a => ({
+    ...a,
+    objectif_period_prospects: Number(objMap[a.id]?.objectif_period_prospects || 0),
+    objectif_period_primes:    Number(objMap[a.id]?.objectif_period_primes    || 0),
+  }));
 
   const tp = Number(totalProspects.c), tc = Number(totalClients.c);
 
@@ -158,7 +224,9 @@ router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
     primes_clients: Number(primesClients.v),
     commission_clients: Number(commClients.v),
     global_conversion_rate: tp > 0 ? parseFloat((tc / tp * 100).toFixed(1)) : 0,
-    agent_stats: agentStats, by_sector: bySector, monthly_trend: [...trend].reverse()
+    period, period_months: periodMonths,
+    agent_stats: enrichedAgentStats, by_sector: bySector,
+    monthly_trend: [...trend].reverse(), by_product: byProduct,
   });
 }));
 

@@ -56,7 +56,7 @@ export default function ProductForm() {
     if (!form.nom.trim()) return toast.error('Le nom du produit est obligatoire')
     const tauxA  = Number(form.taux_commission) || 0
     const tauxSA = Number(form.taux_commission_sous_agent) || 0
-    if (tauxSA > tauxA) return toast.error('Le taux sous-agent ne peut pas dépasser le taux agent')
+    if (tauxSA > tauxA) return toast.error('Le taux Agent Juniore ne peut pas dépasser le taux agent')
     setLoading(true)
     try {
       const payload = {
@@ -162,8 +162,8 @@ export default function ProductForm() {
               />
             </Field>
             <Field
-              label="Taux commission sous-agent (%)"
-              hint="Taux appliqué aux sous-agents commerciaux"
+              label="Taux commission Agent Juniore (%)"
+              hint="Taux appliqué aux Agents Commerciaux Juniors"
             >
               <input
                 className="input" type="number" min="0" max="100" step="0.1"
@@ -177,7 +177,7 @@ export default function ProductForm() {
           {/* Avertissement si taux SA > taux A */}
           {tauxSA > tauxA && tauxA > 0 && (
             <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">
-              Le taux sous-agent ne peut pas dépasser le taux agent.
+              Le taux Agent Juniore ne peut pas dépasser le taux agent.
             </p>
           )}
 
@@ -196,7 +196,7 @@ export default function ProductForm() {
                   <p className="text-xs text-blue-400">{tauxA}%</p>
                 </div>
                 <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
-                  <p className="text-xs text-purple-500 mb-0.5">Commission sous-agent</p>
+                  <p className="text-xs text-purple-500 mb-0.5">Commission Agent Juniore</p>
                   <p className="font-bold text-purple-700">{fmtCur(commSA)}</p>
                   <p className="text-xs text-purple-400">{tauxSA}%</p>
                 </div>

@@ -19,7 +19,7 @@ export default function AgentLayout() {
     { to: '/agent/prospects/create', label: 'Nouveau prospect', icon: PlusCircle },
     { to: '/agent/clients', label: 'Mes clients', icon: UserCheck },
     { to: '/agent/commissions', label: 'Mes commissions', icon: FileText },
-    ...(!isSousAgent ? [{ to: '/agent/sous-agents', label: 'Mes sous-agents', icon: Users }] : []),
+    ...(!isSousAgent ? [{ to: '/agent/sous-agents', label: 'Mes Agents Juniors', icon: Users }] : []),
   ]
 
   const SideNav = ({ onClick }) => (
@@ -42,7 +42,7 @@ export default function AgentLayout() {
         <div className="p-4 border-b border-gray-200">
           <h1 className="font-bold text-blue-600 text-lg">ProspectPro</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            {isSousAgent ? 'Sous-agent commercial' : 'Espace Commercial'}
+            {isSousAgent ? 'Agent Commercial Juniore' : 'Espace Commercial'}
           </p>
         </div>
         <SideNav />

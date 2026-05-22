@@ -54,7 +54,7 @@ router.post('/', authenticateToken, ah(async (req, res) => {
     get("SELECT MAX(CAST(numero AS INTEGER)) v FROM prospects"),
     get("SELECT MAX(CAST(numero AS INTEGER)) v FROM clients"),
   ]);
-  const numero = String(Math.max(Number(lastP?.v || 0), Number(lastC?.v || 0)) + 1).padStart(6, '0');
+  const numero = String(Math.max(Number(lastP?.v || 0), Number(lastC?.v || 0)) + 1).padStart(7, '0');
 
   await run(
     `INSERT INTO prospects (id, agent_id, type, nom, prenom, nom_contact, prenom_contact,
@@ -125,13 +125,19 @@ router.get('/:id', authenticateToken, ah(async (req, res) => {
 
   const pp = await all(
     `SELECT pp.product_id, pp.nb_beneficiaires,
-            p.nom as product_nom, p.prime_annuelle, p.taux_commission as product_taux
+            p.nom as product_nom, p.prime_annuelle,
+            p.taux_commission as product_taux,
+            p.taux_commission_sous_agent as product_taux_sa
      FROM prospect_products pp
      LEFT JOIN products p ON p.id = pp.product_id
      WHERE pp.prospect_id = ?`,
     [req.params.id]
   );
-  res.json({ ...prospect, prospect_products: pp });
+
+  const agentRow = await get('SELECT parent_agent_id FROM users WHERE id = ?', [prospect.agent_id]);
+  const is_sous_agent = !!(agentRow && agentRow.parent_agent_id);
+
+  res.json({ ...prospect, is_sous_agent, prospect_products: pp });
 }));
 
 router.put('/:id', authenticateToken, ah(async (req, res) => {
@@ -174,9 +180,18 @@ router.put('/:id', authenticateToken, ah(async (req, res) => {
 }));
 
 router.post('/:id/convert', authenticateToken, requireAdmin, ah(async (req, res) => {
-  const { numero_contrat, date_effet, date_fin, products } = req.body;
-  if (!numero_contrat || !date_effet || !date_fin)
-    return res.status(400).json({ error: 'N° contrat, date d\'effet et date de fin requis' });
+  const { numero_contrat, date_effet, duree, date_fin: date_fin_input, products } = req.body;
+  if (!numero_contrat || !date_effet || (!duree && !date_fin_input))
+    return res.status(400).json({ error: 'N° contrat, date d\'effet et durée (ou date de fin) requis' });
+
+  // Calcul de date_fin à partir de la durée si fournie
+  let date_fin = date_fin_input;
+  if (duree && Number(duree) > 0) {
+    const d = new Date(date_effet);
+    d.setMonth(d.getMonth() + Number(duree));
+    date_fin = d.toISOString().split('T')[0];
+  }
+  if (!date_fin) return res.status(400).json({ error: 'Date de fin invalide' });
 
   const prospect = await get('SELECT * FROM prospects WHERE id = ?', [req.params.id]);
   if (!prospect) return res.status(404).json({ error: 'Prospect non trouvé' });
@@ -222,15 +237,22 @@ router.post('/:id/convert', authenticateToken, requireAdmin, ah(async (req, res)
   const taux_eff = prime_totale > 0 ? (commission_totale / prime_totale * 100) : 0;
   const clientId = uuidv4();
 
+  // Génération d'un nouveau numéro unique à 7 chiffres pour le client
+  const [lastP2, lastC2] = await Promise.all([
+    get("SELECT MAX(CAST(numero AS INTEGER)) v FROM prospects"),
+    get("SELECT MAX(CAST(numero AS INTEGER)) v FROM clients"),
+  ]);
+  const clientNumero = String(Math.max(Number(lastP2?.v || 0), Number(lastC2?.v || 0)) + 1).padStart(7, '0');
+
   await run(
     `INSERT INTO clients (id, numero, agent_id, type, nom, prenom, nom_contact, prenom_contact,
       telephone, email, secteur_activite,
       lieu_residence_commune, lieu_residence_quartier, lieu_activite_commune, lieu_activite_quartier,
       siege_social_commune, siege_social_quartier, profession, sexe,
-      numero_contrat, date_effet, date_fin,
+      numero_contrat, date_effet, date_fin, duree_contrat,
       prime_totale, commission_totale, taux_commission, date_prospection)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [clientId, prospect.numero, prospect.agent_id,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [clientId, clientNumero, prospect.agent_id,
      prospect.type, prospect.nom, prospect.prenom || null,
      prospect.nom_contact || null, prospect.prenom_contact || null,
      prospect.telephone || null, prospect.email || null,
@@ -239,7 +261,7 @@ router.post('/:id/convert', authenticateToken, requireAdmin, ah(async (req, res)
      prospect.lieu_activite_commune || null, prospect.lieu_activite_quartier || null,
      prospect.siege_social_commune || null, prospect.siege_social_quartier || null,
      prospect.profession || null, prospect.sexe || null,
-     numero_contrat, date_effet, date_fin,
+     numero_contrat, date_effet, date_fin, duree ? Number(duree) : null,
      prime_totale, commission_totale, taux_eff, prospect.date_prospection]
   );
 

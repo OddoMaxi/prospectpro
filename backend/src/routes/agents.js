@@ -240,7 +240,7 @@ router.post('/sous-agents/:id/reset-password', authenticateToken, ah(async (req,
 router.post('/', authenticateToken, requireAdmin, ah(async (req, res) => {
   const {
     type_agent = 'physique',
-    nom, prenom,
+    nom, prenom, sexe,
     raison_sociale, representant_legal,
     email, telephone,
     taux_commission,
@@ -250,9 +250,12 @@ router.post('/', authenticateToken, requireAdmin, ah(async (req, res) => {
   const isMorale = type_agent === 'morale';
 
   if (isMorale) {
-    if (!raison_sociale) return res.status(400).json({ error: 'Raison sociale requise' });
+    if (!raison_sociale)      return res.status(400).json({ error: 'Raison sociale requise' });
+    if (!representant_legal)  return res.status(400).json({ error: 'Représentant légal requis' });
+    if (!telephone)           return res.status(400).json({ error: 'Numéro de téléphone requis' });
   } else {
-    if (!nom || !prenom) return res.status(400).json({ error: 'Nom et prénom requis' });
+    if (!nom || !prenom)  return res.status(400).json({ error: 'Nom et prénom requis' });
+    if (!telephone)       return res.status(400).json({ error: 'Numéro de téléphone requis' });
   }
 
   const agentNom    = isMorale ? raison_sociale : nom;
@@ -278,11 +281,11 @@ router.post('/', authenticateToken, requireAdmin, ah(async (req, res) => {
   const id = uuidv4();
 
   await run(
-    `INSERT INTO users (id, nom, prenom, email, telephone, role, username, password_hash,
+    `INSERT INTO users (id, nom, prenom, sexe, email, telephone, role, username, password_hash,
        must_change_password, objectif_mensuel, objectif_annuel, taux_commission,
        type_agent, raison_sociale, representant_legal)
-     VALUES (?,?,?,?,?,'agent',?,?,1,?,?,?,?,?,?)`,
-    [id, agentNom, agentPrenom, email || null, telephone || null,
+     VALUES (?,?,?,?,?,?,'agent',?,?,1,?,?,?,?,?,?)`,
+    [id, agentNom, agentPrenom, isMorale ? null : (sexe || null), isMorale ? (email || null) : null, telephone || null,
      username, bcrypt.hashSync(tempPassword, 10),
      totalMensuel, totalAnnuel, Number(taux_commission) || 5.0,
      type_agent, isMorale ? raison_sociale : null,
@@ -320,7 +323,7 @@ router.get('/', authenticateToken, requireAdmin, ah(async (req, res) => {
 // Admin: obtenir un agent par ID
 router.get('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
   const agent = await get(
-    `SELECT id, nom, prenom, email, telephone, username, objectif_mensuel, objectif_annuel,
+    `SELECT id, nom, prenom, sexe, email, telephone, username, objectif_mensuel, objectif_annuel,
             taux_commission, taux_commission_parent, is_active, created_at,
             type_agent, raison_sociale, representant_legal, parent_agent_id
      FROM users WHERE id = ? AND role = 'agent'`,
@@ -340,17 +343,30 @@ router.get('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
   res.json({ ...agent, product_objectives });
 }));
 
-// Admin: modifier un agent (y compris taux_commission_parent pour les sous-agents)
+// Admin: modifier un Agent Commercial Séniore uniquement
 router.put('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
   const {
-    nom, prenom, email, telephone, taux_commission, taux_commission_parent, is_active,
+    nom, prenom, sexe, email, telephone, taux_commission, taux_commission_parent, is_active,
     type_agent, raison_sociale, representant_legal, product_objectives
   } = req.body;
 
-  const agent = await get("SELECT id FROM users WHERE id = ? AND role = 'agent'", [req.params.id]);
+  const agent = await get("SELECT id, parent_agent_id FROM users WHERE id = ? AND role = 'agent'", [req.params.id]);
   if (!agent) return res.status(404).json({ error: 'Agent non trouvé' });
+  if (agent.parent_agent_id) {
+    return res.status(403).json({ error: 'Modification des Agents Commerciaux Juniors réservée à l\'agent parent' });
+  }
 
   const isMorale = type_agent === 'morale';
+
+  if (isMorale) {
+    if (!raison_sociale)     return res.status(400).json({ error: 'Raison sociale requise' });
+    if (!representant_legal) return res.status(400).json({ error: 'Représentant légal requis' });
+    if (!telephone)          return res.status(400).json({ error: 'Numéro de téléphone requis' });
+  } else {
+    if (!nom || !prenom) return res.status(400).json({ error: 'Nom et prénom requis' });
+    if (!telephone)      return res.status(400).json({ error: 'Numéro de téléphone requis' });
+  }
+
   const agentNom    = isMorale ? raison_sociale : nom;
   const agentPrenom = isMorale ? '' : prenom;
 
@@ -362,11 +378,12 @@ router.put('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
   }, 0);
 
   await run(
-    `UPDATE users SET nom=?,prenom=?,email=?,telephone=?,
+    `UPDATE users SET nom=?,prenom=?,sexe=?,email=?,telephone=?,
        objectif_mensuel=?,objectif_annuel=?,taux_commission=?,taux_commission_parent=?,is_active=?,
        type_agent=?,raison_sociale=?,representant_legal=?,updated_at=datetime('now')
      WHERE id=?`,
-    [agentNom, agentPrenom, isMorale ? (email || null) : null, telephone || null,
+    [agentNom, agentPrenom, isMorale ? null : (sexe || null),
+     isMorale ? (email || null) : null, telephone || null,
      totalMensuel, totalAnnuel, Number(taux_commission) || 5.0,
      Number(taux_commission_parent) || 0,
      is_active !== undefined ? (is_active ? 1 : 0) : 1,

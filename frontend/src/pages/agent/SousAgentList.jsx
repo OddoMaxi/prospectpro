@@ -27,7 +27,7 @@ function DeleteModal({ agent, onConfirm, onClose, parentId }) {
           </div>
           <div>
             <h3 className="font-bold text-gray-900">Supprimer {agent.prenom} {agent.nom || agent.raison_sociale}</h3>
-            <p className="text-sm text-gray-500 mt-0.5">Ce sous-agent a <strong>{fmt(agent.total_prospects)}</strong> prospect(s)</p>
+            <p className="text-sm text-gray-500 mt-0.5">Cet Agent Juniore a <strong>{fmt(agent.total_prospects)}</strong> prospect(s)</p>
           </div>
         </div>
 
@@ -170,11 +170,11 @@ export default function SousAgentList() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Mes sous-agents</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{agents.length} sous-agent(s) enregistré(s)</p>
+          <h1 className="text-xl font-bold text-gray-900">Mes Agents Commerciaux Juniors</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{agents.length} Agent(s) Commercial(aux) Juniore(s)</p>
         </div>
         <button onClick={() => navigate('/agent/sous-agents/create')} className="btn btn-primary">
-          <Plus size={16} />Nouveau sous-agent
+          <Plus size={16} />Nouvel Agent Juniore
         </button>
       </div>
 
@@ -222,10 +222,10 @@ export default function SousAgentList() {
       ) : agents.length === 0 ? (
         <div className="card text-center py-14">
           <UserX size={40} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">Aucun sous-agent enregistré</p>
-          <p className="text-sm text-gray-400 mt-1 mb-4">Créez des sous-agents commerciaux pour développer votre réseau</p>
+          <p className="text-gray-500 font-medium">Aucun Agent Commercial Juniore enregistré</p>
+          <p className="text-sm text-gray-400 mt-1 mb-4">Créez des Agents Juniors pour développer votre réseau commercial</p>
           <button onClick={() => navigate('/agent/sous-agents/create')} className="btn btn-primary">
-            <Plus size={16} />Créer le premier sous-agent
+            <Plus size={16} />Créer le premier Agent Juniore
           </button>
         </div>
       ) : (
@@ -233,7 +233,7 @@ export default function SousAgentList() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wide">
-                <th className="pb-3 font-medium text-left">Sous-agent</th>
+                <th className="pb-3 font-medium text-left">Agent Juniore</th>
                 <th className="pb-3 font-medium text-left">Contact</th>
                 <th className="pb-3 font-medium text-right">Prospects</th>
                 <th className="pb-3 font-medium text-right">Clients</th>
