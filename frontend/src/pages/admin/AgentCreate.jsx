@@ -103,7 +103,7 @@ export default function AgentCreate() {
   }
 
   const getObjectifProspect = obj => (Number(obj.objectif_mensuel) || 0) * multiplier(obj.periode)
-  const getObjectifPrime    = obj => (Number(obj.objectif_mensuel) || 0) * (Number(obj.prime_annuelle) || 0)
+  const getObjectifPrime    = obj => getObjectifProspect(obj) * (Number(obj.prime_annuelle) || 0)
 
   const handleSubmit = async e => {
     e.preventDefault()
