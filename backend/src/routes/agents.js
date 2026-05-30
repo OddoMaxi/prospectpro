@@ -171,7 +171,7 @@ router.put('/sous-agents/:id', authenticateToken, ah(async (req, res) => {
   await run(
     `UPDATE users SET nom=?,prenom=?,email=?,telephone=?,
        objectif_mensuel=?,objectif_annuel=?,
-       type_agent=?,raison_sociale=?,representant_legal=?,updated_at=datetime('now')
+       type_agent=?,raison_sociale=?,representant_legal=?,updated_at=NOW()
      WHERE id=?`,
     [agentNom, agentPrenom, email || null, telephone || null,
      totalMensuel, totalAnnuel,
@@ -204,13 +204,13 @@ router.delete('/sous-agents/:id', authenticateToken, ah(async (req, res) => {
       { sql: 'UPDATE prospects SET agent_id=? WHERE agent_id=?', args: [transfer_to, req.params.id] },
       { sql: 'DELETE FROM agent_product_objectives WHERE agent_id=?', args: [req.params.id] },
       { sql: 'DELETE FROM users WHERE id=?', args: [req.params.id] }
-    ], 'write');
+    ]);
   } else {
     await db.batch([
       { sql: 'DELETE FROM prospects WHERE agent_id=?', args: [req.params.id] },
       { sql: 'DELETE FROM agent_product_objectives WHERE agent_id=?', args: [req.params.id] },
       { sql: 'DELETE FROM users WHERE id=?', args: [req.params.id] }
-    ], 'write');
+    ]);
   }
   res.json({ message: 'Sous-agent supprimé avec succès' });
 }));
@@ -227,7 +227,7 @@ router.post('/sous-agents/:id/reset-password', authenticateToken, ah(async (req,
 
   const tempPassword = generatePassword();
   await run(
-    "UPDATE users SET password_hash=?,must_change_password=1,updated_at=datetime('now') WHERE id=?",
+    "UPDATE users SET password_hash=?,must_change_password=1,updated_at=NOW() WHERE id=?",
     [bcrypt.hashSync(tempPassword, 10), req.params.id]
   );
 
@@ -380,7 +380,7 @@ router.put('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
   await run(
     `UPDATE users SET nom=?,prenom=?,sexe=?,email=?,telephone=?,
        objectif_mensuel=?,objectif_annuel=?,taux_commission=?,taux_commission_parent=?,is_active=?,
-       type_agent=?,raison_sociale=?,representant_legal=?,updated_at=datetime('now')
+       type_agent=?,raison_sociale=?,representant_legal=?,updated_at=NOW()
      WHERE id=?`,
     [agentNom, agentPrenom, isMorale ? null : (sexe || null),
      isMorale ? (email || null) : null, telephone || null,
@@ -425,7 +425,7 @@ router.delete('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
       { sql: 'UPDATE users SET parent_agent_id = NULL WHERE parent_agent_id = ?', args: [req.params.id] },
       { sql: 'DELETE FROM agent_product_objectives WHERE agent_id = ?', args: [req.params.id] },
       { sql: 'DELETE FROM users WHERE id = ?', args: [req.params.id] }
-    ], 'write');
+    ]);
   } else {
     await db.batch([
       { sql: 'DELETE FROM prospect_products WHERE prospect_id IN (SELECT id FROM prospects WHERE agent_id = ?)', args: [req.params.id] },
@@ -433,7 +433,7 @@ router.delete('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
       { sql: 'UPDATE users SET parent_agent_id = NULL WHERE parent_agent_id = ?', args: [req.params.id] },
       { sql: 'DELETE FROM agent_product_objectives WHERE agent_id = ?', args: [req.params.id] },
       { sql: 'DELETE FROM users WHERE id = ?', args: [req.params.id] }
-    ], 'write');
+    ]);
   }
   res.json({ message: 'Agent supprimé avec succès' });
 }));
@@ -444,7 +444,7 @@ router.post('/:id/reset-password', authenticateToken, requireAdmin, ah(async (re
   if (!agent) return res.status(404).json({ error: 'Agent non trouvé' });
 
   const tempPassword = generatePassword();
-  await run("UPDATE users SET password_hash=?,must_change_password=1,updated_at=datetime('now') WHERE id=?",
+  await run("UPDATE users SET password_hash=?,must_change_password=1,updated_at=NOW() WHERE id=?",
     [bcrypt.hashSync(tempPassword, 10), req.params.id]);
 
   res.json({ message: 'Mot de passe réinitialisé', credentials: { temp_password: tempPassword } });

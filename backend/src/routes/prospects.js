@@ -164,7 +164,7 @@ router.put('/:id', authenticateToken, ah(async (req, res) => {
     telephone=?,email=?,secteur_activite=?,statut=?,montant_potentiel=?,taux_commission=?,
     lieu_residence_commune=?,lieu_residence_quartier=?,lieu_activite_commune=?,lieu_activite_quartier=?,
     siege_social_commune=?,siege_social_quartier=?,niveau_interet=?,profession=?,sexe=?,
-    date_prospection=?,updated_at=datetime('now') WHERE id=?`,
+    date_prospection=?,updated_at=NOW() WHERE id=?`,
     [type, nom, prenom||null, nom_contact||null, prenom_contact||null,
      telephone||null, email||null, secteur_activite||null, statut||'prospect',
      montant_potentiel, taux_commission,
@@ -190,7 +190,7 @@ router.patch('/:id/statut', authenticateToken, ah(async (req, res) => {
   if (req.user.role !== 'admin') { cq += ' AND agent_id = ?'; ca.push(req.user.id); }
   if (!await get(cq, ca)) return res.status(404).json({ error: 'Prospect non trouvé' });
 
-  await run("UPDATE prospects SET statut=?, updated_at=datetime('now') WHERE id=?", [statut, req.params.id]);
+  await run("UPDATE prospects SET statut=?, updated_at=NOW() WHERE id=?", [statut, req.params.id]);
   res.json({ message: 'Statut mis à jour' });
 }));
 

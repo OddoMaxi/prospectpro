@@ -1,25 +1,55 @@
-const { createClient } = require('@libsql/client');
-const path = require('path');
-const fs = require('fs');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const LIEUX_DATA = require('./data/lieux');
 
-const DATA_DIR = path.join(__dirname, '../../data');
-const DB_PATH  = path.join(DATA_DIR, 'prospection.db');
-
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
-const isRemote = !!process.env.TURSO_DATABASE_URL;
-const db = createClient({
-  url: isRemote ? process.env.TURSO_DATABASE_URL : ('file:' + DB_PATH.replace(/\\/g, '/')),
-  authToken: process.env.TURSO_AUTH_TOKEN
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false
 });
 
-async function initializeSchema() {
-  await db.execute("PRAGMA foreign_keys = ON");
+// Converts ? placeholders to $1, $2, ... for PostgreSQL
+function toPositional(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
 
-  await db.execute(`CREATE TABLE IF NOT EXISTS users (
+async function get(sql, args = []) {
+  const result = await pool.query(toPositional(sql), args);
+  return result.rows[0] || null;
+}
+
+async function all(sql, args = []) {
+  const result = await pool.query(toPositional(sql), args);
+  return result.rows;
+}
+
+async function run(sql, args = []) {
+  const result = await pool.query(toPositional(sql), args);
+  return { rowsAffected: result.rowCount };
+}
+
+// Wraps multiple statements in a single transaction (replaces libsql db.batch)
+const db = {
+  async batch(statements) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const stmt of statements) {
+        await client.query(toPositional(stmt.sql), stmt.args);
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+};
+
+async function initializeSchema() {
+  await pool.query(`CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     nom TEXT NOT NULL,
     prenom TEXT NOT NULL,
@@ -33,11 +63,17 @@ async function initializeSchema() {
     objectif_annuel INTEGER DEFAULT 0,
     taux_commission REAL DEFAULT 5.0,
     is_active INTEGER DEFAULT 1,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    type_agent TEXT DEFAULT 'physique',
+    raison_sociale TEXT,
+    representant_legal TEXT,
+    parent_agent_id TEXT,
+    taux_commission_parent REAL DEFAULT 0,
+    sexe TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
   )`);
 
-  await db.execute(`CREATE TABLE IF NOT EXISTS prospects (
+  await pool.query(`CREATE TABLE IF NOT EXISTS prospects (
     id TEXT PRIMARY KEY,
     agent_id TEXT NOT NULL,
     type TEXT NOT NULL,
@@ -57,64 +93,54 @@ async function initializeSchema() {
     montant_potentiel REAL DEFAULT 0,
     taux_commission REAL DEFAULT 5.0,
     produit_id TEXT,
-    date_prospection TEXT DEFAULT (date('now')),
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    lieu_residence_commune TEXT,
+    lieu_residence_quartier TEXT,
+    lieu_activite_commune TEXT,
+    lieu_activite_quartier TEXT,
+    siege_social_commune TEXT,
+    siege_social_quartier TEXT,
+    niveau_interet TEXT,
+    profession TEXT,
+    sexe TEXT,
+    numero TEXT,
+    date_prospection DATE DEFAULT CURRENT_DATE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
   )`);
 
-  await db.execute(`CREATE TABLE IF NOT EXISTS products (
+  await pool.query(`CREATE TABLE IF NOT EXISTS products (
     id TEXT PRIMARY KEY,
     nom TEXT NOT NULL,
     description TEXT,
     prime_annuelle REAL NOT NULL DEFAULT 0,
     taux_commission REAL NOT NULL DEFAULT 5.0,
+    taux_commission_sous_agent REAL DEFAULT 0,
     is_active INTEGER DEFAULT 1,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
   )`);
 
-  await db.execute(`CREATE TABLE IF NOT EXISTS agent_product_objectives (
+  await pool.query(`CREATE TABLE IF NOT EXISTS agent_product_objectives (
     id TEXT PRIMARY KEY,
     agent_id TEXT NOT NULL,
     product_id TEXT NOT NULL,
     objectif_mensuel INTEGER DEFAULT 0,
     periode TEXT NOT NULL DEFAULT 'annuel',
     objectif_annuel INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now')),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(agent_id, product_id)
   )`);
 
-  await db.execute(`CREATE TABLE IF NOT EXISTS prospect_products (
+  await pool.query(`CREATE TABLE IF NOT EXISTS prospect_products (
     id TEXT PRIMARY KEY,
     prospect_id TEXT NOT NULL,
     product_id TEXT NOT NULL,
     nb_beneficiaires INTEGER DEFAULT 1,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TIMESTAMP DEFAULT NOW()
   )`);
 
-  // Migrations bases existantes
-  try { await db.execute("ALTER TABLE prospects ADD COLUMN produit_id TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE users ADD COLUMN type_agent TEXT DEFAULT 'physique'"); } catch(_) {}
-  try { await db.execute("ALTER TABLE users ADD COLUMN raison_sociale TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE users ADD COLUMN representant_legal TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE prospects ADD COLUMN lieu_residence_commune TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE prospects ADD COLUMN lieu_residence_quartier TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE prospects ADD COLUMN lieu_activite_commune TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE prospects ADD COLUMN lieu_activite_quartier TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE prospects ADD COLUMN siege_social_commune TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE prospects ADD COLUMN siege_social_quartier TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE prospects ADD COLUMN niveau_interet TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE prospects ADD COLUMN profession TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE users ADD COLUMN parent_agent_id TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE users ADD COLUMN taux_commission_parent REAL DEFAULT 0"); } catch(_) {}
-  try { await db.execute("ALTER TABLE prospects ADD COLUMN sexe TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE prospects ADD COLUMN numero TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE products ADD COLUMN taux_commission_sous_agent REAL DEFAULT 0"); } catch(_) {}
-  try { await db.execute("ALTER TABLE users ADD COLUMN sexe TEXT"); } catch(_) {}
-  try { await db.execute("ALTER TABLE clients ADD COLUMN duree_contrat INTEGER"); } catch(_) {}
-
-  await db.execute(`CREATE TABLE IF NOT EXISTS clients (
+  await pool.query(`CREATE TABLE IF NOT EXISTS clients (
     id TEXT PRIMARY KEY,
     numero TEXT UNIQUE,
     agent_id TEXT NOT NULL,
@@ -141,11 +167,12 @@ async function initializeSchema() {
     commission_totale REAL DEFAULT 0,
     taux_commission REAL DEFAULT 0,
     date_prospection TEXT,
-    converted_at TEXT DEFAULT (datetime('now')),
-    created_at TEXT DEFAULT (datetime('now'))
+    duree_contrat INTEGER,
+    converted_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW()
   )`);
 
-  await db.execute(`CREATE TABLE IF NOT EXISTS client_products (
+  await pool.query(`CREATE TABLE IF NOT EXISTS client_products (
     id TEXT PRIMARY KEY,
     client_id TEXT NOT NULL,
     product_id TEXT,
@@ -155,7 +182,7 @@ async function initializeSchema() {
     commission REAL DEFAULT 0
   )`);
 
-  await db.execute(`CREATE TABLE IF NOT EXISTS lieux (
+  await pool.query(`CREATE TABLE IF NOT EXISTS lieux (
     id TEXT PRIMARY KEY,
     region TEXT NOT NULL,
     commune TEXT NOT NULL,
@@ -163,7 +190,7 @@ async function initializeSchema() {
     UNIQUE(region, commune, quartier)
   )`);
 
-  await db.execute(`CREATE TABLE IF NOT EXISTS commissions (
+  await pool.query(`CREATE TABLE IF NOT EXISTS commissions (
     id TEXT PRIMARY KEY,
     agent_id TEXT NOT NULL,
     client_id TEXT NOT NULL,
@@ -175,63 +202,43 @@ async function initializeSchema() {
     date_paiement TEXT,
     reference_paiement TEXT,
     notes TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
   )`);
 
-  await db.execute(`CREATE TABLE IF NOT EXISTS commission_payments (
+  await pool.query(`CREATE TABLE IF NOT EXISTS commission_payments (
     id TEXT PRIMARY KEY,
     commission_id TEXT NOT NULL,
     date_paiement TEXT NOT NULL,
     reference TEXT,
     libelle TEXT,
     montant REAL NOT NULL DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TIMESTAMP DEFAULT NOW()
   )`);
 
-  // Seed lieux (INSERT OR IGNORE = skip duplicates silently)
+  // Seed lieux — ON CONFLICT DO NOTHING remplace INSERT OR IGNORE de SQLite
   for (const [region, communes] of Object.entries(LIEUX_DATA)) {
     for (const [commune, quartiers] of Object.entries(communes)) {
-      // Deduplicate quartiers within same commune
       const unique = [...new Set(quartiers)];
       for (const quartier of unique) {
-        try {
-          await db.execute({
-            sql: 'INSERT OR IGNORE INTO lieux (id, region, commune, quartier) VALUES (?,?,?,?)',
-            args: [uuidv4(), region, commune, quartier]
-          });
-        } catch(_) {}
+        await pool.query(
+          'INSERT INTO lieux (id, region, commune, quartier) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',
+          [uuidv4(), region, commune, quartier]
+        );
       }
     }
   }
 
-  const r = await db.execute("SELECT id FROM users WHERE role = 'admin'");
+  const r = await pool.query("SELECT id FROM users WHERE role = 'admin'");
   if (r.rows.length === 0) {
     const hash = bcrypt.hashSync('Admin@2024', 10);
-    await db.execute({
-      sql: `INSERT INTO users (id, nom, prenom, email, role, username, password_hash, must_change_password, objectif_mensuel, objectif_annuel)
-            VALUES (?, 'Administrateur', 'Système', 'admin@prospection.com', 'admin', 'admin', ?, 0, 0, 0)`,
-      args: [uuidv4(), hash]
-    });
+    await pool.query(
+      `INSERT INTO users (id, nom, prenom, email, role, username, password_hash, must_change_password, objectif_mensuel, objectif_annuel)
+       VALUES ($1, 'Administrateur', 'Système', 'admin@prospection.com', 'admin', 'admin', $2, 0, 0, 0)`,
+      [uuidv4(), hash]
+    );
     console.log('Admin créé — identifiant: admin, mot de passe: Admin@2024');
   }
 }
 
-// Helper: get first row or null
-async function get(sql, args = []) {
-  const r = await db.execute({ sql, args });
-  return r.rows.length > 0 ? r.rows[0] : null;
-}
-
-// Helper: get all rows
-async function all(sql, args = []) {
-  const r = await db.execute({ sql, args });
-  return r.rows;
-}
-
-// Helper: execute write (INSERT/UPDATE/DELETE)
-async function run(sql, args = []) {
-  return db.execute({ sql, args });
-}
-
-module.exports = { db, initializeSchema, get, all, run };
+module.exports = { db, pool, initializeSchema, get, all, run };

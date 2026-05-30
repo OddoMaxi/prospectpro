@@ -164,7 +164,7 @@ router.patch('/:id/pay', authenticateToken, requireAdmin, ah(async (req, res) =>
   const statut = totalPaid >= due ? 'paye' : totalPaid > 0 ? 'partiel' : 'non_paye';
 
   await run(
-    `UPDATE commissions SET montant_paye=?, statut=?, date_paiement=?, reference_paiement=?, updated_at=datetime('now') WHERE id=?`,
+    `UPDATE commissions SET montant_paye=?, statut=?, date_paiement=?, reference_paiement=?, updated_at=NOW() WHERE id=?`,
     [totalPaid, statut, date_paiement || null, reference || null, req.params.id]
   );
 

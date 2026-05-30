@@ -42,7 +42,7 @@ router.post('/change-password', authenticateToken, ah(async (req, res) => {
   }
 
   const hash = bcrypt.hashSync(new_password, 10);
-  await run("UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = datetime('now') WHERE id = ?",
+  await run("UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = NOW() WHERE id = ?",
     [hash, req.user.id]);
 
   const newToken = jwt.sign(

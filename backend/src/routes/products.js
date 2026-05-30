@@ -40,7 +40,7 @@ router.put('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
   if (!product) return res.status(404).json({ error: 'Produit non trouvé' });
 
   await run(
-    `UPDATE products SET nom=?,description=?,prime_annuelle=?,taux_commission=?,taux_commission_sous_agent=?,is_active=?,updated_at=datetime('now') WHERE id=?`,
+    `UPDATE products SET nom=?,description=?,prime_annuelle=?,taux_commission=?,taux_commission_sous_agent=?,is_active=?,updated_at=NOW() WHERE id=?`,
     [nom.trim(), description || null,
      Number(prime_annuelle) || 0,
      Number(taux_commission) || 0,
