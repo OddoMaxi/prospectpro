@@ -104,7 +104,7 @@ router.get('/agent', authenticateToken, ah(async (req, res) => {
     );
   } else {
     periodTrend = await all(
-      "SELECT strftime('%Y-%m',date_prospection) month, COUNT(*) count FROM prospects WHERE agent_id=? AND date_prospection>=? GROUP BY month ORDER BY month",
+      "SELECT to_char(date_prospection, 'YYYY-MM') month, COUNT(*) count FROM prospects WHERE agent_id=? AND date_prospection>=? GROUP BY month ORDER BY month",
       [id, periodStart]
     );
   }
@@ -112,7 +112,7 @@ router.get('/agent', authenticateToken, ah(async (req, res) => {
   const [byStatus, byType, trend, recents, byProduct] = await Promise.all([
     all("SELECT statut, COUNT(*) count FROM prospects WHERE agent_id=? GROUP BY statut", [id]),
     all("SELECT type, COUNT(*) count FROM prospects WHERE agent_id=? GROUP BY type", [id]),
-    all("SELECT strftime('%Y-%m',date_prospection) month, COUNT(*) count FROM prospects WHERE agent_id=? GROUP BY month ORDER BY month DESC LIMIT 6", [id]),
+    all("SELECT to_char(date_prospection, 'YYYY-MM') month, COUNT(*) count FROM prospects WHERE agent_id=? GROUP BY month ORDER BY month DESC LIMIT 6", [id]),
     all("SELECT id, type, nom, prenom, statut, montant_potentiel, date_prospection FROM prospects WHERE agent_id=? ORDER BY created_at DESC LIMIT 5", [id]),
     all(`SELECT pr.id as product_id, pr.nom as product_nom, pr.taux_commission as product_taux,
               COUNT(DISTINCT p.id) as total_prospects,
@@ -276,7 +276,7 @@ router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
       ORDER BY total_primes DESC
     `),
     all("SELECT secteur_activite, COUNT(*) count FROM prospects WHERE secteur_activite IS NOT NULL GROUP BY secteur_activite ORDER BY count DESC LIMIT 10"),
-    all("SELECT strftime('%Y-%m',date_prospection) month, COUNT(*) count FROM prospects GROUP BY month ORDER BY month DESC LIMIT 6"),
+    all("SELECT to_char(date_prospection, 'YYYY-MM') month, COUNT(*) count FROM prospects GROUP BY month ORDER BY month DESC LIMIT 6"),
   ]);
 
   const objMap = {};
