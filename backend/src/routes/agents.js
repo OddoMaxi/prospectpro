@@ -315,7 +315,7 @@ router.get('/', authenticateToken, requireAdmin, ah(async (req, res) => {
     LEFT JOIN prospects p ON p.agent_id = u.id
     LEFT JOIN users pa ON pa.id = u.parent_agent_id
     WHERE u.role = 'agent'
-    GROUP BY u.id ORDER BY u.nom, u.prenom
+    GROUP BY u.id, pa.id ORDER BY u.nom, u.prenom
   `);
   res.json(agents);
 }));
