@@ -112,6 +112,7 @@ export default function ProspectForm() {
 
   const [form, setForm] = useState(EMPTY)
   const [lieuResidenceVille, setLieuResidenceVille] = useState('')
+  const [lieuActiviteVille, setLieuActiviteVille] = useState('')
   const [loading, setLoading] = useState(false)
   const [initLoading, setInitLoading] = useState(isEdit)
   const [availableProducts, setAvailableProducts] = useState([])
@@ -149,6 +150,9 @@ export default function ProspectForm() {
           })
           if (p.lieu_residence_commune) {
             setLieuResidenceVille(getVilleFromCommune(p.lieu_residence_commune))
+          }
+          if (p.lieu_activite_commune) {
+            setLieuActiviteVille(getVilleFromCommune(p.lieu_activite_commune))
           }
           if (p.prospect_products?.length > 0) {
             setSelectedProducts(p.prospect_products.map(pp => ({
@@ -382,14 +386,17 @@ export default function ProspectForm() {
                   onQuartierChange={v => f('lieu_residence_quartier', v)}
                 />
               </div>
-              <LocationSelect
-                communeValue={form.lieu_activite_commune}
-                quartierValue={form.lieu_activite_quartier}
-                onCommuneChange={v => f('lieu_activite_commune', v)}
-                onQuartierChange={v => f('lieu_activite_quartier', v)}
-                labelCommune="Lieu d'activité – Commune"
-                labelQuartier="Lieu d'activité – Quartier"
-              />
+              <div>
+                <label className="label">Lieu d'activité</label>
+                <LocationSelect3
+                  villeValue={lieuActiviteVille}
+                  communeValue={form.lieu_activite_commune}
+                  quartierValue={form.lieu_activite_quartier}
+                  onVilleChange={v => { setLieuActiviteVille(v); f('lieu_activite_commune', ''); f('lieu_activite_quartier', '') }}
+                  onCommuneChange={v => f('lieu_activite_commune', v)}
+                  onQuartierChange={v => f('lieu_activite_quartier', v)}
+                />
+              </div>
               <Field label="Profession">
                 <select className="input" value={form.profession}
                   onChange={e => f('profession', e.target.value)}>
