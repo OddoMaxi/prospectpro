@@ -1,58 +1,64 @@
-// Communes et quartiers de la Guinée
 export const LOCATIONS = [
   // ── CONAKRY ──────────────────────────────────────────────────────────────
-  { ville: 'Conakry', commune: 'Conakry – Kaloum',  quartiers: ['Almamya', 'Boulbinet', 'Coronthie', 'Kaloum Centre', 'Tombo'] },
-  { ville: 'Conakry', commune: 'Conakry – Dixinn',  quartiers: ['Bellevue', 'Camayenne', 'Dixinn Centre', 'Landréah', 'Minière', 'Taouyah'] },
-  { ville: 'Conakry', commune: 'Conakry – Matam',   quartiers: ['Bambéto', 'Dar-Es-Salam', 'Enta', 'Hafia', 'Kobaya', 'Madina', 'Matam Centre', 'Nongo'] },
-  { ville: 'Conakry', commune: 'Conakry – Matoto',  quartiers: ['Djikoroni', 'Kagbelen', 'Kissosso', 'Lambanyi', 'Matoto Centre', 'Sonfonia', 'Yattayah'] },
-  { ville: 'Conakry', commune: 'Conakry – Ratoma',  quartiers: ['Cimenterie', 'Cosa', 'Kipé', 'Koloma', 'Lambandji', 'Ratoma Centre', 'Wanidara'] },
+  { ville: 'CONAKRY', commune: 'RATOMA', quartiers: ['TAOUYAH','RATOMA DISPENSAIRE','RATOMA CENTRE','KAPORO RAILS','HAMDALLAYE 1','HAMDALLAYE 2','KOLOMA SOLOPRIMO','KIPE','KAPORO CENTRE'] },
+  { ville: 'CONAKRY', commune: 'LAMBANYI', quartiers: ['NONGO-CENTRE','NONGO TAADY','LAMBANYI','YEMBEYA','WAREAH','SIMBAYA GARE','YATTAYA CENTRE','NASSOUROULAYE','BANTOUNKA 1','BANTOUNKA 2','SOUMAMBOSSIA','WANINDARA','WANINDARA RAILS','KINIFI'] },
+  { ville: 'CONAKRY', commune: 'SONFONIA', quartiers: ['KOBAYAH','YATTAYA FOSSIDET','YATTAYA CENTRE','SONFONIA GARE 1','SONFONIA GARE 2','SONFONIA CENTRE 1','SONFONIA CENTRE 2'] },
+  { ville: 'CONAKRY', commune: 'GBESSIA', quartiers: ['DABONDY 1','DABONDY 2','DABONDY 3','DABONDY ECOLE','DABONDY RAILS','GBESSIA CITE 1','GBESSIA CITE 2','GBESSIA CITE 3','GBESSIA ECOLE','GBESSIA CENTRE','GBESSIA PORT 1','GBESSIA PORT 2','DAR-ES-SALAM','CITE DE L\'AIR','BEHANZIN','TANENE MARCHE','TANENE MOSQUEE','YIMBAYA ECOLE','YIMBAYA PERMANENCE','YIMBAYA PORT','HAMDALLAYE MOSQUEE','YIMBAYA TANNERIE','SIMBAYA 1','KOLOMA 1','KOLOMA 2','NASSOUROULAYE'] },
+  { ville: 'CONAKRY', commune: 'MATOTO', quartiers: ['MATATO CENTRE','SIMBAYA 2','SIMBAYA ECOLE','MATOTO MARCHE','MATOTO KHABITAYA','SANGOYAH MOSQUEE','SANGOYAH MARCHE','KISSOSSO','KISSOSSO PLATEAU','MARCHE ENCO 5','WANINDARA DISPENSAIRE','WANINDARA MARCHE'] },
+  { ville: 'CONAKRY', commune: 'TOMBOLIA', quartiers: ['ENTA MARCHE','ENTA FASSA','TOMBOLIA','TOMBOLIA PLATEAU','DABOMPA VILLAGE','DABOMPA PLATEAU','LANSANAYAH'] },
+  { ville: 'CONAKRY', commune: 'DIXINN', quartiers: ['BELLE-VUE ECOLE','BELLE-VUE-MARCHE','CAMAYENNE','CAMEROUN','DIXINN-CITE1','DIXINN-CITE 2','DIXINN-GARE','DIXINN-GARE-RAILS','DIXINN-MOSQUEE','DIXINN-PORT','HAFIA 1','HAFIA 2','HAFIA-MINIERE','HAFIA-MOSQUEE','KENIEN','LANDREAH','MINIERE-CITE'] },
+  { ville: 'CONAKRY', commune: 'MATAM', quartiers: ['BONFI','BONFI MARCHE','BONFI ROUTIERE','BOUSSOURA','CARRIERE CENTRE','CARRIERE CITE','COLEAH CENTRE','COLEAH CITE','COLEAH DOMINO','COLEAH IMPRIMERIE','HERMAKONON MOSQUEE','HERMAKONON PERMANANCE','LANSEBOUNDJI','MADINA CENTRE','MADINA CITE (SIG)','MADINA MARCHE','MADINA MOSQUEE','MADINA ECOLE','MAFANCO','MAFANCO CENTRE','MATAM','MATAM CENTRE','MATAM LIDO','TOUGUIWONDY'] },
+  { ville: 'CONAKRY', commune: 'KAGBELEN', quartiers: ['KAGBELEN PLATEAU','KENENDE','KAGBELEN VILLAGE','DONDOLKHOURE','KINDIADY','TOBOLON 1','TOBOLON 2','KEITAYAH','ANSOMANIAH PLATEAU','TANGA','KIRKILAND','FOFOMERE','BAILOBAYA CENTRE','BAILOBAYA PLATEAU'] },
+  { ville: 'CONAKRY', commune: 'SANOYAH', quartiers: ['SANOYAH KM 36','SANOYAH TEXTILE','SANOYAH RAILS PLATEAU','SANOYAH DISPENSAIRE','KOUNTIAH NORD','SANOYAH CBA','KALOKHOYA','SAMPILYAH','FASSIAH CENTRE','FASSIAH TEXTILE','CBC'] },
+  { ville: 'CONAKRY', commune: 'KALOUM', quartiers: ['ALMAMYA I','ALMAMYA II','BOULBINET','CORONTHIE I','CORONTHIE II','KOULEWONDY','MANQUEPAS','SANDERVALIA','SANS FIL','TEMINETAYE','TOMBO'] },
+  { ville: 'CONAKRY', commune: 'MANEYAH', quartiers: ['HERMAKONO','BAMBAYAH','KASSOGNAH','KAKULIMA','SÖMBE','TANENE I','TANENE II','BENTOURAYAH-PLATEAU','BENTOURAYAH-VILLAGE','FRIGUIADY-NORD','FRIGUIADY-VILLAGE','GOMBOYAH-NORD','GOMBOYAH VILLAGE'] },
 
-  // ── RÉGION DE BOKÉ ───────────────────────────────────────────────────────
-  { ville: 'Boké', commune: 'Boké',     quartiers: ['Boké Centre', 'Hamdallaye', 'Kolaboui', 'Sangarédi'] },
-  { ville: 'Boké', commune: 'Boffa',    quartiers: ['Boffa Centre', 'Douprou', 'Mankountan'] },
-  { ville: 'Boké', commune: 'Fria',     quartiers: ['Fria Centre', 'Kimbo', 'Tormelin'] },
-  { ville: 'Boké', commune: 'Gaoual',   quartiers: ['Gaoual Centre', 'Hidié', 'Touba'] },
-  { ville: 'Boké', commune: 'Koundara', quartiers: ['Koundara Centre', 'Saréboïdo', 'Termesse'] },
+  // ── KINDIA ───────────────────────────────────────────────────────────────
+  { ville: 'KINDIA', commune: 'DUBREKA', quartiers: ['ANSOUMANIAH PLATEAU','ANSOUMANIAH VILLAGE','BAILOBAYA CENTRE','BAILOBAYA PLATEAU','BONDABON','DAR-ES-SALAM','DOGERE','DONDOLIKHOURE','FOFOMERE','GBEREIRE','KAGBELEN VILLAGE','KAGBELEN VILLAGE 2','KEITAYAH','KENENDE','KINDIADY','KIRIKIRAN','KOBIAN','KOLEYAN N\'SIRA','MAFOUDIA','NEGUEYAH','SAMATRAN PLATEAU','SAMATRAN VILLAGE','SIMBAYAH','TANENE','TANGA','TESET','TOBOLON 1','TOMPETIN','TOUMANIAH','YOROKOGUEYAH'] },
+  { ville: 'KINDIA', commune: 'COYAH', quartiers: ['CENTRE','COYAH PLATEAU (OU SOMAYA PLATEAU)','SOMAYA MOSQUEE','SOMAYA CENTRE','DOUMBOUYA ECOLE','DOUMBOUYA CENTRE','LABO','FILY 1','FILY 2','KAROUBA TOUGANDI','LAMINAYA BATOUYA','NORD 1','NORD 2','KM 54','NAKIRI','KOURIAH','WONKIFONG'] },
+  { ville: 'KINDIA', commune: 'FORECARIAH', quartiers: ['KOUTOUMANIA','MADINA','FATAKO 1','FATAKO 2','TATAGUI 1','TATAGUI 2'] },
+  { ville: 'KINDIA', commune: 'TELIMELE', quartiers: ['TATA','MISSIRE','DARA','SARE KALY','HOOYO','KOUROULA'] },
+  { ville: 'KINDIA', commune: 'KINDIA', quartiers: ['ABATTOIR 1','ABATTOIR 2','BAMBAN','BANLIEUE','BAGUEYA','BENDOUGOU','BOKARIA','CACIA 1','CACIA 2','CARAVANSERAIL','CONDETA 3','CONDETA MOSQUEE','DARESSALAM','FEREFOU 1','FEREFOU 2','FILIGBE','FISSA ECOLE','FISSA HOPITAL','GADHAWAWA','GANGAN','GARANGUELAYA','GARE','KAALY','KENENDE','KOBA PASTORIA','KOLIADY I','KOLIADY II','KOUMBAYA','MANQUEPAS','MANQUEPAS TP','NERIBILY','SAMBAYA','SARAKHOLEYA','SEKOUYA','SINANYA','TABOUNA','TAFORY ALMAMYA','TAFORY METEO','TANENE KELE','TATAGUI','SEGUEYA','THIERNO DJIBIYA','WOLEAH','WONDI','YEWOLE'] },
 
-  // ── RÉGION DE KINDIA ─────────────────────────────────────────────────────
-  { ville: 'Kindia', commune: 'Kindia',     quartiers: ['Kindia Centre', 'Madina Oula', 'Molota', 'Samaya', 'Souguéta'] },
-  { ville: 'Kindia', commune: 'Coyah',      quartiers: ['Coyah Centre', 'Kouriya', 'Manéah', 'Wonkifong'] },
-  { ville: 'Kindia', commune: 'Dubréka',    quartiers: ['Dubréka Centre', 'Fotoba', 'Kouria'] },
-  { ville: 'Kindia', commune: 'Forécariah', quartiers: ['Farmoriah', 'Forécariah Centre', 'Moussayah', 'Wonkifong'] },
-  { ville: 'Kindia', commune: 'Télimélé',   quartiers: ['Mitty', 'Télimélé Centre', 'Thionthian'] },
+  // ── BOKE ─────────────────────────────────────────────────────────────────
+  { ville: 'BOKE', commune: 'BOKE', quartiers: ['BOKÉ-CENTRE','WAKRIYA','TAMARA','K MATOTO','DIBIA','KOUNTIA','BARALANDE','DABHALA','YOMBOYA','KOUROULA','ANTENNE','MISSIRA','CONCORDE','HEREMAKONON','LEBERE','KAMSSAR','KOLABOUGNI','GORÉYE','CORRÉRAH','DIOUMAYA','KOUGNÉWADÉ I','TOMBOYA','MADINA KEBENYAH','QUARTIER GENERAL','SAINTE MARIE','KAKANDE','LAMBANYI','MOSQUEE','AVIATION'] },
+  { ville: 'BOKE', commune: 'BOFFA', quartiers: ['ALMAMIYA I','ALMAMIYA II','BOLONDÉ','TAMAKÈNÈ','KINDIADY','TABORIYA','DOUPROU CENTRE','MARCHE','PORT','BOFFA CENTRE','DIXINN I','DIXINN II','COLIA','TOUGNIFILY','MANKOUNTAN'] },
+  { ville: 'BOKE', commune: 'FRIA', quartiers: ['AVIATION I','AVIATION II','ALPHA YAYA','SABENDE I','SABENDE II','TIGUE 1','TIGUE 2','CITE RUSAL','CENTRE-VILLE','BOWAL','TOMBOLIA','KATOUROU','TABOSSY','FRIA BASE','FRIA VILLAGE'] },
+  { ville: 'BOKE', commune: 'GAOUAL', quartiers: ['BARKÈRÈ','BASSANTO','DANDOU','HAFIA','HOUMBAYA','KAYAN','MADINA KEMBERA','SINTHIOUROU','TOULOUN'] },
+  { ville: 'BOKE', commune: 'KOUNDARA', quartiers: ['MOSQUEE','MARCHE','RESIDENTIEL','AVIATION','KANDAÏDE','LONI','DIAMEL','CENTRE-VILLE'] },
 
-  // ── RÉGION DE MAMOU ──────────────────────────────────────────────────────
-  { ville: 'Mamou', commune: 'Mamou',  quartiers: ['Mamou Centre', 'Porédaka', 'Saramoussayah', 'Timbo'] },
-  { ville: 'Mamou', commune: 'Dalaba', quartiers: ['Dalaba Centre', 'Ditinn', 'Maci', 'Soya'] },
-  { ville: 'Mamou', commune: 'Pita',   quartiers: ['Bantignel', 'Mitty', 'Pita Centre', 'Sangaréah'] },
+  // ── MAMOU ────────────────────────────────────────────────────────────────
+  { ville: 'MAMOU', commune: 'DALABA', quartiers: ['TOMBOKO','HERICO','MISSIDE','POMMIERS','PARC','TINKA','HORE-DIMMA'] },
+  { ville: 'MAMOU', commune: 'MAMOU', quartiers: ['ALMAMYA','DOUNET','POREDAKA','PETEL','TEGUEREYA','NIAGARA','KONKOURE','GONGORE','BOULIWEL','TIMBO'] },
+  { ville: 'MAMOU', commune: 'PITA', quartiers: ['GONGORÈ','LEY MIRO','TIMBI TOUNI','TIMBI MADINA','SINTALY','DONGOL TOUMA','NINGUELANDE','SANGAREYAH','BANTIGNEL','MACI','BROUWAL TAPPE'] },
 
-  // ── RÉGION DE LABÉ ───────────────────────────────────────────────────────
-  { ville: 'Labé', commune: 'Labé',    quartiers: ['Diari', 'Labé Centre', 'Pellel', 'Popodara', 'Tountouroun'] },
-  { ville: 'Labé', commune: 'Koubia',  quartiers: ['Koubia Centre', 'Mombéya'] },
-  { ville: 'Labé', commune: 'Lélouma', quartiers: ['Fougoumba', 'Lélouma Centre', 'Popodara'] },
-  { ville: 'Labé', commune: 'Mali',    quartiers: ['Hidié', 'Madina Wora', 'Mali Centre'] },
-  { ville: 'Labé', commune: 'Tougué',  quartiers: ['Gagnakaly', 'Tougué Centre'] },
+  // ── LABE ─────────────────────────────────────────────────────────────────
+  { ville: 'LABE', commune: 'KOUBIA', quartiers: ['KOUBIA CENTRE','MATAKAOU','FAFAYA','PILIMINI','MISSIRA','KOLLET'] },
+  { ville: 'LABE', commune: 'LABE', quartiers: ['TATA 1','TATA 2','TATA 3','DOW-SARE','DAKA 1','DAKA 2','KONKOLA','KOUROULA','LEY-SARE','COMPAYA'] },
+  { ville: 'LABE', commune: 'LELOUMA', quartiers: ['LELOUMA CENTRE','THIANGUEL BORI','DIOUNTOU','PARAWOL','SAGALE','BALAKI'] },
+  { ville: 'LABE', commune: 'MALI', quartiers: ['MALI CENTRE','DOUGOUNTOUNY','BALAKI','MADINA WORA','YEMBÉRING','SALAMBANDE'] },
+  { ville: 'LABE', commune: 'TOUGUE', quartiers: ['TOUGUÉ CENTRE','KANSAGUI','KOURATONGO','KOIN','KONAH','FELLO','KOUNDOU','FATAKO','TANGALY','KOLLAGUI','KOLLET'] },
 
-  // ── RÉGION DE FARANAH ────────────────────────────────────────────────────
-  { ville: 'Faranah', commune: 'Faranah',    quartiers: ['Banian', 'Faranah Centre', 'Sanfinia', 'Tiro'] },
-  { ville: 'Faranah', commune: 'Dabola',     quartiers: ['Arfamoussaya', 'Dabola Centre', 'Kankama'] },
-  { ville: 'Faranah', commune: 'Dinguiraye', quartiers: ['Dinguiraye Centre', 'Kalinko', 'Mafara'] },
-  { ville: 'Faranah', commune: 'Kissidougou', quartiers: ['Firawa', 'Gbenko', 'Kissidougou Centre', 'Yendé Millimou'] },
+  // ── FARANAH ──────────────────────────────────────────────────────────────
+  { ville: 'FARANAH', commune: 'FARANAH – CENTRE', quartiers: ['ABATTOIR','AVIATION','DALABA','MOSQUEE','MARCHE','TONKOLONKO','BORDO'] },
+  { ville: 'FARANAH', commune: 'KISSIDOUGOU', quartiers: ['KORODOU','LIMANIYA','SOGBE','YOMBA','TP','FARAKO'] },
+  { ville: 'FARANAH', commune: 'DABOLA', quartiers: ['HEREMAKONO','ARFAMOUSSAYA','BISSIKIRIMA','TINKISSO','DABOLA CENTRE'] },
+  { ville: 'FARANAH', commune: 'DINGUIRAYE', quartiers: ['DINGUIRAYE CENTRE','DIALAKORO','BANORA','LANSANAYA','DIATIFERE'] },
 
-  // ── RÉGION DE KANKAN ─────────────────────────────────────────────────────
-  { ville: 'Kankan', commune: 'Kankan',   quartiers: ['Bankalan', 'Caboul', 'Kankan Centre', 'Kouroula', 'Niani'] },
-  { ville: 'Kankan', commune: 'Kérouané', quartiers: ['Kérouané Centre', 'Komodou', 'Sansando'] },
-  { ville: 'Kankan', commune: 'Kouroussa', quartiers: ['Baro', 'Doura', 'Kouroussa Centre', 'Sanguiana'] },
-  { ville: 'Kankan', commune: 'Mandiana', quartiers: ['Dialakoro', 'Mandiana Centre', 'Nionsomoridou'] },
-  { ville: 'Kankan', commune: 'Siguiri',  quartiers: ['Gbérédou', 'Norassoba', 'Siguiri Centre', 'Tokounou'] },
+  // ── KANKAN ───────────────────────────────────────────────────────────────
+  { ville: 'KANKAN', commune: 'KANKAN', quartiers: ['KANKAN KOURA','KABADA 1','KABADA 2','BORDO','MISSIRAN','BANANKÖRÖDA','TIMBO','BRIQUETERIE'] },
+  { ville: 'KANKAN', commune: 'KEROUANE', quartiers: ['KEROUANE CENTRE','KOMODOU','DAMARO','SOROMAYA','BANANKORO'] },
+  { ville: 'KANKAN', commune: 'KOUROUSSA', quartiers: ['KOUROUSSA CENTRE','SOGBE','KOMOLA','HAMDALLAYE','BORDO'] },
+  { ville: 'KANKAN', commune: 'MANDIANA', quartiers: ['MANDIANA CENTRE','KODIARAN','MORODOU','KOUNDIAN','DIALAKORO'] },
+  { ville: 'KANKAN', commune: 'SIGUIRI', quartiers: ['SIGUIRI KORO 1','SIGUIRI KORO 2','BOLIBANA 1','BOLIBANA 2','KOUROUDAKORO','SIGUIRI KOURA','FODÉBA KEITA','TELELADJI','O.R.S.','BANANINKORO','ENERGIE','SAINT-ALEXIS'] },
 
-  // ── RÉGION DE NZÉRÉKORÉ ──────────────────────────────────────────────────
-  { ville: 'Nzérékoré', commune: 'Nzérékoré', quartiers: ['Gouécké', 'Kobela', 'Nzérékoré Centre', 'Womey'] },
-  { ville: 'Nzérékoré', commune: 'Beyla',      quartiers: ['Beyla Centre', 'Sinko', 'Tokounou'] },
-  { ville: 'Nzérékoré', commune: 'Guéckédou',  quartiers: ['Guéckédou Centre', 'Nongoa', 'Ouendou'] },
-  { ville: 'Nzérékoré', commune: 'Lola',       quartiers: ['Bossou', 'Lola Centre', 'Nzo'] },
-  { ville: 'Nzérékoré', commune: 'Macenta',    quartiers: ['Macenta Centre', 'Sérédou', 'Tekoulo'] },
-  { ville: 'Nzérékoré', commune: 'Yomou',      quartiers: ['Diécké', 'Yomou Centre'] },
+  // ── N'ZEREKORE ───────────────────────────────────────────────────────────
+  { ville: "N'ZEREKORE", commune: 'BEYLA', quartiers: ['DIAKOLIDOU-SOBAKONO','GBORO','BANANKORO','DIAKORO','PYARO','KONI','KANKOU MOUSSA','CENTRE-VILLE'] },
+  { ville: "N'ZEREKORE", commune: 'GUECKEDOU', quartiers: ['SOKORO','MANGALLA 1','MANGALLA 2','FARAKO PHARMACIE','FARAKO WOYA','PEYEMBOU','GBANGBADOU','HAFIA','KOULEWONDY','KENENDE','MISSIRA','CARREFOUR','BOWAL','KANDJA','TÉLIKORO','LIMANYA','DONGHOL'] },
+  { ville: "N'ZEREKORE", commune: 'LOLA', quartiers: ['THIÉTA','TIGHEN-MO I','TIGHEN-MO II','WOROYAPO','KPÈLÈKOLY','HOMIAKOLY I','HOMIAKOLY II','FLAYAPO','GOTÉKOLY','SOUWALAKOLY I','SOUWALAKOLY II','MANGHAN-MO','BALEMOU','GAMA KONI-KONI','GAMA YALÉ','GBECKÈ','GOGOTA I','GOGOTA II','GOH','LOMOU','N\'ZON','TOKPANATA','WÉYAKORÉ','ZOUGOUÉTA I','ZOUGOUETA II','DOUSSOU','GONOTA-YALE'] },
+  { ville: "N'ZEREKORE", commune: 'MACENTA', quartiers: ['ZEZEBOKONI','BARRAGE','KAMANDOU KOURA','PATRICE','BOWA','MOINLAMINDOU','MACENTA MOSQUEE','MACENTA KOURA','WOYA HERMANKONO'] },
+  { ville: "N'ZEREKORE", commune: "N'ZEREKORE", quartiers: ['BELLEVUE','BOMA','DOROTA 1','DOROTA 2','GBANGANA','HOROYA (JAMAÏQUE)','KOSSAYA','KWITEPOLA','MOHOMOU','NAKOYAKPALA','NYEN','OSSUD 1','OSSUD 2','WESSESSOU','WOATA','YAMOU','YEKEPA','ZALY','ZOGHBO'] },
+  { ville: "N'ZEREKORE", commune: 'YOMOU', quartiers: ['YOMOU-CENTRE','BALLO','GBAMOU','BANIE','BHETA','BIGNAMOU','BOWE','DIECKE'] },
 ]
 
 export const COMMUNES = LOCATIONS.map(l => l.commune)
@@ -109,7 +115,7 @@ export const PROFESSIONS = [
   'Autres',
 ]
 
-// ── Secteurs d'activité (personne morale) — en majuscules ────────────────────
+// ── Secteurs d'activité (personne morale) ────────────────────────────────────
 export const SECTEURS_MORALE = [
   'AGRICULTURE',
   'ELEVAGE',
