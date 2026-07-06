@@ -259,28 +259,21 @@ router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
     get("SELECT COUNT(*) c FROM prospects WHERE date_prospection>=?", [monthStart]),
   ]);
 
-  // ── 4 blocs financiers : prévisionnel (pipeline ouvert) vs perçu/payé (réalisé) ──
-  const [primePrev, primePercu, cpPrev, cpPercu, accPrev, accPercu, commDu, commPaye] = await Promise.all([
+  // ── 2 blocs financiers : prévisionnel (pipeline ouvert) vs perçu/payé (réalisé) ──
+  const [primePrev, primePercu, commDu, commPaye] = await Promise.all([
     get("SELECT COALESCE(SUM(montant_potentiel),0) v FROM prospects"),
     get("SELECT COALESCE(SUM(prime_totale),0) v FROM clients"),
-    get("SELECT COALESCE(SUM(cout_police_potentiel),0) v FROM prospects"),
-    get("SELECT COALESCE(SUM(cout_police_total),0) v FROM clients"),
-    get("SELECT COALESCE(SUM(accessoire_potentiel),0) v FROM prospects"),
-    get("SELECT COALESCE(SUM(accessoire_total),0) v FROM clients"),
     get("SELECT COALESCE(SUM(montant_du),0) v FROM commissions"),
     get("SELECT COALESCE(SUM(montant_paye),0) v FROM commissions"),
   ]);
 
-  // Prime/coût de police/accessoire : le prévisionnel (pipeline encore ouvert) et le perçu (déjà
-  // encaissé chez les clients) forment deux populations disjointes → taux = perçu / (perçu+prévisionnel)
-  const realisationPools = (percu, prev) => {
-    const total = Number(percu) + Number(prev);
-    return total > 0 ? parseFloat((Number(percu) / total * 100).toFixed(1)) : 0;
+  // Prime commerciale : le prévisionnel (pipeline encore ouvert) et le perçu (déjà encaissé chez
+  // les clients) forment deux populations disjointes → taux = perçu / (perçu+prévisionnel)
+  const primeBlock = {
+    previsionnel: Number(primePrev.v), percu: Number(primePercu.v),
+    taux_realisation: (Number(primePercu.v) + Number(primePrev.v)) > 0
+      ? parseFloat((Number(primePercu.v) / (Number(primePercu.v) + Number(primePrev.v)) * 100).toFixed(1)) : 0,
   };
-
-  const primeBlock = { previsionnel: Number(primePrev.v), percu: Number(primePercu.v), taux_realisation: realisationPools(primePercu.v, primePrev.v) };
-  const coutPoliceBlock = { previsionnel: Number(cpPrev.v), percu: Number(cpPercu.v), taux_realisation: realisationPools(cpPercu.v, cpPrev.v) };
-  const accessoireBlock = { previsionnel: Number(accPrev.v), percu: Number(accPercu.v), taux_realisation: realisationPools(accPercu.v, accPrev.v) };
   // Commission : montant_du est le total dû (payé inclus dedans), donc taux = payé / dû
   const commissionBlock = {
     previsionnel: Number(commDu.v),
@@ -327,33 +320,17 @@ router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
              COALESCE(SUM(CASE WHEN converted_at>=? THEN commission_totale ELSE 0 END),0) period_commission_clients
       FROM clients GROUP BY agent_id
     `, [periodStart, periodStart]),
+    // Le dénominateur d'objectif ne dépend que de l'objectif mensuel fixé et de la période
+    // choisie dans le dashboard : mensuel=×1, trimestre=×3, semestre=×6, année=×12
+    // (la "periode" propre à chaque objectif produit n'entre plus en jeu ici).
     all(`
       SELECT apo.agent_id,
-        COALESCE(SUM(CASE apo.periode
-          WHEN 'mensuel'   THEN apo.objectif_mensuel * ?
-          WHEN 'trimestre' THEN apo.objectif_mensuel * ? / 3.0
-          WHEN 'semestre'  THEN apo.objectif_mensuel * ? / 6.0
-          WHEN 'annuel'    THEN apo.objectif_mensuel * ? / 12.0
-          ELSE apo.objectif_mensuel * ?
-        END), 0) objectif_period_prospects,
-        COALESCE(SUM(CASE apo.periode
-          WHEN 'mensuel'   THEN apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ?
-          WHEN 'trimestre' THEN apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ? / 3.0
-          WHEN 'semestre'  THEN apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ? / 6.0
-          WHEN 'annuel'    THEN apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ? / 12.0
-          ELSE apo.objectif_mensuel * pr.prime_annuelle / 12.0 * ?
-        END), 0) objectif_period_primes,
-        COALESCE(SUM(CASE apo.periode
-          WHEN 'mensuel'   THEN apo.objectif_mensuel * pr.prime_annuelle * pr.taux_commission / 100.0 / 12.0 * ?
-          WHEN 'trimestre' THEN apo.objectif_mensuel * pr.prime_annuelle * pr.taux_commission / 100.0 / 12.0 * ? / 3.0
-          WHEN 'semestre'  THEN apo.objectif_mensuel * pr.prime_annuelle * pr.taux_commission / 100.0 / 12.0 * ? / 6.0
-          WHEN 'annuel'    THEN apo.objectif_mensuel * pr.prime_annuelle * pr.taux_commission / 100.0 / 12.0 * ? / 12.0
-          ELSE apo.objectif_mensuel * pr.prime_annuelle * pr.taux_commission / 100.0 / 12.0 * ?
-        END), 0) objectif_period_commissions
+        COALESCE(SUM(apo.objectif_mensuel), 0) objectif_base_prospects,
+        COALESCE(SUM(apo.objectif_mensuel * pr.prime_annuelle), 0) objectif_base_primes
       FROM agent_product_objectives apo
       JOIN products pr ON pr.id = apo.product_id
       GROUP BY apo.agent_id
-    `, Array(15).fill(periodMonths)),
+    `),
   ]);
 
   const clientMap = {}; for (const c of clientStatsByAgent) clientMap[c.agent_id] = c;
@@ -369,14 +346,13 @@ router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
       prime_clients: Number(cs.prime_clients || 0),
       commission_clients: Number(cs.commission_clients || 0),
       period_commission_clients: Number(cs.period_commission_clients || 0),
-      objectif_period_prospects:    Number(objMap[a.id]?.objectif_period_prospects    || 0),
-      objectif_period_primes:       Number(objMap[a.id]?.objectif_period_primes       || 0),
-      objectif_period_commissions:  Number(objMap[a.id]?.objectif_period_commissions  || 0),
+      objectif_period_prospects: Number(objMap[a.id]?.objectif_base_prospects || 0) * periodMonths,
+      objectif_period_primes:    Number(objMap[a.id]?.objectif_base_primes    || 0) * periodMonths,
     };
   });
 
   // ── Stats par produit : pipeline (prospects encore ouverts) + réalisé (clients) ──
-  const [productPipeline, productClients, products, bySector, trend] = await Promise.all([
+  const [productPipeline, productClients, products] = await Promise.all([
     all(`
       SELECT pp.product_id, COUNT(DISTINCT p.id) total_prospects
       FROM prospect_products pp JOIN prospects p ON p.id = pp.prospect_id
@@ -387,28 +363,22 @@ router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
              COUNT(DISTINCT cp.client_id) total_clients,
              COALESCE(SUM(cp.nb_beneficiaires),0) total_beneficiaires,
              COALESCE(SUM(cp.prime_payee),0) total_primes,
-             COALESCE(SUM(cp.commission),0) total_commissions,
-             COALESCE(SUM(cp.cout_police),0) total_cout_police,
-             COALESCE(SUM(cp.accessoire),0) total_accessoire
+             COALESCE(SUM(cp.commission),0) total_commissions
       FROM client_products cp
       GROUP BY cp.product_id
     `),
-    all("SELECT id, nom, prime_annuelle, taux_commission FROM products WHERE is_active=1 ORDER BY nom"),
-    all(`SELECT secteur_activite, COUNT(*) AS "count" FROM prospects WHERE secteur_activite IS NOT NULL GROUP BY secteur_activite ORDER BY "count" DESC LIMIT 10`),
-    all(`SELECT to_char(date_prospection, 'YYYY-MM') AS "month", COUNT(*) AS "count" FROM prospects GROUP BY to_char(date_prospection, 'YYYY-MM') ORDER BY "month" DESC LIMIT 6`),
+    all("SELECT id, nom FROM products WHERE is_active=1 ORDER BY nom"),
   ]);
 
   const pipelineMap = {}; for (const r of productPipeline) pipelineMap[r.product_id] = r;
   const clientsProductMap = {}; for (const r of productClients) clientsProductMap[r.product_id] = r;
   const byProduct = products.map(pr => ({
-    id: pr.id, nom: pr.nom, prime_annuelle: Number(pr.prime_annuelle), taux_commission: Number(pr.taux_commission),
+    id: pr.id, nom: pr.nom,
     total_prospects: Number(pipelineMap[pr.id]?.total_prospects || 0),
     total_clients: Number(clientsProductMap[pr.id]?.total_clients || 0),
     total_beneficiaires: Number(clientsProductMap[pr.id]?.total_beneficiaires || 0),
     total_primes: Number(clientsProductMap[pr.id]?.total_primes || 0),
     total_commissions: Number(clientsProductMap[pr.id]?.total_commissions || 0),
-    total_cout_police: Number(clientsProductMap[pr.id]?.total_cout_police || 0),
-    total_accessoire: Number(clientsProductMap[pr.id]?.total_accessoire || 0),
   })).sort((a, b) => b.total_primes - a.total_primes);
 
   res.json({
@@ -428,8 +398,6 @@ router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
       morale: convRate(tcMor, tpMor),
     },
     prime: primeBlock,
-    cout_police: coutPoliceBlock,
-    accessoire: accessoireBlock,
     commission: commissionBlock,
     renouvellement: {
       renouveles, non_renouveles: nonRenouveles, en_attente: Number(renewalRow.en_attente),
@@ -437,8 +405,6 @@ router.get('/admin', authenticateToken, requireAdmin, ah(async (req, res) => {
     },
     agent_stats: enrichedAgentStats,
     by_product: byProduct,
-    by_sector: bySector,
-    monthly_trend: [...trend].reverse(),
   });
 }));
 
