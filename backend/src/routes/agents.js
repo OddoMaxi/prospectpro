@@ -31,20 +31,31 @@ async function saveObjectives(agentId, product_objectives) {
 router.get('/sous-agents', authenticateToken, ah(async (req, res) => {
   if (req.user.role !== 'agent') return res.status(403).json({ error: 'Accès réservé aux agents' });
 
-  const sousAgents = await all(`
-    SELECT u.id, u.nom, u.prenom, u.email, u.telephone, u.username,
-           u.objectif_mensuel, u.objectif_annuel, u.taux_commission, u.taux_commission_parent,
-           u.is_active, u.created_at, u.type_agent, u.raison_sociale,
-           COUNT(p.id) as total_prospects,
-           SUM(CASE WHEN p.statut = 'client' THEN 1 ELSE 0 END) as total_clients,
-           COALESCE(SUM(p.montant_potentiel * p.taux_commission / 100), 0) as commission_agent,
-           COALESCE(SUM(p.montant_potentiel), 0) as prime_total
-    FROM users u LEFT JOIN prospects p ON p.agent_id = u.id
-    WHERE u.parent_agent_id = ?
-    GROUP BY u.id ORDER BY u.nom, u.prenom
-  `, [req.user.id]);
+  const [sousAgents, clientCounts] = await Promise.all([
+    all(`
+      SELECT u.id, u.nom, u.prenom, u.email, u.telephone, u.username,
+             u.objectif_mensuel, u.objectif_annuel, u.taux_commission, u.taux_commission_parent,
+             u.is_active, u.created_at, u.type_agent, u.raison_sociale,
+             COUNT(p.id) as total_prospects,
+             COALESCE(SUM(p.montant_potentiel * p.taux_commission / 100), 0) as commission_agent,
+             COALESCE(SUM(p.montant_potentiel), 0) as prime_total
+      FROM users u LEFT JOIN prospects p ON p.agent_id = u.id
+      WHERE u.parent_agent_id = ?
+      GROUP BY u.id ORDER BY u.nom, u.prenom
+    `, [req.user.id]),
+    // Les clients vivent dans `clients` (le prospect est supprimé à la conversion) : compter à part
+    all(`
+      SELECT c.agent_id, COUNT(*) as total_clients
+      FROM clients c JOIN users u ON u.id = c.agent_id
+      WHERE u.parent_agent_id = ?
+      GROUP BY c.agent_id
+    `, [req.user.id]),
+  ]);
 
-  res.json(sousAgents);
+  const clientMap = {};
+  for (const c of clientCounts) clientMap[c.agent_id] = Number(c.total_clients);
+
+  res.json(sousAgents.map(a => ({ ...a, total_clients: clientMap[a.id] || 0 })));
 }));
 
 // Créer un sous-agent
@@ -303,21 +314,28 @@ router.post('/', authenticateToken, requireAdmin, ah(async (req, res) => {
 
 // Admin: lister tous les agents (y compris les sous-agents)
 router.get('/', authenticateToken, requireAdmin, ah(async (req, res) => {
-  const agents = await all(`
-    SELECT u.id, u.nom, u.prenom, u.email, u.telephone, u.username,
-           u.objectif_mensuel, u.objectif_annuel, u.taux_commission, u.taux_commission_parent,
-           u.is_active, u.created_at, u.type_agent, u.raison_sociale, u.representant_legal,
-           u.parent_agent_id,
-           pa.nom as parent_nom, pa.prenom as parent_prenom, pa.raison_sociale as parent_raison_sociale,
-           COUNT(p.id) as total_prospects,
-           SUM(CASE WHEN p.statut = 'client' THEN 1 ELSE 0 END) as total_clients
-    FROM users u
-    LEFT JOIN prospects p ON p.agent_id = u.id
-    LEFT JOIN users pa ON pa.id = u.parent_agent_id
-    WHERE u.role = 'agent'
-    GROUP BY u.id, pa.id ORDER BY u.nom, u.prenom
-  `);
-  res.json(agents);
+  const [agents, clientCounts] = await Promise.all([
+    all(`
+      SELECT u.id, u.nom, u.prenom, u.email, u.telephone, u.username,
+             u.objectif_mensuel, u.objectif_annuel, u.taux_commission, u.taux_commission_parent,
+             u.is_active, u.created_at, u.type_agent, u.raison_sociale, u.representant_legal,
+             u.parent_agent_id,
+             pa.nom as parent_nom, pa.prenom as parent_prenom, pa.raison_sociale as parent_raison_sociale,
+             COUNT(p.id) as total_prospects
+      FROM users u
+      LEFT JOIN prospects p ON p.agent_id = u.id
+      LEFT JOIN users pa ON pa.id = u.parent_agent_id
+      WHERE u.role = 'agent'
+      GROUP BY u.id, pa.id ORDER BY u.nom, u.prenom
+    `),
+    // Les clients vivent dans `clients` (le prospect est supprimé à la conversion) : compter à part
+    all(`SELECT agent_id, COUNT(*) as total_clients FROM clients GROUP BY agent_id`),
+  ]);
+
+  const clientMap = {};
+  for (const c of clientCounts) clientMap[c.agent_id] = Number(c.total_clients);
+
+  res.json(agents.map(a => ({ ...a, total_clients: clientMap[a.id] || 0 })));
 }));
 
 // Admin: obtenir un agent par ID

@@ -8,6 +8,12 @@ import { exportCSV } from '../../utils/csv'
 
 const PAGE_SIZE = 10
 const TYPES = { physique: 'Particulier', morale: 'Entreprise' }
+const RENOUVELLEMENT = { en_attente: 'En attente', renouvele: 'Renouvelé', non_renouvele: 'Non renouvelé' }
+const RENOUVELLEMENT_STYLES = {
+  en_attente:     'bg-gray-100 text-gray-600',
+  renouvele:      'bg-emerald-100 text-emerald-700',
+  non_renouvele:  'bg-red-100 text-red-600',
+}
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
 const fmtDate = d => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
 
@@ -205,6 +211,14 @@ export default function ClientList() {
     } catch { toast.error('Erreur lors de la suppression') }
   }
 
+  const handleRenouvellement = async (id, statut_renouvellement) => {
+    try {
+      await api.patch(`/clients/${id}/renouvellement`, { statut_renouvellement })
+      setClients(prev => prev.map(c => c.id === id ? { ...c, statut_renouvellement } : c))
+      toast.success('Statut de renouvellement mis à jour')
+    } catch { toast.error('Erreur lors de la mise à jour') }
+  }
+
   const hasActiveFilters = Object.values(filters).some(Boolean)
   const displayClients = filters.expiring_soon ? clients.filter(c => isExpiringSoon(c.date_fin)) : clients
 
@@ -327,8 +341,9 @@ export default function ClientList() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  {['N°','Nom / Raison sociale','Type','Agent','N° Contrat','Prime payée','Commission','Date effet','Date fin','Actions']
+                  {['N°','Nom / Raison sociale','Type','Agent','N° Contrat','Prime payée','Commission','Date effet','Date fin','Renouvellement','Actions']
                     .filter(h => isAdmin || h !== 'Agent')
+                    .filter(h => isAdmin || h !== 'Renouvellement')
                     .map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
@@ -364,6 +379,19 @@ export default function ClientList() {
                         : <span className="text-gray-500">{fmtDate(c.date_fin)}</span>
                       }
                     </td>
+                    {isAdmin && (
+                      <td className="px-4 py-3">
+                        <select
+                          value={c.statut_renouvellement || 'en_attente'}
+                          onChange={e => handleRenouvellement(c.id, e.target.value)}
+                          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border-0 cursor-pointer bg-transparent appearance-none text-center ${RENOUVELLEMENT_STYLES[c.statut_renouvellement] || RENOUVELLEMENT_STYLES.en_attente}`}
+                        >
+                          {Object.entries(RENOUVELLEMENT).map(([k, label]) => (
+                            <option key={k} value={k}>{label}</option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button

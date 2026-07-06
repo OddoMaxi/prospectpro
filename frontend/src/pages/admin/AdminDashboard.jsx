@@ -1,14 +1,24 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
-import StatCard from '../../components/StatCard'
-import { Users, UserCheck, TrendingUp, DollarSign, BarChart2, Target, Banknote, Award, Package } from 'lucide-react'
 import Pagination from '../../components/Pagination'
+import {
+  Users, UserCheck, BarChart2, Target, Banknote, Award, Package,
+  ShieldCheck, Receipt, RefreshCw
+} from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 const PAGE_SIZE = 10
 const PIE_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6']
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
-const fmtCur = n => fmt(n)
+
+const COLORS = {
+  blue:   'bg-blue-50 text-blue-600',
+  green:  'bg-emerald-50 text-emerald-600',
+  purple: 'bg-purple-50 text-purple-600',
+  orange: 'bg-orange-50 text-orange-600',
+  red:    'bg-red-50 text-red-600',
+  yellow: 'bg-yellow-50 text-yellow-600',
+}
 
 const PERIODS = [
   { value: 'mois',      label: 'Mois',      short: 'Ce mois' },
@@ -58,6 +68,93 @@ function AchievementBar({ value, target }) {
   )
 }
 
+function RealisationBar({ taux }) {
+  const pct = Math.min(Number(taux) || 0, 100)
+  const barColor = pct >= 100 ? 'bg-emerald-500' : pct >= 70 ? 'bg-orange-400' : 'bg-blue-400'
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs font-semibold text-gray-600 shrink-0">{(Number(taux) || 0).toFixed(1)}%</span>
+    </div>
+  )
+}
+
+function TypeSplitCard({ title, icon: Icon, color, total, physique, morale, isPercent }) {
+  const val = isPercent ? `${total}%` : fmt(total)
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 mb-2">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${COLORS[color]}`}>
+          <Icon size={20} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-2xl font-bold text-gray-900">{val}</p>
+          <p className="text-xs text-gray-500 truncate">{title}</p>
+        </div>
+      </div>
+      <div className="flex gap-3 text-xs text-gray-500">
+        <span>Particuliers : <span className="font-medium text-gray-700">{isPercent ? `${physique}%` : fmt(physique)}</span></span>
+        <span>Entreprises : <span className="font-medium text-gray-700">{isPercent ? `${morale}%` : fmt(morale)}</span></span>
+      </div>
+    </div>
+  )
+}
+
+function AgentBreakdownCard({ agents }) {
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-blue-50 text-blue-600">
+          <Users size={20} />
+        </div>
+        <div>
+          <p className="text-2xl font-bold text-gray-900">{fmt(agents.total)}</p>
+          <p className="text-xs text-gray-500">Agents commerciaux actifs</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="bg-gray-50 rounded-lg p-2">
+          <p className="text-gray-400 mb-0.5">Séniores</p>
+          <p className="font-bold text-gray-800">{fmt(agents.seniors.total)}</p>
+          <p className="text-gray-400">{fmt(agents.seniors.physique)} phys. · {fmt(agents.seniors.morale)} mor.</p>
+        </div>
+        <div className="bg-gray-50 rounded-lg p-2">
+          <p className="text-gray-400 mb-0.5">Juniores</p>
+          <p className="font-bold text-gray-800">{fmt(agents.juniors.total)}</p>
+          <p className="text-gray-400">{fmt(agents.juniors.physique)} phys. · {fmt(agents.juniors.morale)} mor.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FinanceBlock({ title, icon: Icon, color, previsionnel, percu, percuLabel, taux }) {
+  return (
+    <div className="card">
+      <div className="flex items-center gap-2 mb-3">
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${COLORS[color]}`}>
+          <Icon size={18} />
+        </div>
+        <h3 className="font-semibold text-gray-800 text-sm">{title}</h3>
+      </div>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <p className="text-xs text-gray-400">Prévisionnel</p>
+          <p className="font-bold text-gray-700">{fmt(previsionnel)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-400">{percuLabel}</p>
+          <p className="font-bold text-emerald-700">{fmt(percu)}</p>
+        </div>
+      </div>
+      <p className="text-xs text-gray-400 mb-1">Taux de réalisation</p>
+      <RealisationBar taux={taux} />
+    </div>
+  )
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -94,8 +191,8 @@ export default function AdminDashboard() {
     return sortDir === 'asc' ? -cmp : cmp
   })
 
-  const totalPrimes      = sortedAgents.reduce((s, a) => s + Number(a.prime_total      || 0), 0)
-  const totalCommissions = sortedAgents.reduce((s, a) => s + Number(a.commission_total || 0), 0)
+  const totalPrimes  = sortedAgents.reduce((s, a) => s + Number(a.prime_total   || 0), 0)
+  const totalClients = sortedAgents.reduce((s, a) => s + Number(a.total_clients || 0), 0)
   const totalPages       = Math.ceil(sortedAgents.length / PAGE_SIZE)
   const paginatedAgents  = sortedAgents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
@@ -106,40 +203,44 @@ export default function AdminDashboard() {
         <p className="text-gray-500 text-sm mt-0.5">Vue globale de l'activité commerciale</p>
       </div>
 
-      {/* Métriques globales */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard title="Agents actifs"       value={stats.total_agents}                    icon={Users}      color="blue" />
-        <StatCard title="Total prospects"     value={fmt(stats.total_prospects)}            icon={BarChart2}  color="purple" />
-        <StatCard title="Ce mois"             value={fmt(stats.monthly_prospects)}          icon={TrendingUp} color="orange" />
-        <StatCard title="Clients"             value={fmt(stats.total_clients)}              icon={UserCheck}  color="green" />
-        <StatCard title="Taux conversion"     value={`${stats.global_conversion_rate}%`}   icon={Target}     color="yellow" />
-        <StatCard title="Commission totale"   value={fmtCur(stats.commission_total)}        icon={DollarSign} color="green" />
+      {/* Agents / Prospects / Clients / Conversion */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <AgentBreakdownCard agents={stats.agents} />
+        <TypeSplitCard title="Total prospects" icon={BarChart2} color="purple"
+          total={stats.prospects.total} physique={stats.prospects.physique} morale={stats.prospects.morale} />
+        <TypeSplitCard title="Total clients" icon={UserCheck} color="green"
+          total={stats.clients.total} physique={stats.clients.physique} morale={stats.clients.morale} />
+        <TypeSplitCard title="Taux de conversion" icon={Target} color="yellow" isPercent
+          total={stats.conversion.total} physique={stats.conversion.physique} morale={stats.conversion.morale} />
       </div>
 
-      {/* Primes et commissions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="card bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide mb-1">Total primes (portefeuille clients)</p>
-              <p className="text-2xl font-bold text-blue-900">{fmtCur(stats.primes_clients)}</p>
-              <p className="text-xs text-blue-500 mt-1">Primes prévisionnelles : {fmtCur(stats.primes_total)}</p>
-            </div>
-            <div className="w-10 h-10 bg-blue-200 rounded-xl flex items-center justify-center shrink-0">
-              <Banknote size={20} className="text-blue-700" />
-            </div>
-          </div>
+      {/* 4 blocs financiers : prévisionnel vs perçu/payé + taux de réalisation */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <FinanceBlock title="Primes" icon={Banknote} color="blue" percuLabel="Perçu"
+          previsionnel={stats.prime.previsionnel} percu={stats.prime.percu} taux={stats.prime.taux_realisation} />
+        <FinanceBlock title="Coût de police" icon={ShieldCheck} color="purple" percuLabel="Perçu"
+          previsionnel={stats.cout_police.previsionnel} percu={stats.cout_police.percu} taux={stats.cout_police.taux_realisation} />
+        <FinanceBlock title="Accessoire" icon={Receipt} color="orange" percuLabel="Perçu"
+          previsionnel={stats.accessoire.previsionnel} percu={stats.accessoire.percu} taux={stats.accessoire.taux_realisation} />
+        <FinanceBlock title="Commissions" icon={Award} color="green" percuLabel="Payé"
+          previsionnel={stats.commission.previsionnel} percu={stats.commission.paye} taux={stats.commission.taux_realisation} />
+      </div>
+
+      {/* Renouvellement des contrats */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-3">
+          <RefreshCw size={18} className="text-blue-600" />
+          <h2 className="font-semibold text-gray-800">Taux de renouvellement des contrats</h2>
         </div>
-        <div className="card bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-medium text-emerald-600 uppercase tracking-wide mb-1">Commissions à payer aux agents (clients)</p>
-              <p className="text-2xl font-bold text-emerald-900">{fmtCur(stats.commission_clients)}</p>
-              <p className="text-xs text-emerald-500 mt-1">Commissions prévisionnelles : {fmtCur(stats.commission_total)}</p>
-            </div>
-            <div className="w-10 h-10 bg-emerald-200 rounded-xl flex items-center justify-center shrink-0">
-              <Award size={20} className="text-emerald-700" />
-            </div>
+        <div className="flex flex-wrap items-center gap-6">
+          <div>
+            <p className="text-3xl font-bold text-gray-900">{stats.renouvellement.taux}%</p>
+            <p className="text-xs text-gray-400 mt-0.5">Sur les contrats arrivés à échéance</p>
+          </div>
+          <div className="flex gap-4 text-sm">
+            <div><span className="font-semibold text-emerald-600">{fmt(stats.renouvellement.renouveles)}</span> <span className="text-gray-400">renouvelés</span></div>
+            <div><span className="font-semibold text-red-500">{fmt(stats.renouvellement.non_renouveles)}</span> <span className="text-gray-400">non renouvelés</span></div>
+            <div><span className="font-semibold text-gray-500">{fmt(stats.renouvellement.en_attente)}</span> <span className="text-gray-400">en attente</span></div>
           </div>
         </div>
       </div>
@@ -193,22 +294,26 @@ export default function AdminDashboard() {
                   <th className="pb-3 font-medium">Produit</th>
                   <th className="pb-3 font-medium text-right">Prime annuelle</th>
                   <th className="pb-3 font-medium text-right">Prospects</th>
-                  <th className="pb-3 font-medium text-right">Bénéficiaires</th>
                   <th className="pb-3 font-medium text-right">Clients</th>
-                  <th className="pb-3 font-medium text-right">Primes totales</th>
+                  <th className="pb-3 font-medium text-right">Bénéficiaires</th>
+                  <th className="pb-3 font-medium text-right">Primes perçues</th>
                   <th className="pb-3 font-medium text-right">Commissions</th>
+                  <th className="pb-3 font-medium text-right">Coût police</th>
+                  <th className="pb-3 font-medium text-right">Accessoire</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {stats.by_product.map(p => (
                   <tr key={p.id} className="hover:bg-gray-50">
                     <td className="py-3 font-medium text-gray-800">{p.nom}</td>
-                    <td className="py-3 text-right text-gray-500">{fmtCur(p.prime_annuelle)}</td>
+                    <td className="py-3 text-right text-gray-500">{fmt(p.prime_annuelle)}</td>
                     <td className="py-3 text-right">{fmt(p.total_prospects)}</td>
-                    <td className="py-3 text-right text-blue-700 font-medium">{fmt(p.total_beneficiaires)}</td>
                     <td className="py-3 text-right text-emerald-600 font-medium">{fmt(p.total_clients)}</td>
-                    <td className="py-3 text-right text-blue-700 font-medium">{fmtCur(p.total_primes)}</td>
-                    <td className="py-3 text-right text-purple-700">{fmtCur(p.total_commissions)}</td>
+                    <td className="py-3 text-right text-blue-700 font-medium">{fmt(p.total_beneficiaires)}</td>
+                    <td className="py-3 text-right text-blue-700 font-medium">{fmt(p.total_primes)}</td>
+                    <td className="py-3 text-right text-purple-700">{fmt(p.total_commissions)}</td>
+                    <td className="py-3 text-right text-gray-600">{fmt(p.total_cout_police)}</td>
+                    <td className="py-3 text-right text-gray-600">{fmt(p.total_accessoire)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -217,10 +322,12 @@ export default function AdminDashboard() {
                   <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-gray-800 text-sm">
                     <td className="py-3 text-xs uppercase tracking-wide text-gray-500" colSpan={2}>Totaux</td>
                     <td className="py-3 text-right">{fmt(stats.by_product.reduce((s,p) => s + Number(p.total_prospects||0), 0))}</td>
-                    <td className="py-3 text-right text-blue-700">{fmt(stats.by_product.reduce((s,p) => s + Number(p.total_beneficiaires||0), 0))}</td>
                     <td className="py-3 text-right text-emerald-700">{fmt(stats.by_product.reduce((s,p) => s + Number(p.total_clients||0), 0))}</td>
-                    <td className="py-3 text-right text-blue-700">{fmtCur(stats.by_product.reduce((s,p) => s + Number(p.total_primes||0), 0))}</td>
-                    <td className="py-3 text-right text-purple-700">{fmtCur(stats.by_product.reduce((s,p) => s + Number(p.total_commissions||0), 0))}</td>
+                    <td className="py-3 text-right text-blue-700">{fmt(stats.by_product.reduce((s,p) => s + Number(p.total_beneficiaires||0), 0))}</td>
+                    <td className="py-3 text-right text-blue-700">{fmt(stats.by_product.reduce((s,p) => s + Number(p.total_primes||0), 0))}</td>
+                    <td className="py-3 text-right text-purple-700">{fmt(stats.by_product.reduce((s,p) => s + Number(p.total_commissions||0), 0))}</td>
+                    <td className="py-3 text-right text-gray-600">{fmt(stats.by_product.reduce((s,p) => s + Number(p.total_cout_police||0), 0))}</td>
+                    <td className="py-3 text-right text-gray-600">{fmt(stats.by_product.reduce((s,p) => s + Number(p.total_accessoire||0), 0))}</td>
                   </tr>
                 </tfoot>
               )}
@@ -232,7 +339,7 @@ export default function AdminDashboard() {
       {/* Performance des agents */}
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h2 className="font-semibold text-gray-800">Performance des agents</h2>
+          <h2 className="font-semibold text-gray-800">Performance des agents (séniores et juniores)</h2>
           {/* Sélecteur de période */}
           <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
             {PERIODS.map(p => (
@@ -274,24 +381,30 @@ export default function AdminDashboard() {
                   <SortTh label="Primes"                 sortKey="prime_total"      current={sortKey} dir={sortDir} onSort={handleSort} />
                   <th className="pb-3 font-medium text-right">Atteinte prospects</th>
                   <th className="pb-3 font-medium text-right">Atteinte primes</th>
+                  <th className="pb-3 font-medium text-right">Atteinte commissions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {paginatedAgents.map(a => (
                   <tr key={a.id} className="hover:bg-gray-50">
                     <td className="py-3 font-medium">
-                      {a.type_agent === 'morale'
-                        ? (a.raison_sociale || a.nom)
-                        : `${a.prenom} ${a.nom}`}
+                      <div className="flex items-center gap-2">
+                        <span>{a.type_agent === 'morale' ? (a.raison_sociale || a.nom) : `${a.prenom} ${a.nom}`}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
+                          a.hierarchie === 'seniore' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'
+                        }`}>
+                          {a.hierarchie === 'seniore' ? 'Séniore' : 'Juniore'}
+                        </span>
+                      </div>
                     </td>
                     <td className="py-3 text-right">{fmt(a.total_prospects)}</td>
                     <td className="py-3 text-right font-medium text-blue-700">{fmt(a.period_prospects)}</td>
                     <td className="py-3 text-right text-emerald-600 font-medium">{fmt(a.total_clients)}</td>
                     <td className="py-3 text-right">
                       <div>
-                        <span className="text-blue-700 font-medium">{fmtCur(a.prime_total)}</span>
+                        <span className="text-blue-700 font-medium">{fmt(a.prime_total)}</span>
                         {Number(a.prime_clients) > 0 && (
-                          <div className="text-xs text-emerald-600">{fmtCur(a.prime_clients)} clients</div>
+                          <div className="text-xs text-emerald-600">{fmt(a.prime_clients)} clients</div>
                         )}
                       </div>
                     </td>
@@ -307,6 +420,12 @@ export default function AdminDashboard() {
                         target={Number(a.objectif_period_primes)}
                       />
                     </td>
+                    <td className="py-3 pl-2">
+                      <AchievementBar
+                        value={Number(a.period_commission_total)}
+                        target={Number(a.objectif_period_commissions)}
+                      />
+                    </td>
                   </tr>
                 ))}
 
@@ -315,15 +434,16 @@ export default function AdminDashboard() {
                     <td className="py-3 text-xs uppercase tracking-wide text-gray-500">Totaux</td>
                     <td className="py-3 text-right">{fmt(sortedAgents.reduce((s,a) => s + Number(a.total_prospects||0), 0))}</td>
                     <td className="py-3 text-right text-blue-700">{fmt(sortedAgents.reduce((s,a) => s + Number(a.period_prospects||0), 0))}</td>
-                    <td className="py-3 text-right text-emerald-700">{fmt(sortedAgents.reduce((s,a) => s + Number(a.total_clients||0), 0))}</td>
-                    <td className="py-3 text-right text-blue-700">{fmtCur(totalPrimes)}</td>
+                    <td className="py-3 text-right text-emerald-700">{fmt(totalClients)}</td>
+                    <td className="py-3 text-right text-blue-700">{fmt(totalPrimes)}</td>
+                    <td className="py-3"></td>
                     <td className="py-3"></td>
                     <td className="py-3"></td>
                   </tr>
                 )}
 
                 {sortedAgents.length === 0 && (
-                  <tr><td colSpan={7} className="py-8 text-center text-gray-400">Aucun agent enregistré</td></tr>
+                  <tr><td colSpan={8} className="py-8 text-center text-gray-400">Aucun agent enregistré</td></tr>
                 )}
               </tbody>
             </table>

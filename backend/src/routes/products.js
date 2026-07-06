@@ -19,32 +19,36 @@ router.get('/', authenticateToken, requireAdmin, ah(async (req, res) => {
 }));
 
 router.post('/', authenticateToken, requireAdmin, ah(async (req, res) => {
-  const { nom, description, prime_annuelle, taux_commission, taux_commission_sous_agent } = req.body;
+  const { nom, description, prime_annuelle, taux_commission, taux_commission_sous_agent, cout_police, montant_accessoire } = req.body;
   if (!nom) return res.status(400).json({ error: 'Nom du produit requis' });
 
   const id = uuidv4();
   await run(
-    "INSERT INTO products (id, nom, description, prime_annuelle, taux_commission, taux_commission_sous_agent) VALUES (?,?,?,?,?,?)",
+    "INSERT INTO products (id, nom, description, prime_annuelle, taux_commission, taux_commission_sous_agent, cout_police, montant_accessoire) VALUES (?,?,?,?,?,?,?,?)",
     [id, nom.trim(), description || null,
      Number(prime_annuelle) || 0,
      Number(taux_commission) || 0,
-     Number(taux_commission_sous_agent) || 0]
+     Number(taux_commission_sous_agent) || 0,
+     Number(cout_police) || 0,
+     Number(montant_accessoire) || 0]
   );
   const product = await get("SELECT * FROM products WHERE id=?", [id]);
   res.status(201).json({ message: 'Produit créé avec succès', product });
 }));
 
 router.put('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
-  const { nom, description, prime_annuelle, taux_commission, taux_commission_sous_agent, is_active } = req.body;
+  const { nom, description, prime_annuelle, taux_commission, taux_commission_sous_agent, cout_police, montant_accessoire, is_active } = req.body;
   const product = await get("SELECT id FROM products WHERE id=?", [req.params.id]);
   if (!product) return res.status(404).json({ error: 'Produit non trouvé' });
 
   await run(
-    `UPDATE products SET nom=?,description=?,prime_annuelle=?,taux_commission=?,taux_commission_sous_agent=?,is_active=?,updated_at=NOW() WHERE id=?`,
+    `UPDATE products SET nom=?,description=?,prime_annuelle=?,taux_commission=?,taux_commission_sous_agent=?,cout_police=?,montant_accessoire=?,is_active=?,updated_at=NOW() WHERE id=?`,
     [nom.trim(), description || null,
      Number(prime_annuelle) || 0,
      Number(taux_commission) || 0,
      Number(taux_commission_sous_agent) || 0,
+     Number(cout_police) || 0,
+     Number(montant_accessoire) || 0,
      is_active !== undefined ? (is_active ? 1 : 0) : 1,
      req.params.id]
   );

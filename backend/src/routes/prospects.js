@@ -18,19 +18,24 @@ async function saveProspectProducts(prospectId, items) {
 }
 
 async function computeTotalsFromProducts(items) {
-  let totalPrime = 0, totalCommission = 0;
+  let totalPrime = 0, totalCommission = 0, totalCoutPolice = 0, totalAccessoire = 0;
   for (const item of (items || [])) {
     if (!item.product_id) continue;
-    const product = await get("SELECT prime_annuelle, taux_commission FROM products WHERE id=?", [item.product_id]);
+    const product = await get("SELECT prime_annuelle, taux_commission, cout_police, montant_accessoire FROM products WHERE id=?", [item.product_id]);
     if (product) {
       const nb = Number(item.nb_beneficiaires) || 1;
       const prime = nb * Number(product.prime_annuelle);
       totalPrime += prime;
       totalCommission += prime * Number(product.taux_commission) / 100;
+      totalCoutPolice += nb * Number(product.cout_police || 0);
+      totalAccessoire += nb * Number(product.montant_accessoire || 0);
     }
   }
   const effectiveTaux = totalPrime > 0 ? (totalCommission / totalPrime * 100) : 0;
-  return { montant_potentiel: totalPrime, taux_commission: effectiveTaux };
+  return {
+    montant_potentiel: totalPrime, taux_commission: effectiveTaux,
+    cout_police_potentiel: totalCoutPolice, accessoire_potentiel: totalAccessoire
+  };
 }
 
 router.post('/', authenticateToken, ah(async (req, res) => {
@@ -47,7 +52,7 @@ router.post('/', authenticateToken, ah(async (req, res) => {
   if (!type || !nom) return res.status(400).json({ error: 'Type et nom requis' });
   if (!['physique', 'morale'].includes(type)) return res.status(400).json({ error: 'Type invalide' });
 
-  const { montant_potentiel, taux_commission } = await computeTotalsFromProducts(prospect_products);
+  const { montant_potentiel, taux_commission, cout_police_potentiel, accessoire_potentiel } = await computeTotalsFromProducts(prospect_products);
   const id = uuidv4();
 
   const [lastP, lastC] = await Promise.all([
@@ -59,13 +64,14 @@ router.post('/', authenticateToken, ah(async (req, res) => {
   await run(
     `INSERT INTO prospects (id, agent_id, type, nom, prenom, nom_contact, prenom_contact,
       telephone, email, secteur_activite, statut, montant_potentiel, taux_commission,
+      cout_police_potentiel, accessoire_potentiel,
       lieu_residence_commune, lieu_residence_quartier, lieu_activite_commune, lieu_activite_quartier,
       siege_social_commune, siege_social_quartier, niveau_interet, profession, sexe,
       date_prospection, numero)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, req.user.id, type, nom, prenom||null, nom_contact||null, prenom_contact||null,
      telephone||null, email||null, secteur_activite||null, statut||'prospect',
-     montant_potentiel, taux_commission,
+     montant_potentiel, taux_commission, cout_police_potentiel, accessoire_potentiel,
      lieu_residence_commune||null, lieu_residence_quartier||null,
      lieu_activite_commune||null, lieu_activite_quartier||null,
      siege_social_commune||null, siege_social_quartier||null,
@@ -157,17 +163,18 @@ router.put('/:id', authenticateToken, ah(async (req, res) => {
     niveau_interet, profession, sexe,
   } = req.body;
 
-  const { montant_potentiel, taux_commission } = await computeTotalsFromProducts(prospect_products);
+  const { montant_potentiel, taux_commission, cout_police_potentiel, accessoire_potentiel } = await computeTotalsFromProducts(prospect_products);
 
   await run(
     `UPDATE prospects SET type=?,nom=?,prenom=?,nom_contact=?,prenom_contact=?,
     telephone=?,email=?,secteur_activite=?,statut=?,montant_potentiel=?,taux_commission=?,
+    cout_police_potentiel=?,accessoire_potentiel=?,
     lieu_residence_commune=?,lieu_residence_quartier=?,lieu_activite_commune=?,lieu_activite_quartier=?,
     siege_social_commune=?,siege_social_quartier=?,niveau_interet=?,profession=?,sexe=?,
     date_prospection=?,updated_at=NOW() WHERE id=?`,
     [type, nom, prenom||null, nom_contact||null, prenom_contact||null,
      telephone||null, email||null, secteur_activite||null, statut||'prospect',
-     montant_potentiel, taux_commission,
+     montant_potentiel, taux_commission, cout_police_potentiel, accessoire_potentiel,
      lieu_residence_commune||null, lieu_residence_quartier||null,
      lieu_activite_commune||null, lieu_activite_quartier||null,
      siege_social_commune||null, siege_social_quartier||null,
@@ -215,9 +222,10 @@ router.post('/:id/convert', authenticateToken, ah(async (req, res) => {
   const prospect = await get(prospectQ, prospectA);
   if (!prospect) return res.status(404).json({ error: 'Prospect non trouvé' });
 
-  // Récupère les produits avec les deux taux (agent + sous-agent)
+  // Récupère les produits avec les deux taux (agent + sous-agent) + coût de police / accessoire fixes
   const pp = await all(
-    `SELECT pp.*, p.nom as product_nom, p.taux_commission as taux_agent, p.taux_commission_sous_agent as taux_sous_agent
+    `SELECT pp.*, p.nom as product_nom, p.taux_commission as taux_agent, p.taux_commission_sous_agent as taux_sous_agent,
+            p.cout_police, p.montant_accessoire
      FROM prospect_products pp
      LEFT JOIN products p ON p.id = pp.product_id
      WHERE pp.prospect_id = ?`,
@@ -231,23 +239,31 @@ router.post('/:id/convert', authenticateToken, ah(async (req, res) => {
   let prime_totale = 0;
   let commission_agent_total = 0;   // commission au taux agent (pour l'agent direct ou parent)
   let commission_sa_total = 0;      // commission au taux sous-agent (si sous-agent)
+  let cout_police_total = 0;
+  let accessoire_total = 0;
 
   const items = pp.map(item => {
     const inp = (products || []).find(x => x.product_id === item.product_id);
     const prime_payee = inp ? Number(inp.prime_payee) || 0 : 0;
     const tauxA = Number(item.taux_agent || 0);
     const tauxSA = Number(item.taux_sous_agent || 0);
+    const nb = Number(item.nb_beneficiaires) || 1;
     const commAgent  = prime_payee * tauxA  / 100;
     const commSA     = prime_payee * tauxSA / 100;
+    const coutPolice = nb * Number(item.cout_police || 0);
+    const accessoire = nb * Number(item.montant_accessoire || 0);
     prime_totale += prime_payee;
     commission_agent_total += commAgent;
     commission_sa_total    += commSA;
+    cout_police_total += coutPolice;
+    accessoire_total  += accessoire;
     // commission stockée dans client_products = commission de l'acteur direct
     const commissionActeur = isSousAgent ? commSA : commAgent;
     return {
       product_id: item.product_id, product_nom: item.product_nom,
       nb_beneficiaires: item.nb_beneficiaires, prime_payee,
-      commission: commissionActeur, taux_agent: tauxA, taux_sous_agent: tauxSA
+      commission: commissionActeur, taux_agent: tauxA, taux_sous_agent: tauxSA,
+      cout_police: coutPolice, accessoire
     };
   });
 
@@ -269,8 +285,8 @@ router.post('/:id/convert', authenticateToken, ah(async (req, res) => {
       lieu_residence_commune, lieu_residence_quartier, lieu_activite_commune, lieu_activite_quartier,
       siege_social_commune, siege_social_quartier, profession, sexe,
       numero_contrat, date_effet, date_fin, duree_contrat,
-      prime_totale, commission_totale, taux_commission, date_prospection)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      prime_totale, commission_totale, taux_commission, cout_police_total, accessoire_total, date_prospection)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [clientId, clientNumero, prospect.agent_id,
      prospect.type, prospect.nom, prospect.prenom || null,
      prospect.nom_contact || null, prospect.prenom_contact || null,
@@ -281,14 +297,14 @@ router.post('/:id/convert', authenticateToken, ah(async (req, res) => {
      prospect.siege_social_commune || null, prospect.siege_social_quartier || null,
      prospect.profession || null, prospect.sexe || null,
      numero_contrat, date_effet, date_fin, duree ? Number(duree) : null,
-     prime_totale, commission_totale, taux_eff, prospect.date_prospection]
+     prime_totale, commission_totale, taux_eff, cout_police_total, accessoire_total, prospect.date_prospection]
   );
 
   for (const item of items) {
     await run(
-      `INSERT INTO client_products (id, client_id, product_id, product_nom, nb_beneficiaires, prime_payee, commission)
-       VALUES (?,?,?,?,?,?,?)`,
-      [uuidv4(), clientId, item.product_id, item.product_nom, item.nb_beneficiaires, item.prime_payee, item.commission]
+      `INSERT INTO client_products (id, client_id, product_id, product_nom, nb_beneficiaires, prime_payee, commission, cout_police, accessoire)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+      [uuidv4(), clientId, item.product_id, item.product_nom, item.nb_beneficiaires, item.prime_payee, item.commission, item.cout_police, item.accessoire]
     );
   }
 

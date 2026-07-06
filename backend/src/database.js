@@ -103,6 +103,8 @@ async function initializeSchema() {
     profession TEXT,
     sexe TEXT,
     numero TEXT,
+    cout_police_potentiel REAL DEFAULT 0,
+    accessoire_potentiel REAL DEFAULT 0,
     date_prospection DATE DEFAULT CURRENT_DATE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -115,6 +117,8 @@ async function initializeSchema() {
     prime_annuelle REAL NOT NULL DEFAULT 0,
     taux_commission REAL NOT NULL DEFAULT 5.0,
     taux_commission_sous_agent REAL DEFAULT 0,
+    cout_police REAL DEFAULT 0,
+    montant_accessoire REAL DEFAULT 0,
     is_active INTEGER DEFAULT 1,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -166,6 +170,9 @@ async function initializeSchema() {
     prime_totale REAL DEFAULT 0,
     commission_totale REAL DEFAULT 0,
     taux_commission REAL DEFAULT 0,
+    cout_police_total REAL DEFAULT 0,
+    accessoire_total REAL DEFAULT 0,
+    statut_renouvellement TEXT DEFAULT 'en_attente',
     date_prospection TEXT,
     duree_contrat INTEGER,
     converted_at TIMESTAMP DEFAULT NOW(),
@@ -179,7 +186,9 @@ async function initializeSchema() {
     product_nom TEXT,
     nb_beneficiaires INTEGER DEFAULT 1,
     prime_payee REAL DEFAULT 0,
-    commission REAL DEFAULT 0
+    commission REAL DEFAULT 0,
+    cout_police REAL DEFAULT 0,
+    accessoire REAL DEFAULT 0
   )`);
 
   await pool.query(`CREATE TABLE IF NOT EXISTS lieux (
@@ -215,6 +224,18 @@ async function initializeSchema() {
     montant REAL NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT NOW()
   )`);
+
+  // Migrations additives — nécessaires car CREATE TABLE IF NOT EXISTS est un no-op
+  // sur les tables déjà créées en production (VPS)
+  await pool.query(`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS cout_police_potentiel REAL DEFAULT 0`);
+  await pool.query(`ALTER TABLE prospects ADD COLUMN IF NOT EXISTS accessoire_potentiel REAL DEFAULT 0`);
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS cout_police REAL DEFAULT 0`);
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS montant_accessoire REAL DEFAULT 0`);
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS cout_police_total REAL DEFAULT 0`);
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS accessoire_total REAL DEFAULT 0`);
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS statut_renouvellement TEXT DEFAULT 'en_attente'`);
+  await pool.query(`ALTER TABLE client_products ADD COLUMN IF NOT EXISTS cout_police REAL DEFAULT 0`);
+  await pool.query(`ALTER TABLE client_products ADD COLUMN IF NOT EXISTS accessoire REAL DEFAULT 0`);
 
   // Seed lieux — ON CONFLICT DO NOTHING remplace INSERT OR IGNORE de SQLite
   for (const [region, communes] of Object.entries(LIEUX_DATA)) {

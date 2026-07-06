@@ -52,6 +52,16 @@ router.get('/:id', authenticateToken, ah(async (req, res) => {
   res.json({ ...client, products });
 }));
 
+router.patch('/:id/renouvellement', authenticateToken, requireAdmin, ah(async (req, res) => {
+  const { statut_renouvellement } = req.body;
+  if (!['en_attente', 'renouvele', 'non_renouvele'].includes(statut_renouvellement))
+    return res.status(400).json({ error: 'Statut de renouvellement invalide' });
+
+  const r = await run('UPDATE clients SET statut_renouvellement=? WHERE id=?', [statut_renouvellement, req.params.id]);
+  if (r.rowsAffected === 0) return res.status(404).json({ error: 'Client non trouvé' });
+  res.json({ message: 'Statut de renouvellement mis à jour' });
+}));
+
 router.delete('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
   await run('DELETE FROM client_products WHERE client_id = ?', [req.params.id]);
   const r = await run('DELETE FROM clients WHERE id = ?', [req.params.id]);

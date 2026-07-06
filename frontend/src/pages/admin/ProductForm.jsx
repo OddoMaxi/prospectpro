@@ -8,7 +8,8 @@ const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
 
 const EMPTY = {
   nom: '', description: '', prime_annuelle: '',
-  taux_commission: '0', taux_commission_sous_agent: '0', is_active: true
+  taux_commission: '0', taux_commission_sous_agent: '0',
+  cout_police: '0', montant_accessoire: '0', is_active: true
 }
 
 function Field({ label, children, hint }) {
@@ -41,6 +42,8 @@ export default function ProductForm() {
           prime_annuelle: String(p.prime_annuelle || ''),
           taux_commission: String(p.taux_commission ?? '0'),
           taux_commission_sous_agent: String(p.taux_commission_sous_agent ?? '0'),
+          cout_police: String(p.cout_police ?? '0'),
+          montant_accessoire: String(p.montant_accessoire ?? '0'),
           is_active: Boolean(p.is_active)
         })
       }).catch(() => { toast.error('Erreur de chargement'); navigate('/admin/products') })
@@ -64,6 +67,8 @@ export default function ProductForm() {
         prime_annuelle: Number(form.prime_annuelle) || 0,
         taux_commission: tauxA,
         taux_commission_sous_agent: tauxSA,
+        cout_police: Number(form.cout_police) || 0,
+        montant_accessoire: Number(form.montant_accessoire) || 0,
         is_active: form.is_active
       }
       if (isEdit) {
@@ -90,6 +95,8 @@ export default function ProductForm() {
   const prime   = Number(form.prime_annuelle) || 0
   const tauxA   = Number(form.taux_commission) || 0
   const tauxSA  = Number(form.taux_commission_sous_agent) || 0
+  const coutPolice = Number(form.cout_police) || 0
+  const accessoire = Number(form.montant_accessoire) || 0
   const commAgent  = prime * tauxA  / 100
   const commSA     = prime * tauxSA / 100
   const commParent = commAgent - commSA
@@ -149,6 +156,25 @@ export default function ProductForm() {
           </Field>
 
           <div className="grid grid-cols-2 gap-4">
+            <Field label="Coût de police (GNF)" hint="Montant fixe par bénéficiaire">
+              <input
+                className="input" type="number" min="0" step="100"
+                value={form.cout_police}
+                onChange={e => f('cout_police', e.target.value)}
+                placeholder="0"
+              />
+            </Field>
+            <Field label="Montant accessoire (GNF)" hint="Montant fixe par bénéficiaire">
+              <input
+                className="input" type="number" min="0" step="100"
+                value={form.montant_accessoire}
+                onChange={e => f('montant_accessoire', e.target.value)}
+                placeholder="0"
+              />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <Field
               label="Taux commission agent (%)"
               hint="Taux appliqué aux agents directs"
@@ -204,6 +230,18 @@ export default function ProductForm() {
                   <p className="font-bold text-orange-700">{fmt(Math.max(0, commParent))}</p>
                   <p className="text-xs text-orange-400">{Math.max(0, tauxA - tauxSA).toFixed(1)}%</p>
                 </div>
+                {(coutPolice > 0 || accessoire > 0) && (
+                  <>
+                    <div className="bg-white rounded-lg p-3 border border-gray-100">
+                      <p className="text-xs text-gray-400 mb-0.5">Coût de police</p>
+                      <p className="font-bold text-gray-900">{fmt(coutPolice)}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-gray-100">
+                      <p className="text-xs text-gray-400 mb-0.5">Accessoire</p>
+                      <p className="font-bold text-gray-900">{fmt(accessoire)}</p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
