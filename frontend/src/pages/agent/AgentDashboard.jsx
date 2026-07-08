@@ -3,8 +3,114 @@ import { Link } from 'react-router-dom'
 import { api } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import StatCard from '../../components/StatCard'
+import GlobalStatsDashboard from '../../components/GlobalStatsDashboard'
 import { Users, UserCheck, TrendingUp, DollarSign, Target, Calendar, PlusCircle, ArrowRight, Banknote, UsersRound, Package } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
+
+const JUNIOR_PERIODS = [
+  { value: 'mois',      label: 'Mois',      short: 'Ce mois' },
+  { value: 'trimestre', label: 'Trimestre', short: 'Ce trimestre' },
+  { value: 'semestre',  label: 'Semestre',  short: 'Ce semestre' },
+  { value: 'annee',     label: 'Année',     short: 'Cette année' },
+]
+
+function MiniAchievementBar({ value, target }) {
+  if (!target || target === 0) return <span className="text-xs text-gray-300">—</span>
+  const pct = Math.min((value / target) * 100, 100)
+  const barColor = pct >= 100 ? 'bg-emerald-500' : pct >= 70 ? 'bg-orange-400' : 'bg-blue-400'
+  const textColor = pct >= 100 ? 'text-emerald-600 font-semibold' : pct >= 70 ? 'text-orange-500' : 'text-gray-500'
+  return (
+    <div className="flex items-center gap-1.5 min-w-[90px]">
+      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className={`text-xs shrink-0 ${textColor}`}>{pct.toFixed(0)}%</span>
+    </div>
+  )
+}
+
+function JuniorsPerformanceTable() {
+  const [data, setData] = useState(null)
+  const [period, setPeriod] = useState('mois')
+
+  useEffect(() => {
+    api.get('/stats/sous-agents', { params: { period } }).then(r => setData(r.data)).catch(() => setData(null))
+  }, [period])
+
+  const sousAgents = data?.sous_agents || []
+  if (data && sousAgents.length === 0) return null
+  const currentPeriod = JUNIOR_PERIODS.find(p => p.value === period) || JUNIOR_PERIODS[0]
+
+  return (
+    <div className="card">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+          <UsersRound size={18} className="text-purple-500" />
+          Performance de mes commerciaux juniores
+        </h2>
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+          {JUNIOR_PERIODS.map(p => (
+            <button
+              key={p.value}
+              onClick={() => setPeriod(p.value)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                period === p.value ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!data ? (
+        <div className="flex justify-center py-6">
+          <div className="w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-left text-gray-500 text-xs uppercase tracking-wide">
+                <th className="pb-3 font-medium">Junior</th>
+                <th className="pb-3 font-medium text-right">Total</th>
+                <th className="pb-3 font-medium text-right">{currentPeriod.short}</th>
+                <th className="pb-3 font-medium text-right">Clients</th>
+                <th className="pb-3 font-medium text-right">Primes</th>
+                <th className="pb-3 font-medium text-right">Atteinte prospects</th>
+                <th className="pb-3 font-medium text-right">Atteinte primes</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {sousAgents.map(a => (
+                <tr key={a.id} className="hover:bg-gray-50">
+                  <td className="py-3 font-medium text-gray-800">
+                    {a.type_agent === 'morale' ? (a.raison_sociale || a.nom) : `${a.prenom} ${a.nom}`}
+                  </td>
+                  <td className="py-3 text-right">{fmt(a.total_prospects)}</td>
+                  <td className="py-3 text-right font-medium text-blue-700">{fmt(a.period_prospects)}</td>
+                  <td className="py-3 text-right text-emerald-600 font-medium">{fmt(a.total_clients)}</td>
+                  <td className="py-3 text-right">
+                    <span className="text-blue-700 font-medium">{fmt(a.prime_total)}</span>
+                    {Number(a.prime_clients) > 0 && (
+                      <div className="text-xs text-emerald-600">{fmt(a.prime_clients)} clients</div>
+                    )}
+                  </td>
+                  <td className="py-3 pl-2">
+                    <MiniAchievementBar value={Number(a.period_prospects)} target={Number(a.objectif_period_prospects)} />
+                  </td>
+                  <td className="py-3 pl-2">
+                    <MiniAchievementBar value={Number(a.period_prime_total)} target={Number(a.objectif_period_primes)} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const STATUS_LABELS = { prospect: 'Prospect', en_cours: 'En cours', client: 'Client', perdu: 'Perdu' }
 const STATUS_COLORS = { prospect: '#3b82f6', en_cours: '#f59e0b', client: '#10b981', perdu: '#ef4444' }
@@ -303,6 +409,8 @@ export default function AgentDashboard() {
         </div>
       )}
 
+      {stats.sous_agent_count > 0 && <JuniorsPerformanceTable />}
+
       {stats.recents?.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
@@ -325,6 +433,14 @@ export default function AgentDashboard() {
           </div>
         </div>
       )}
+
+      {/* Tableau de bord de l'entreprise — mêmes indicateurs que l'administrateur */}
+      <div className="pt-4 border-t border-gray-200">
+        <GlobalStatsDashboard
+          title="Tableau de bord de l'entreprise"
+          subtitle="Vue globale de l'activité commerciale, identique à celle de l'administrateur"
+        />
+      </div>
     </div>
   )
 }

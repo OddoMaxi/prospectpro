@@ -146,6 +146,22 @@ router.patch('/:id/pay', authenticateToken, requireAdmin, ah(async (req, res) =>
   const paid = Number(montant) || 0;
   if (paid <= 0) return res.status(400).json({ error: 'Le montant doit être supérieur à 0' });
 
+  // Le total payé (paiements déjà enregistrés + celui-ci) ne peut jamais dépasser le montant dû,
+  // même en cumulant plusieurs paiements fractionnés.
+  const totalRow = await get(
+    'SELECT COALESCE(SUM(montant), 0) v FROM commission_payments WHERE commission_id = ?',
+    [req.params.id]
+  );
+  const alreadyPaid = Number(totalRow.v);
+  const due = Number(comm.montant_du);
+  const remaining = due - alreadyPaid;
+
+  if (paid > remaining) {
+    return res.status(400).json({
+      error: `Le paiement dépasse le montant restant dû (${remaining.toLocaleString('fr-FR')} GNF restants sur ${due.toLocaleString('fr-FR')} GNF)`
+    });
+  }
+
   await run(
     `INSERT INTO commission_payments (id, commission_id, date_paiement, reference, libelle, montant)
      VALUES (?,?,?,?,?,?)`,
@@ -154,13 +170,7 @@ router.patch('/:id/pay', authenticateToken, requireAdmin, ah(async (req, res) =>
      reference || null, libelle || null, paid]
   );
 
-  // Recalcul du total payé à partir de tous les paiements
-  const totalRow = await get(
-    'SELECT COALESCE(SUM(montant), 0) v FROM commission_payments WHERE commission_id = ?',
-    [req.params.id]
-  );
-  const totalPaid = Number(totalRow.v);
-  const due = Number(comm.montant_du);
+  const totalPaid = alreadyPaid + paid;
   const statut = totalPaid >= due ? 'paye' : totalPaid > 0 ? 'partiel' : 'non_paye';
 
   await run(
