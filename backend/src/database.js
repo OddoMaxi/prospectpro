@@ -2,6 +2,8 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const LIEUX_DATA = require('./data/lieux');
+const PROFESSIONS_DATA = require('./data/professions');
+const SECTEURS_DATA = require('./data/secteurs');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -199,6 +201,16 @@ async function initializeSchema() {
     UNIQUE(region, commune, quartier)
   )`);
 
+  await pool.query(`CREATE TABLE IF NOT EXISTS professions (
+    id TEXT PRIMARY KEY,
+    nom TEXT NOT NULL UNIQUE
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS secteurs_activite (
+    id TEXT PRIMARY KEY,
+    nom TEXT NOT NULL UNIQUE
+  )`);
+
   await pool.query(`CREATE TABLE IF NOT EXISTS commissions (
     id TEXT PRIMARY KEY,
     agent_id TEXT NOT NULL,
@@ -248,6 +260,15 @@ async function initializeSchema() {
         );
       }
     }
+  }
+
+  // Seed professions et secteurs d'activité (liste de départ, complétée ensuite
+  // automatiquement par les agents via la création de prospects)
+  for (const nom of PROFESSIONS_DATA) {
+    await pool.query('INSERT INTO professions (id, nom) VALUES ($1,$2) ON CONFLICT DO NOTHING', [uuidv4(), nom]);
+  }
+  for (const nom of SECTEURS_DATA) {
+    await pool.query('INSERT INTO secteurs_activite (id, nom) VALUES ($1,$2) ON CONFLICT DO NOTHING', [uuidv4(), nom]);
   }
 
   const r = await pool.query("SELECT id FROM users WHERE role = 'admin'");

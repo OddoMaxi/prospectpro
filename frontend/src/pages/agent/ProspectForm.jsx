@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import toast from 'react-hot-toast'
 import { Save, ArrowLeft, User, Building2, Plus, Trash2 } from 'lucide-react'
-import { COMMUNES, VILLES, getCommunes, getQuartiers, getVilleFromCommune, PROFESSIONS, SECTEURS_MORALE } from '../../data/guinea'
+import { COMMUNES, VILLES, getCommunes, getQuartiers, getVilleFromCommune } from '../../data/guinea'
 
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
 const NIVEAUX_INTERET = ['Faible', 'Moyen', 'Élevé']
@@ -69,13 +69,13 @@ function LocationSelect3({ villeValue, communeValue, quartierValue, onVilleChang
   const quartiers = communeValue ? getQuartiers(communeValue) : []
   return (
     <div className="grid grid-cols-3 gap-3">
-      <Field label="Ville">
+      <Field label="Région">
         <select
           className="input"
           value={villeValue}
           onChange={e => { onVilleChange(e.target.value); onCommuneChange(''); onQuartierChange('') }}
         >
-          <option value="">Ville...</option>
+          <option value="">Région...</option>
           {VILLES.map(v => <option key={v} value={v}>{v}</option>)}
         </select>
       </Field>
@@ -118,9 +118,13 @@ export default function ProspectForm() {
   const [initLoading, setInitLoading] = useState(isEdit)
   const [availableProducts, setAvailableProducts] = useState([])
   const [selectedProducts, setSelectedProducts] = useState([])
+  const [professions, setProfessions] = useState([])
+  const [secteurs, setSecteurs] = useState([])
 
   useEffect(() => {
     api.get('/products/active').then(r => setAvailableProducts(r.data)).catch(() => {})
+    api.get('/professions').then(r => setProfessions(r.data)).catch(() => {})
+    api.get('/secteurs-activite').then(r => setSecteurs(r.data)).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -315,12 +319,12 @@ export default function ProspectForm() {
 
             <div className="grid grid-cols-2 gap-4">
               <Field label="Prénom" required>
-                <input className="input" type="text" value={form.prenom}
-                  onChange={e => f('prenom', e.target.value)} required placeholder="Mamadou" />
+                <input className="input uppercase" type="text" value={form.prenom}
+                  onChange={e => f('prenom', e.target.value.toUpperCase())} required placeholder="MAMADOU" />
               </Field>
               <Field label="Nom" required>
-                <input className="input" type="text" value={form.nom}
-                  onChange={e => f('nom', e.target.value)} required placeholder="DIALLO" />
+                <input className="input uppercase" type="text" value={form.nom}
+                  onChange={e => f('nom', e.target.value.toUpperCase())} required placeholder="DIALLO" />
               </Field>
             </div>
           </div>
@@ -336,12 +340,12 @@ export default function ProspectForm() {
             </Field>
             <div className="grid grid-cols-2 gap-4">
               <Field label="Prénom du contact">
-                <input className="input" type="text" value={form.prenom_contact}
-                  onChange={e => f('prenom_contact', e.target.value)} placeholder="Mariama" />
+                <input className="input uppercase" type="text" value={form.prenom_contact}
+                  onChange={e => f('prenom_contact', e.target.value.toUpperCase())} placeholder="MARIAMA" />
               </Field>
               <Field label="Nom du contact">
-                <input className="input" type="text" value={form.nom_contact}
-                  onChange={e => f('nom_contact', e.target.value)} placeholder="CAMARA" />
+                <input className="input uppercase" type="text" value={form.nom_contact}
+                  onChange={e => f('nom_contact', e.target.value.toUpperCase())} placeholder="CAMARA" />
               </Field>
             </div>
             <div>
@@ -356,11 +360,12 @@ export default function ProspectForm() {
               />
             </div>
             <Field label="Secteur d'activité">
-              <select className="input" value={form.secteur_activite}
-                onChange={e => f('secteur_activite', e.target.value)}>
-                <option value="">Sélectionner...</option>
-                {SECTEURS_MORALE.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <input className="input" list="secteurs-list" value={form.secteur_activite}
+                onChange={e => f('secteur_activite', e.target.value)}
+                placeholder="Choisir ou saisir un nouveau secteur..." />
+              <datalist id="secteurs-list">
+                {secteurs.map(s => <option key={s} value={s} />)}
+              </datalist>
             </Field>
           </div>
         )}
@@ -370,7 +375,7 @@ export default function ProspectForm() {
           <h2 className="text-sm font-semibold text-gray-700">Coordonnées</h2>
           <Field label="Téléphone" required>
             <input className="input" type="tel" value={form.telephone} required
-              onChange={e => f('telephone', e.target.value)} placeholder="+224 6XX XX XX XX" />
+              onChange={e => f('telephone', e.target.value)} placeholder="6XX XX XX XX" />
           </Field>
 
           {!isPhysique && (
@@ -405,11 +410,12 @@ export default function ProspectForm() {
                 />
               </div>
               <Field label="Profession">
-                <select className="input" value={form.profession}
-                  onChange={e => f('profession', e.target.value)}>
-                  <option value="">Sélectionner...</option>
-                  {PROFESSIONS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
+                <input className="input" list="professions-list" value={form.profession}
+                  onChange={e => f('profession', e.target.value)}
+                  placeholder="Choisir ou saisir une nouvelle profession..." />
+                <datalist id="professions-list">
+                  {professions.map(p => <option key={p} value={p} />)}
+                </datalist>
               </Field>
             </>
           )}

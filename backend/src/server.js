@@ -21,6 +21,8 @@ app.use('/api/stats',     require('./routes/stats'));
 app.use('/api/clients',      require('./routes/clients'));
 app.use('/api/commissions',  require('./routes/commissions'));
 app.use('/api/lieux',        require('./routes/lieux'));
+app.use('/api/professions',  require('./routes/professions'));
+app.use('/api/secteurs-activite', require('./routes/secteurs'));
 app.get('/api/health',    (_, res) => res.json({ status: 'ok' }));
 
 // Global error handler

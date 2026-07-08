@@ -303,7 +303,7 @@ export default function AgentCreate() {
           <Field label="Téléphone" required>
             <input className="input" type="tel" value={form.telephone}
               onChange={e => f('telephone', e.target.value)}
-              required placeholder="+224 6XX XX XX XX" />
+              required placeholder="6XX XX XX XX" />
           </Field>
         </div>
 

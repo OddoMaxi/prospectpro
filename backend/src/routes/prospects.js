@@ -6,6 +6,17 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const router = express.Router();
 const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
+// Alimente automatiquement les listes profession/secteur d'activité avec toute
+// valeur inédite saisie par l'agent, sans jamais créer de doublon (ON CONFLICT DO NOTHING)
+async function ensureProfessionAndSecteur(profession, secteur_activite) {
+  if (profession) {
+    await run('INSERT INTO professions (id, nom) VALUES (?,?) ON CONFLICT DO NOTHING', [uuidv4(), profession.trim()]);
+  }
+  if (secteur_activite) {
+    await run('INSERT INTO secteurs_activite (id, nom) VALUES (?,?) ON CONFLICT DO NOTHING', [uuidv4(), secteur_activite.trim()]);
+  }
+}
+
 async function saveProspectProducts(prospectId, items) {
   await run("DELETE FROM prospect_products WHERE prospect_id=?", [prospectId]);
   for (const item of (items || [])) {
@@ -80,6 +91,7 @@ router.post('/', authenticateToken, ah(async (req, res) => {
   );
 
   await saveProspectProducts(id, prospect_products);
+  await ensureProfessionAndSecteur(profession, secteur_activite);
 
   res.status(201).json({ message: 'Prospect créé avec succès', id });
 }));
@@ -183,6 +195,7 @@ router.put('/:id', authenticateToken, ah(async (req, res) => {
   );
 
   await saveProspectProducts(req.params.id, prospect_products);
+  await ensureProfessionAndSecteur(profession, secteur_activite);
 
   res.json({ message: 'Prospect mis à jour avec succès' });
 }));
