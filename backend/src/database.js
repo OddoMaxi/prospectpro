@@ -81,20 +81,14 @@ async function initializeSchema() {
     type TEXT NOT NULL,
     nom TEXT NOT NULL,
     prenom TEXT,
-    siret TEXT,
     nom_contact TEXT,
     prenom_contact TEXT,
     telephone TEXT,
     email TEXT,
-    adresse TEXT,
-    ville TEXT,
-    code_postal TEXT,
     secteur_activite TEXT,
-    notes TEXT,
     statut TEXT DEFAULT 'prospect',
     montant_potentiel REAL DEFAULT 0,
     taux_commission REAL DEFAULT 5.0,
-    produit_id TEXT,
     lieu_residence_commune TEXT,
     lieu_residence_quartier TEXT,
     lieu_activite_commune TEXT,
@@ -249,6 +243,14 @@ async function initializeSchema() {
   await pool.query(`ALTER TABLE client_products ADD COLUMN IF NOT EXISTS cout_police REAL DEFAULT 0`);
   await pool.query(`ALTER TABLE client_products ADD COLUMN IF NOT EXISTS accessoire REAL DEFAULT 0`);
 
+  // Colonnes mortes — jamais lues ni écrites par le code applicatif (confirmé par audit)
+  await pool.query(`ALTER TABLE prospects DROP COLUMN IF EXISTS siret`);
+  await pool.query(`ALTER TABLE prospects DROP COLUMN IF EXISTS adresse`);
+  await pool.query(`ALTER TABLE prospects DROP COLUMN IF EXISTS ville`);
+  await pool.query(`ALTER TABLE prospects DROP COLUMN IF EXISTS code_postal`);
+  await pool.query(`ALTER TABLE prospects DROP COLUMN IF EXISTS notes`);
+  await pool.query(`ALTER TABLE prospects DROP COLUMN IF EXISTS produit_id`);
+
   // Seed lieux — ON CONFLICT DO NOTHING remplace INSERT OR IGNORE de SQLite
   for (const [region, communes] of Object.entries(LIEUX_DATA)) {
     for (const [commune, quartiers] of Object.entries(communes)) {
@@ -260,6 +262,34 @@ async function initializeSchema() {
         );
       }
     }
+  }
+
+  // Séquence atomique pour les numéros de prospects/clients (remplace le MAX+1 racy)
+  await pool.query(`CREATE SEQUENCE IF NOT EXISTS numero_seq`);
+  const maxNumero = await pool.query(`
+    SELECT GREATEST(
+      COALESCE((SELECT MAX(CAST(numero AS INTEGER)) FROM prospects WHERE numero ~ '^[0-9]+$'), 0),
+      COALESCE((SELECT MAX(CAST(numero AS INTEGER)) FROM clients WHERE numero ~ '^[0-9]+$'), 0)
+    ) AS v
+  `);
+  const maxNumeroVal = Number(maxNumero.rows[0].v);
+  if (maxNumeroVal > 0) {
+    // Une séquence neuve démarre déjà à 1 ; setval(0) est hors limites pour Postgres
+    await pool.query(`SELECT setval('numero_seq', $1)`, [maxNumeroVal]);
+  }
+
+  // Garde-fou : numéro de prospect unique (déjà le cas pour clients.numero)
+  try {
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'prospects_numero_unique') THEN
+          ALTER TABLE prospects ADD CONSTRAINT prospects_numero_unique UNIQUE (numero);
+        END IF;
+      END $$;
+    `);
+  } catch (e) {
+    console.warn('Impossible d\'ajouter la contrainte UNIQUE sur prospects.numero (doublons existants ?) :', e.message);
   }
 
   // Seed professions et secteurs d'activité (liste de départ, complétée ensuite

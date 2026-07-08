@@ -481,20 +481,40 @@ router.post('/:id/transfer-portfolio', authenticateToken, requireAdmin, ah(async
   if (!target) return res.status(400).json({ error: 'Agent cible introuvable ou inactif' });
 
   const typeFilter = type && ['physique', 'morale'].includes(type) ? type : null;
-  let sql = "UPDATE prospects SET agent_id=? WHERE agent_id=?";
-  const args = [transfer_to, req.params.id];
-  if (typeFilter) { sql += " AND type=?"; args.push(typeFilter); }
 
-  const result = await run(sql, args);
-  const count = Number(result.rowsAffected) || 0;
+  // Prospects (pipeline ouvert)
+  let prospectSql = "UPDATE prospects SET agent_id=? WHERE agent_id=?";
+  const prospectArgs = [transfer_to, req.params.id];
+  if (typeFilter) { prospectSql += " AND type=?"; prospectArgs.push(typeFilter); }
+  const prospectResult = await run(prospectSql, prospectArgs);
+
+  // Clients déjà convertis — un vrai "transfert de portefeuille" doit aussi les déplacer
+  let clientSql = "UPDATE clients SET agent_id=? WHERE agent_id=?";
+  const clientArgs = [transfer_to, req.params.id];
+  if (typeFilter) { clientSql += " AND type=?"; clientArgs.push(typeFilter); }
+  const clientResult = await run(clientSql, clientArgs);
+
+  // Commissions liées à ces clients (en tant qu'agent direct ou agent parent d'un sous-agent)
+  let commSql = "UPDATE commissions SET agent_id=? WHERE agent_id=?";
+  const commArgs = [transfer_to, req.params.id];
+  if (typeFilter) { commSql += " AND client_id IN (SELECT id FROM clients WHERE type=?)"; commArgs.push(typeFilter); }
+  await run(commSql, commArgs);
+
+  let commSourceSql = "UPDATE commissions SET source_agent_id=? WHERE source_agent_id=?";
+  const commSourceArgs = [transfer_to, req.params.id];
+  if (typeFilter) { commSourceSql += " AND client_id IN (SELECT id FROM clients WHERE type=?)"; commSourceArgs.push(typeFilter); }
+  await run(commSourceSql, commSourceArgs);
+
+  const prospectCount = Number(prospectResult.rowsAffected) || 0;
+  const clientCount = Number(clientResult.rowsAffected) || 0;
 
   const sourceName = source.type_agent === 'morale' ? source.raison_sociale : `${source.prenom} ${source.nom}`;
   const targetName = target.type_agent === 'morale' ? target.raison_sociale : `${target.prenom} ${target.nom}`;
   const typeLabel  = typeFilter === 'physique' ? ' particuliers' : typeFilter === 'morale' ? ' entreprises' : '';
 
   res.json({
-    message: `${count} prospect(s)${typeLabel} transféré(s) de ${sourceName} vers ${targetName}`,
-    count
+    message: `${prospectCount} prospect(s) et ${clientCount} client(s)${typeLabel} transférés de ${sourceName} vers ${targetName}`,
+    count: prospectCount + clientCount
   });
 }));
 

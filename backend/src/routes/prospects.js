@@ -17,6 +17,24 @@ async function ensureProfessionAndSecteur(profession, secteur_activite) {
   }
 }
 
+// Bloque la création/modification si le téléphone est déjà utilisé par un autre
+// prospect ou un client existant (excludeProspectId permet d'ignorer le prospect en cours d'édition)
+async function findDuplicatePhone(telephone, excludeProspectId) {
+  const phone = (telephone || '').trim();
+  if (!phone) return null;
+
+  let prospectSql = 'SELECT id, nom, prenom FROM prospects WHERE telephone = ?';
+  const prospectArgs = [phone];
+  if (excludeProspectId) { prospectSql += ' AND id != ?'; prospectArgs.push(excludeProspectId); }
+  const existingProspect = await get(prospectSql, prospectArgs);
+  if (existingProspect) return { type: 'prospect', ...existingProspect };
+
+  const existingClient = await get('SELECT id, nom, prenom FROM clients WHERE telephone = ?', [phone]);
+  if (existingClient) return { type: 'client', ...existingClient };
+
+  return null;
+}
+
 async function saveProspectProducts(prospectId, items) {
   await run("DELETE FROM prospect_products WHERE prospect_id=?", [prospectId]);
   for (const item of (items || [])) {
@@ -63,14 +81,19 @@ router.post('/', authenticateToken, ah(async (req, res) => {
   if (!type || !nom) return res.status(400).json({ error: 'Type et nom requis' });
   if (!['physique', 'morale'].includes(type)) return res.status(400).json({ error: 'Type invalide' });
 
+  const duplicate = await findDuplicatePhone(telephone);
+  if (duplicate) {
+    const name = duplicate.prenom ? `${duplicate.prenom} ${duplicate.nom}` : duplicate.nom;
+    return res.status(400).json({
+      error: `Ce numéro de téléphone est déjà utilisé par un ${duplicate.type === 'prospect' ? 'prospect' : 'client'} (${name})`
+    });
+  }
+
   const { montant_potentiel, taux_commission, cout_police_potentiel, accessoire_potentiel } = await computeTotalsFromProducts(prospect_products);
   const id = uuidv4();
 
-  const [lastP, lastC] = await Promise.all([
-    get("SELECT MAX(CAST(numero AS INTEGER)) v FROM prospects"),
-    get("SELECT MAX(CAST(numero AS INTEGER)) v FROM clients"),
-  ]);
-  const numero = String(Math.max(Number(lastP?.v || 0), Number(lastC?.v || 0)) + 1).padStart(7, '0');
+  const seqRow = await get("SELECT nextval('numero_seq') v");
+  const numero = String(seqRow.v).padStart(7, '0');
 
   await run(
     `INSERT INTO prospects (id, agent_id, type, nom, prenom, nom_contact, prenom_contact,
@@ -174,6 +197,14 @@ router.put('/:id', authenticateToken, ah(async (req, res) => {
     siege_social_commune, siege_social_quartier,
     niveau_interet, profession, sexe,
   } = req.body;
+
+  const duplicate = await findDuplicatePhone(telephone, req.params.id);
+  if (duplicate) {
+    const name = duplicate.prenom ? `${duplicate.prenom} ${duplicate.nom}` : duplicate.nom;
+    return res.status(400).json({
+      error: `Ce numéro de téléphone est déjà utilisé par un ${duplicate.type === 'prospect' ? 'prospect' : 'client'} (${name})`
+    });
+  }
 
   const { montant_potentiel, taux_commission, cout_police_potentiel, accessoire_potentiel } = await computeTotalsFromProducts(prospect_products);
 
@@ -285,12 +316,9 @@ router.post('/:id/convert', authenticateToken, ah(async (req, res) => {
   const taux_eff = prime_totale > 0 ? (commission_totale / prime_totale * 100) : 0;
   const clientId = uuidv4();
 
-  // Génération d'un nouveau numéro unique à 7 chiffres pour le client
-  const [lastP2, lastC2] = await Promise.all([
-    get("SELECT MAX(CAST(numero AS INTEGER)) v FROM prospects"),
-    get("SELECT MAX(CAST(numero AS INTEGER)) v FROM clients"),
-  ]);
-  const clientNumero = String(Math.max(Number(lastP2?.v || 0), Number(lastC2?.v || 0)) + 1).padStart(7, '0');
+  // Génération d'un nouveau numéro unique à 7 chiffres pour le client (séquence atomique)
+  const seqRow2 = await get("SELECT nextval('numero_seq') v");
+  const clientNumero = String(seqRow2.v).padStart(7, '0');
 
   await run(
     `INSERT INTO clients (id, numero, agent_id, type, nom, prenom, nom_contact, prenom_contact,

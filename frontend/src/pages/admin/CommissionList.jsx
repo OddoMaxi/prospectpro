@@ -3,9 +3,11 @@ import { api } from '../../api'
 import toast from 'react-hot-toast'
 import {
   Search, Filter, ChevronDown, X, CreditCard, CheckCircle,
-  Clock, AlertCircle, History, TrendingDown
+  Clock, AlertCircle, History, Download
 } from 'lucide-react'
 import Pagination from '../../components/Pagination'
+import CommissionSituation from '../../components/CommissionSituation'
+import { exportCSV } from '../../utils/csv'
 
 const PAGE_SIZE = 10
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
@@ -196,16 +198,12 @@ export default function CommissionList() {
   const [commissions, setCommissions] = useState([])
   const [stats, setStats] = useState(null)
   const [agents, setAgents] = useState([])
+  const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [paying, setPaying] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState({ search: '', statut: '', agent_id: '', date_debut: '', date_fin: '' })
+  const [filters, setFilters] = useState({ search: '', statut: '', agent_id: '', product_id: '', date_debut: '', date_fin: '' })
   const [page, setPage] = useState(1)
-
-  // Situation périodique
-  const [sitFilters, setSitFilters] = useState({ agent_id: '', date_debut: '', date_fin: '' })
-  const [situation, setSituation] = useState(null)
-  const [sitLoading, setSitLoading] = useState(false)
 
   const loadStats = useCallback(() => {
     api.get('/commissions/stats').then(r => setStats(r.data)).catch(() => {})
@@ -218,22 +216,29 @@ export default function CommissionList() {
   }, [filters])
 
   useEffect(() => { api.get('/agents').then(r => setAgents(r.data)) }, [])
+  useEffect(() => { api.get('/products').then(r => setProducts(r.data)).catch(() => {}) }, [])
   useEffect(() => { loadStats() }, [loadStats])
   useEffect(() => {
     if (view === 'commissions') { const t = setTimeout(load, 300); return () => clearTimeout(t) }
   }, [load, view])
 
   const setF  = (k, v) => { setFilters(p => ({ ...p, [k]: v })); setPage(1) }
-  const setSF = (k, v) => setSitFilters(p => ({ ...p, [k]: v }))
   const hasActiveFilters = Object.values(filters).some(Boolean)
 
-  const loadSituation = () => {
-    setSitLoading(true)
-    const params = Object.fromEntries(Object.entries(sitFilters).filter(([, v]) => v))
-    api.get('/commissions/situation', { params })
-      .then(r => setSituation(r.data))
-      .catch(() => toast.error('Erreur de chargement'))
-      .finally(() => setSitLoading(false))
+  const handleExport = () => {
+    exportCSV(commissions, [
+      { label: 'Agent',          value: r => `${r.agent_prenom || ''} ${r.agent_nom || ''}`.trim() },
+      { label: 'Type',           value: r => r.type === 'parent' ? `Via ${r.source_prenom || ''} ${r.source_nom || ''}`.trim() : 'Direct' },
+      { label: 'Client',         value: r => r.client_type === 'physique' ? `${r.client_prenom || ''} ${r.client_nom}`.trim() : r.client_nom },
+      { label: 'N° Client',      value: 'client_numero' },
+      { label: 'N° Contrat',     value: 'numero_contrat' },
+      { label: 'Commission due', value: r => Math.round(r.montant_du || 0) },
+      { label: 'Montant reçu',   value: r => Math.round(r.montant_paye || 0) },
+      { label: 'Solde',          value: r => Math.round(Math.max(0, Number(r.montant_du) - Number(r.montant_paye))) },
+      { label: 'Statut',         value: r => STATUTS[r.statut]?.label || r.statut },
+      { label: 'Date paiement',  value: r => fmtDate(r.date_paiement) },
+      { label: 'Référence',      value: 'reference_paiement' },
+    ], `commissions_${new Date().toISOString().split('T')[0]}.csv`)
   }
 
   const paginated = commissions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -333,15 +338,27 @@ export default function CommissionList() {
                 <Filter size={15} />Filtres
                 <ChevronDown size={14} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
               </button>
+              {commissions.length > 0 && (
+                <button onClick={handleExport} className="btn btn-secondary gap-2" title="Exporter en CSV">
+                  <Download size={15} />
+                </button>
+              )}
             </div>
 
             {showFilters && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-gray-100">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-3 border-t border-gray-100">
                 <div>
                   <label className="label">Agent</label>
                   <select className="input" value={filters.agent_id} onChange={e => setF('agent_id', e.target.value)}>
                     <option value="">Tous les agents</option>
                     {agents.map(a => <option key={a.id} value={a.id}>{a.prenom} {a.nom}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Produit</label>
+                  <select className="input" value={filters.product_id} onChange={e => setF('product_id', e.target.value)}>
+                    <option value="">Tous les produits</option>
+                    {products.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}
                   </select>
                 </div>
                 <div>
@@ -361,8 +378,8 @@ export default function CommissionList() {
                 </div>
                 {hasActiveFilters && (
                   <button
-                    onClick={() => { setFilters({ search: '', statut: '', agent_id: '', date_debut: '', date_fin: '' }); setPage(1) }}
-                    className="col-span-2 md:col-span-4 btn btn-secondary btn-sm justify-center">
+                    onClick={() => { setFilters({ search: '', statut: '', agent_id: '', product_id: '', date_debut: '', date_fin: '' }); setPage(1) }}
+                    className="col-span-2 md:col-span-5 btn btn-secondary btn-sm justify-center">
                     <X size={13} />Effacer les filtres
                   </button>
                 )}
@@ -448,121 +465,7 @@ export default function CommissionList() {
 
       {/* ===== VUE : SITUATION PÉRIODIQUE ===== */}
       {view === 'situation' && (
-        <div className="space-y-4">
-          <div className="card space-y-4">
-            <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <TrendingDown size={16} className="text-blue-600" />
-              Situation périodique des paiements par agent
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-              <div>
-                <label className="label">Agent</label>
-                <select className="input" value={sitFilters.agent_id} onChange={e => setSF('agent_id', e.target.value)}>
-                  <option value="">Tous les agents</option>
-                  {agents.map(a => <option key={a.id} value={a.id}>{a.prenom} {a.nom}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">Du</label>
-                <input className="input" type="date" value={sitFilters.date_debut} onChange={e => setSF('date_debut', e.target.value)} />
-              </div>
-              <div>
-                <label className="label">Au</label>
-                <input className="input" type="date" value={sitFilters.date_fin} onChange={e => setSF('date_fin', e.target.value)} />
-              </div>
-              <button
-                onClick={loadSituation}
-                disabled={sitLoading}
-                className="btn btn-primary justify-center"
-              >
-                {sitLoading ? 'Chargement…' : 'Afficher'}
-              </button>
-            </div>
-          </div>
-
-          {!situation && (
-            <div className="card text-center py-12 text-gray-400">
-              <TrendingDown size={36} className="mx-auto mb-3 text-gray-200" />
-              <p className="text-sm">Sélectionnez un agent et/ou une période puis cliquez sur Afficher</p>
-            </div>
-          )}
-
-          {situation && situation.payments.length === 0 && (
-            <div className="card text-center py-12">
-              <TrendingDown size={36} className="text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500 font-medium">Aucun paiement pour cette période</p>
-            </div>
-          )}
-
-          {situation && situation.payments.length > 0 && (
-            <div className="card overflow-hidden p-0">
-              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
-                <p className="text-sm font-semibold text-gray-700">
-                  {situation.payments[0]?.agent_prenom} {situation.payments[0]?.agent_nom}
-                  <span className="ml-2 text-xs font-normal text-gray-400">
-                    {situation.payments.length} paiement{situation.payments.length > 1 ? 's' : ''}
-                  </span>
-                </p>
-                <span className="text-xs text-gray-500">
-                  Solde d'ouverture :{' '}
-                  <span className="font-semibold text-gray-900">{fmt(situation.initial_solde)}</span>
-                </span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-100">
-                    <tr>
-                      {['Date','Client','Référence','Libellé','Montant','Solde'].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {situation.payments.map(p => {
-                      const clientNom = p.client_type === 'physique'
-                        ? `${p.client_prenom || ''} ${p.client_nom}`.trim()
-                        : p.client_nom
-                      return (
-                        <tr key={p.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fmtDate(p.date_paiement)}</td>
-                          <td className="px-4 py-3">
-                            {p.client_numero && (
-                              <span className="font-mono text-xs text-blue-600 mr-1">#{p.client_numero}</span>
-                            )}
-                            <span className="text-gray-800">{clientNom}</span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">{p.reference || '—'}</td>
-                          <td className="px-4 py-3 text-gray-600 text-xs">{p.libelle || '—'}</td>
-                          <td className="px-4 py-3 text-right font-semibold text-emerald-700 whitespace-nowrap">{fmt(p.montant)}</td>
-                          <td className="px-4 py-3 text-right font-semibold whitespace-nowrap">
-                            <span className={p.solde > 0 ? 'text-red-600' : 'text-emerald-600'}>
-                              {fmt(p.solde)}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
-                      <td colSpan={4} className="px-4 py-3 text-xs text-gray-500 uppercase">
-                        Total ({situation.payments.length} ligne{situation.payments.length > 1 ? 's' : ''})
-                      </td>
-                      <td className="px-4 py-3 text-right text-emerald-700 whitespace-nowrap">
-                        {fmt(situation.payments.reduce((s, p) => s + Number(p.montant), 0))}
-                      </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <span className={situation.payments.at(-1)?.solde > 0 ? 'text-red-600' : 'text-emerald-600'}>
-                          {fmt(situation.payments.at(-1)?.solde ?? 0)}
-                        </span>
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
+        <CommissionSituation agents={agents} title="Situation périodique des paiements par agent" />
       )}
     </div>
   )

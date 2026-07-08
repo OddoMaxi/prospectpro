@@ -58,7 +58,17 @@ router.put('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
 router.delete('/:id', authenticateToken, requireAdmin, ah(async (req, res) => {
   const product = await get("SELECT id FROM products WHERE id=?", [req.params.id]);
   if (!product) return res.status(404).json({ error: 'Produit non trouvé' });
-  await run("UPDATE prospects SET produit_id=NULL WHERE produit_id=?", [req.params.id]);
+
+  const [usedByProspects, usedByClients] = await Promise.all([
+    get("SELECT COUNT(*) c FROM prospect_products WHERE product_id=?", [req.params.id]),
+    get("SELECT COUNT(*) c FROM client_products WHERE product_id=?", [req.params.id]),
+  ]);
+  if (Number(usedByProspects.c) > 0 || Number(usedByClients.c) > 0) {
+    return res.status(400).json({
+      error: 'Ce produit est utilisé par des prospects ou des clients et ne peut pas être supprimé. Désactivez-le plutôt (Actif = non).'
+    });
+  }
+
   await run("DELETE FROM products WHERE id=?", [req.params.id]);
   res.json({ message: 'Produit supprimé avec succès' });
 }));

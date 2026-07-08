@@ -1,13 +1,13 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
-const { get, all, run } = require('../database');
+const { get, all, run, pool } = require('../database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 router.get('/', authenticateToken, ah(async (req, res) => {
-  const { statut, agent_id, date_debut, date_fin, search } = req.query;
+  const { statut, agent_id, date_debut, date_fin, search, product_id } = req.query;
 
   let sql = `
     SELECT cm.*,
@@ -37,6 +37,10 @@ router.get('/', authenticateToken, ah(async (req, res) => {
   }
   if (date_debut) { sql += ' AND date(cm.created_at) >= ?'; args.push(date_debut); }
   if (date_fin)   { sql += ' AND date(cm.created_at) <= ?'; args.push(date_fin); }
+  if (product_id) {
+    sql += ' AND EXISTS (SELECT 1 FROM client_products cp WHERE cp.client_id = c.id AND cp.product_id = ?)';
+    args.push(product_id);
+  }
 
   sql += ' ORDER BY cm.created_at DESC';
   res.json(await all(sql, args));
@@ -137,48 +141,63 @@ router.get('/:id/payments', authenticateToken, ah(async (req, res) => {
 }));
 
 // Enregistrer un paiement (multi-paiements supportés)
+// Transaction + verrou de ligne : deux paiements simultanés sur la même commission
+// ne peuvent pas ensemble dépasser le montant dû (lecture+vérification+écriture atomiques).
 router.patch('/:id/pay', authenticateToken, requireAdmin, ah(async (req, res) => {
   const { montant, date_paiement, reference, libelle } = req.body;
-
-  const comm = await get('SELECT * FROM commissions WHERE id = ?', [req.params.id]);
-  if (!comm) return res.status(404).json({ error: 'Commission non trouvée' });
-
   const paid = Number(montant) || 0;
   if (paid <= 0) return res.status(400).json({ error: 'Le montant doit être supérieur à 0' });
 
-  // Le total payé (paiements déjà enregistrés + celui-ci) ne peut jamais dépasser le montant dû,
-  // même en cumulant plusieurs paiements fractionnés.
-  const totalRow = await get(
-    'SELECT COALESCE(SUM(montant), 0) v FROM commission_payments WHERE commission_id = ?',
-    [req.params.id]
-  );
-  const alreadyPaid = Number(totalRow.v);
-  const due = Number(comm.montant_du);
-  const remaining = due - alreadyPaid;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  if (paid > remaining) {
-    return res.status(400).json({
-      error: `Le paiement dépasse le montant restant dû (${remaining.toLocaleString('fr-FR')} GNF restants sur ${due.toLocaleString('fr-FR')} GNF)`
-    });
+    const commRes = await client.query('SELECT * FROM commissions WHERE id = $1 FOR UPDATE', [req.params.id]);
+    const comm = commRes.rows[0];
+    if (!comm) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Commission non trouvée' });
+    }
+
+    const totalRes = await client.query(
+      'SELECT COALESCE(SUM(montant), 0) v FROM commission_payments WHERE commission_id = $1',
+      [req.params.id]
+    );
+    const alreadyPaid = Number(totalRes.rows[0].v);
+    const due = Number(comm.montant_du);
+    const remaining = due - alreadyPaid;
+
+    if (paid > remaining) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `Le paiement dépasse le montant restant dû (${remaining.toLocaleString('fr-FR')} GNF restants sur ${due.toLocaleString('fr-FR')} GNF)`
+      });
+    }
+
+    await client.query(
+      `INSERT INTO commission_payments (id, commission_id, date_paiement, reference, libelle, montant)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [uuidv4(), req.params.id,
+       date_paiement || new Date().toISOString().split('T')[0],
+       reference || null, libelle || null, paid]
+    );
+
+    const totalPaid = alreadyPaid + paid;
+    const statut = totalPaid >= due ? 'paye' : totalPaid > 0 ? 'partiel' : 'non_paye';
+
+    await client.query(
+      `UPDATE commissions SET montant_paye=$1, statut=$2, date_paiement=$3, reference_paiement=$4, updated_at=NOW() WHERE id=$5`,
+      [totalPaid, statut, date_paiement || null, reference || null, req.params.id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ message: 'Paiement enregistré' });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
   }
-
-  await run(
-    `INSERT INTO commission_payments (id, commission_id, date_paiement, reference, libelle, montant)
-     VALUES (?,?,?,?,?,?)`,
-    [uuidv4(), req.params.id,
-     date_paiement || new Date().toISOString().split('T')[0],
-     reference || null, libelle || null, paid]
-  );
-
-  const totalPaid = alreadyPaid + paid;
-  const statut = totalPaid >= due ? 'paye' : totalPaid > 0 ? 'partiel' : 'non_paye';
-
-  await run(
-    `UPDATE commissions SET montant_paye=?, statut=?, date_paiement=?, reference_paiement=?, updated_at=NOW() WHERE id=?`,
-    [totalPaid, statut, date_paiement || null, reference || null, req.params.id]
-  );
-
-  res.json({ message: 'Paiement enregistré' });
 }));
 
 module.exports = router;

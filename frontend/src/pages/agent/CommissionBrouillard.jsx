@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api } from '../../api'
-import toast from 'react-hot-toast'
 import {
-  Search, Filter, ChevronDown, X, CreditCard, CheckCircle,
-  Clock, AlertCircle, FileText, TrendingDown, Download
+  Search, Filter, ChevronDown, X, CheckCircle,
+  Clock, AlertCircle, FileText, Download
 } from 'lucide-react'
 import Pagination from '../../components/Pagination'
+import CommissionSituation from '../../components/CommissionSituation'
 import { exportCSV } from '../../utils/csv'
 
 const PAGE_SIZE = 15
@@ -37,11 +37,6 @@ export default function CommissionBrouillard() {
   const [filters, setFilters] = useState({ search: '', statut: '', date_debut: '', date_fin: '' })
   const [page, setPage] = useState(1)
 
-  // Situation périodique
-  const [sitFilters, setSitFilters] = useState({ date_debut: '', date_fin: '' })
-  const [situation, setSituation] = useState(null)
-  const [sitLoading, setSitLoading] = useState(false)
-
   const load = useCallback(() => {
     setLoading(true)
     const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v))
@@ -59,7 +54,6 @@ export default function CommissionBrouillard() {
   }, [load, view])
 
   const setF  = (k, v) => { setFilters(p => ({ ...p, [k]: v })); setPage(1) }
-  const setSF = (k, v) => setSitFilters(p => ({ ...p, [k]: v }))
   const hasActiveFilters = Object.values(filters).some(Boolean)
   const paginated = commissions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
@@ -77,28 +71,6 @@ export default function CommissionBrouillard() {
       { label: 'Date paiement',  value: r => fmtDate(r.date_paiement) },
       { label: 'Référence',      value: 'reference_paiement' },
     ], `commissions_${new Date().toISOString().split('T')[0]}.csv`)
-  }
-
-  const handleExportSituation = () => {
-    if (!situation) return
-    exportCSV(situation.payments, [
-      { label: 'Date',      value: r => fmtDate(r.date_paiement) },
-      { label: 'Client',    value: r => r.client_type === 'physique' ? `${r.client_prenom || ''} ${r.client_nom}`.trim() : r.client_nom },
-      { label: 'N° Client', value: 'client_numero' },
-      { label: 'Référence', value: 'reference' },
-      { label: 'Libellé',   value: 'libelle' },
-      { label: 'Montant',   value: r => Math.round(r.montant || 0) },
-      { label: 'Solde',     value: r => Math.round(r.solde || 0) },
-    ], `situation_${sitFilters.date_debut || 'debut'}_${sitFilters.date_fin || 'fin'}.csv`)
-  }
-
-  const loadSituation = () => {
-    setSitLoading(true)
-    const params = Object.fromEntries(Object.entries(sitFilters).filter(([, v]) => v))
-    api.get('/commissions/situation', { params })
-      .then(r => setSituation(r.data))
-      .catch(() => toast.error('Erreur de chargement'))
-      .finally(() => setSitLoading(false))
   }
 
   return (
@@ -307,118 +279,7 @@ export default function CommissionBrouillard() {
 
       {/* ===== VUE : SITUATION PÉRIODIQUE ===== */}
       {view === 'situation' && (
-        <div className="space-y-4">
-          <div className="card space-y-4">
-            <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <TrendingDown size={16} className="text-blue-600" />
-              Situation périodique de mes paiements
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-              <div>
-                <label className="label">Du</label>
-                <input className="input" type="date" value={sitFilters.date_debut} onChange={e => setSF('date_debut', e.target.value)} />
-              </div>
-              <div>
-                <label className="label">Au</label>
-                <input className="input" type="date" value={sitFilters.date_fin} onChange={e => setSF('date_fin', e.target.value)} />
-              </div>
-              <button
-                onClick={loadSituation}
-                disabled={sitLoading}
-                className="btn btn-primary justify-center"
-              >
-                {sitLoading ? 'Chargement…' : 'Afficher'}
-              </button>
-            </div>
-          </div>
-
-          {!situation && (
-            <div className="card text-center py-12 text-gray-400">
-              <TrendingDown size={36} className="mx-auto mb-3 text-gray-200" />
-              <p className="text-sm">Sélectionnez une période puis cliquez sur Afficher</p>
-            </div>
-          )}
-
-          {situation && situation.payments.length === 0 && (
-            <div className="card text-center py-12">
-              <TrendingDown size={36} className="text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500 font-medium">Aucun paiement pour cette période</p>
-            </div>
-          )}
-
-          {situation && situation.payments.length > 0 && (
-            <div className="card overflow-hidden p-0">
-              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
-                <p className="text-sm font-semibold text-gray-700">
-                  {situation.payments.length} paiement{situation.payments.length > 1 ? 's' : ''}
-                </p>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-gray-500">
-                    Solde d'ouverture :{' '}
-                    <span className="font-semibold text-gray-900">{fmt(situation.initial_solde)}</span>
-                  </span>
-                  <button onClick={handleExportSituation} className="btn btn-secondary btn-sm gap-1.5" title="Exporter en CSV">
-                    <Download size={13} />CSV
-                  </button>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-100">
-                    <tr>
-                      {['Date','Client','Référence','Libellé','Montant','Solde'].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {situation.payments.map(p => {
-                      const clientNom = p.client_type === 'physique'
-                        ? `${p.client_prenom || ''} ${p.client_nom}`.trim()
-                        : p.client_nom
-                      return (
-                        <tr key={p.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fmtDate(p.date_paiement)}</td>
-                          <td className="px-4 py-3">
-                            {p.client_numero && (
-                              <span className="font-mono text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded mr-1.5">
-                                #{p.client_numero}
-                              </span>
-                            )}
-                            <span className="text-gray-800">{clientNom}</span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">{p.reference || '—'}</td>
-                          <td className="px-4 py-3 text-gray-600 text-xs">{p.libelle || '—'}</td>
-                          <td className="px-4 py-3 text-right font-semibold text-emerald-700 whitespace-nowrap">{fmt(p.montant)}</td>
-                          <td className="px-4 py-3 text-right font-semibold whitespace-nowrap">
-                            <span className={p.solde > 0 ? 'text-red-600' : 'text-emerald-600'}>
-                              {fmt(p.solde)}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
-                      <td colSpan={4} className="px-4 py-3 text-xs text-gray-500 uppercase">
-                        Total
-                      </td>
-                      <td className="px-4 py-3 text-right text-emerald-700 whitespace-nowrap">
-                        {fmt(situation.payments.reduce((s, p) => s + Number(p.montant), 0))}
-                      </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <span className={situation.payments.at(-1)?.solde > 0 ? 'text-red-600' : 'text-emerald-600'}>
-                          {fmt(situation.payments.at(-1)?.solde ?? 0)}
-                        </span>
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
+        <CommissionSituation title="Situation périodique de mes paiements" />
       )}
     </div>
   )
