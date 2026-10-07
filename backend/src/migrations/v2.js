@@ -210,6 +210,23 @@ async function migrer(q) {
     }
     for (const id of new Set(Object.values(factures))) await recalcFacture(q, id);
     if (comms.length) log.push(`${comms.length} commission(s) et ${nbPaiements} paiement(s) repris dans ${new Set(Object.values(factures)).size} facture(s)`);
+
+    // Commissions dont l'agent a été effacé par l'ancienne version : conservées dans l'ancienne table « commissions »
+    const orphelines = await q.get(
+      `SELECT COUNT(*) n, COALESCE(SUM(montant_du),0) du,
+         COALESCE((SELECT SUM(p.montant) FROM commission_payments p JOIN commissions c2 ON c2.id = p.commission_id
+                   WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id = c2.agent_id)),0) paye
+       FROM commissions cm WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id = cm.agent_id)`);
+    if (orphelines.n > 0) {
+      log.push(`${orphelines.n} commission(s) d'agents supprimés dans l'ancienne version non reprises (dû ${Math.round(orphelines.du)}, payé ${Math.round(orphelines.paye)}) : conservées dans la table « commissions »`);
+    }
+    // Paiements supérieurs au dû (l'ancienne version ne les plafonnait pas)
+    const tropPercus = await q.all(
+      `SELECT f.numero, f.total, f.total_paye FROM factures f WHERE f.id IN (${[...new Set(Object.values(factures))].map(() => '?').join(',') || "''"})
+         AND f.total_paye > f.total`, [...new Set(Object.values(factures))]);
+    for (const f of tropPercus) {
+      log.push(`Trop-perçu sur la facture ${f.numero} : ${Math.round(f.total_paye - f.total)} payé(s) au-delà du dû (${Math.round(f.total)})`);
+    }
   }
   return log;
 }
