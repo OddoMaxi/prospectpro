@@ -1,336 +1,152 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { FileText, RefreshCw, Zap, TrendingUp, Target, Wallet, Users, CalendarClock } from 'lucide-react'
 import { api } from '../../api'
-import StatCard from '../../components/StatCard'
-import { Users, UserCheck, TrendingUp, DollarSign, BarChart2, Target, Banknote, Award, Package } from 'lucide-react'
-import Pagination from '../../components/Pagination'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { useExercice } from '../../context/ExerciceContext'
+import { usePeriod, PeriodSelector, Kpi, ObjectifsTable, TrendChart } from '../../components/dashboard'
+import { Spinner, ExportButtons } from '../../components/ui'
+import { exportExcel, exportPdf } from '../../utils/export'
+import { fmtMoney, fmtNum, fmtPct, personName, variation } from '../../utils/format'
 
-const PAGE_SIZE = 10
-const PIE_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6']
-const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
-const fmtCur = n => fmt(n)
-
-const PERIODS = [
-  { value: 'mois',      label: 'Mois',      short: 'Ce mois' },
-  { value: 'trimestre', label: 'Trimestre', short: 'Ce trimestre' },
-  { value: 'semestre',  label: 'Semestre',  short: 'Ce semestre' },
-  { value: 'annee',     label: 'Année',     short: 'Cette année' },
+const CLASSEMENT = [
+  { label: 'Agent', value: a => personName(a) },
+  { label: 'Équipe', value: a => (a.parent_agent_id ? `Junior de ${personName(a, 'parent_')}` : 'Sénior') },
+  { label: 'Contrats', value: 'realise_nb', type: 'number' },
+  { label: 'Objectif (nb)', value: 'objectif_nb', type: 'number' },
+  { label: 'Atteinte nb', value: 'atteinte_nb', type: 'pct' },
+  { label: 'Prime pure', value: 'realise_montant', type: 'money' },
+  { label: 'Objectif (montant)', value: 'objectif_montant', type: 'money' },
+  { label: 'Atteinte montant', value: 'atteinte_montant', type: 'pct' },
 ]
 
-const SORT_KEYS = {
-  nom:               (a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`),
-  total_prospects:   (a, b) => Number(b.total_prospects)   - Number(a.total_prospects),
-  period_prospects:  (a, b) => Number(b.period_prospects)  - Number(a.period_prospects),
-  total_clients:     (a, b) => Number(b.total_clients)     - Number(a.total_clients),
-  prime_total:       (a, b) => Number(b.prime_total)       - Number(a.prime_total),
-  commission_total:  (a, b) => Number(b.commission_total)  - Number(a.commission_total),
-}
-
-function SortTh({ label, sortKey, current, dir, onSort, className = '' }) {
-  const active = current === sortKey
-  return (
-    <th
-      className={`pb-3 font-medium cursor-pointer select-none hover:text-gray-800 transition-colors ${className}`}
-      onClick={() => onSort(sortKey)}
-    >
-      <span className="flex items-center gap-1 justify-end">
-        {label}
-        <span className={`text-xs ${active ? 'text-blue-500' : 'text-gray-300'}`}>
-          {active ? (dir === 'asc' ? '↑' : '↓') : '↕'}
-        </span>
-      </span>
-    </th>
-  )
-}
-
-function AchievementBar({ value, target }) {
-  if (!target || target === 0) return <span className="text-xs text-gray-300">—</span>
-  const pct = Math.min((value / target) * 100, 100)
-  const barColor = pct >= 100 ? 'bg-emerald-500' : pct >= 70 ? 'bg-orange-400' : 'bg-blue-400'
-  const textColor = pct >= 100 ? 'text-emerald-600 font-semibold' : pct >= 70 ? 'text-orange-500' : 'text-gray-500'
-  return (
-    <div className="flex items-center gap-1.5 min-w-[90px]">
-      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className={`text-xs shrink-0 ${textColor}`}>{pct.toFixed(0)}%</span>
-    </div>
-  )
-}
-
 export default function AdminDashboard() {
-  const [stats, setStats] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [period, setPeriod] = useState('mois')
-  const [sortKey, setSortKey] = useState('total_prospects')
-  const [sortDir, setSortDir] = useState('desc')
-  const [page, setPage] = useState(1)
+  const { annee } = useExercice()
+  const period = usePeriod(annee, 'annee')
+  const [filters, setFilters] = useState({ agent_id: '', equipe_id: '', branche_id: '', product_id: '' })
+  const [agents, setAgents] = useState([])
+  const [branches, setBranches] = useState([])
+  const [products, setProducts] = useState([])
+  const [d, setD] = useState(null)
 
   useEffect(() => {
-    setLoading(true)
-    api.get('/stats/admin', { params: { period } })
-      .then(r => setStats(r.data))
-      .finally(() => setLoading(false))
-  }, [period])
+    api.get('/agents').then(r => setAgents(r.data))
+    api.get('/branches').then(r => setBranches(r.data))
+    api.get('/products').then(r => setProducts(r.data))
+  }, [])
+  useEffect(() => {
+    setD(null)
+    api.get('/stats/dashboard', { params: { ...period.params, ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) } }).then(r => setD(r.data))
+  }, [period.debut, period.fin, period.type, filters])
+  const setF = (k, v) => setFilters(p => ({ ...p, [k]: v, ...(k === 'agent_id' && v ? { equipe_id: '' } : {}), ...(k === 'equipe_id' && v ? { agent_id: '' } : {}) }))
 
-  const handleSort = key => {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(key); setSortDir('desc') }
-    setPage(1)
-  }
-
-  const handlePeriodChange = p => { setPeriod(p); setPage(1) }
-
-  if (!stats) return (
-    <div className="flex justify-center py-20">
-      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-    </div>
-  )
-
-  const currentPeriod = PERIODS.find(p => p.value === period) || PERIODS[0]
-
-  const sortedAgents = [...(stats.agent_stats || [])].sort((a, b) => {
-    const cmp = SORT_KEYS[sortKey] ? SORT_KEYS[sortKey](a, b) : 0
-    return sortDir === 'asc' ? -cmp : cmp
-  })
-
-  const totalPrimes      = sortedAgents.reduce((s, a) => s + Number(a.prime_total      || 0), 0)
-  const totalCommissions = sortedAgents.reduce((s, a) => s + Number(a.commission_total || 0), 0)
-  const totalPages       = Math.ceil(sortedAgents.length / PAGE_SIZE)
-  const paginatedAgents  = sortedAgents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const seniors = agents.filter(a => !a.parent_agent_id)
+  const c = d?.courant, p = d?.precedente, n1 = d?.n_moins_1
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Tableau de bord</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Vue globale de l'activité commerciale</p>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Tableau de bord</h1>
+          <p className="text-sm text-gray-500">{period.label} · comparaison avec la période précédente et la même période N-1</p>
+        </div>
+        <PeriodSelector period={period} />
       </div>
 
-      {/* Métriques globales */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard title="Agents actifs"       value={stats.total_agents}                    icon={Users}      color="blue" />
-        <StatCard title="Total prospects"     value={fmt(stats.total_prospects)}            icon={BarChart2}  color="purple" />
-        <StatCard title="Ce mois"             value={fmt(stats.monthly_prospects)}          icon={TrendingUp} color="orange" />
-        <StatCard title="Clients"             value={fmt(stats.total_clients)}              icon={UserCheck}  color="green" />
-        <StatCard title="Taux conversion"     value={`${stats.global_conversion_rate}%`}   icon={Target}     color="yellow" />
-        <StatCard title="Commission totale"   value={fmtCur(stats.commission_total)}        icon={DollarSign} color="green" />
+      <div className="card p-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <select className="input" value={filters.agent_id} onChange={e => setF('agent_id', e.target.value)}>
+          <option value="">Tous les agents</option>
+          {agents.map(a => <option key={a.id} value={a.id}>{personName(a)}</option>)}
+        </select>
+        <select className="input" value={filters.equipe_id} onChange={e => setF('equipe_id', e.target.value)}>
+          <option value="">Toutes les équipes</option>
+          {seniors.map(a => <option key={a.id} value={a.id}>Équipe {personName(a)}</option>)}
+        </select>
+        <select className="input" value={filters.branche_id} onChange={e => setF('branche_id', e.target.value)}>
+          <option value="">Toutes les branches</option>
+          {branches.map(b => <option key={b.id} value={b.id}>{b.nom}</option>)}
+        </select>
+        <select className="input" value={filters.product_id} onChange={e => setF('product_id', e.target.value)}>
+          <option value="">Tous les produits</option>
+          {products.filter(x => !filters.branche_id || x.branche_id === filters.branche_id).map(x => <option key={x.id} value={x.id}>{x.nom}</option>)}
+        </select>
       </div>
 
-      {/* Primes et commissions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="card bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide mb-1">Total primes (portefeuille clients)</p>
-              <p className="text-2xl font-bold text-blue-900">{fmtCur(stats.primes_clients)}</p>
-              <p className="text-xs text-blue-500 mt-1">Primes prévisionnelles : {fmtCur(stats.primes_total)}</p>
+      {!d ? <Spinner /> : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Kpi title="Production (souscriptions)" icon={FileText} value={fmtMoney(c.production.prime_ttc)} sub={`${fmtNum(c.production.nb)} contrat(s) souscrit(s)`}
+              cur={c.production.prime_ttc} prev={p.production.prime_ttc} n1={n1.production.prime_ttc} />
+            <Kpi title="Renouvellements" icon={RefreshCw} tone="green" value={fmtNum(c.renouvellements.nb)}
+              sub={`Taux : ${fmtPct(c.renouvellements.taux)} (${c.renouvellements.renouveles}/${c.renouvellements.echus} échus)`}
+              cur={c.renouvellements.nb} prev={p.renouvellements.nb} n1={n1.renouvellements.nb} />
+            <Kpi title="Renouvellements anticipés" icon={Zap} tone="purple" value={fmtNum(c.renouvellements.anticipes)}
+              sub="payés au moins un mois avant l'échéance" cur={c.renouvellements.anticipes} prev={p.renouvellements.anticipes} n1={n1.renouvellements.anticipes} />
+            <Kpi title="Croissance de la production" icon={TrendingUp} tone="orange"
+              value={fmtPct(variation(c.production.prime_ttc, p.production.prime_ttc))} sub={`vs N-1 : ${fmtPct(variation(c.production.prime_ttc, n1.production.prime_ttc))}`} />
+            <Kpi title="Atteinte des objectifs" icon={Target} value={fmtPct(d.objectifs.global?.atteinte_montant)}
+              sub={d.objectifs.global ? `${fmtMoney(d.objectifs.global.realise_montant)} / ${fmtMoney(d.objectifs.global.objectif_montant)} (prime pure)` : 'Aucun objectif'} />
+            <Kpi title="Commissions dues" icon={Wallet} tone="green" value={fmtMoney(c.commissions.dues)}
+              sub={`dont performance ${fmtMoney(c.commissions.performance)}${c.commissions.retrocession ? ` · rétrocessions ${fmtMoney(c.commissions.retrocession)}` : ''}`}
+              cur={c.commissions.dues} prev={p.commissions.dues} n1={n1.commissions.dues} />
+            <Kpi title="Commissions payées / reste" icon={Wallet} tone="orange" value={fmtMoney(c.commissions.payees)}
+              sub={`Reste à payer (toutes factures) : ${fmtMoney(d.commissions_reste_a_payer)}`} cur={c.commissions.payees} prev={p.commissions.payees} n1={n1.commissions.payees} />
+            <Kpi title="Pipeline" icon={Users} tone="purple" value={`${fmtNum(c.pipeline.convertis)} / ${fmtNum(c.pipeline.crees)}`}
+              sub={`convertis / créés · taux ${fmtPct(c.pipeline.taux)}`} cur={c.pipeline.convertis} prev={p.pipeline.convertis} n1={n1.pipeline.convertis} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div className="card lg:col-span-2">
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Production mensuelle (prime TTC) — {annee} vs {annee - 1}</h2>
+              <TrendChart data={d.tendance} annee={annee} />
             </div>
-            <div className="w-10 h-10 bg-blue-200 rounded-xl flex items-center justify-center shrink-0">
-              <Banknote size={20} className="text-blue-700" />
+            <div className="card">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><CalendarClock size={15} />Échéances à venir</h2>
+                <Link to="/admin/echeances" className="text-xs text-blue-600 hover:underline">Voir</Link>
+              </div>
+              {[['Sous 30 jours', d.echeances.j30, 'bg-red-50 text-red-700'], ['31 à 60 jours', d.echeances.j60, 'bg-amber-50 text-amber-700'], ['61 à 90 jours', d.echeances.j90, 'bg-blue-50 text-blue-700']].map(([l, n, cls]) => (
+                <div key={l} className={`flex items-center justify-between rounded-lg px-3 py-2.5 mb-2 ${cls}`}><span className="text-sm">{l}</span><span className="text-lg font-bold">{n}</span></div>
+              ))}
+              <p className="text-xs text-gray-500 mt-2">Prime TTC à renouveler sous 90 jours : <strong>{fmtMoney(d.echeances.prime_ttc_90)}</strong></p>
+              <p className="text-xs text-gray-500 mt-1">Encaissements de la période : <strong>{fmtMoney(c.encaissements)}</strong></p>
             </div>
           </div>
-        </div>
-        <div className="card bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-medium text-emerald-600 uppercase tracking-wide mb-1">Commissions à payer aux agents (clients)</p>
-              <p className="text-2xl font-bold text-emerald-900">{fmtCur(stats.commission_clients)}</p>
-              <p className="text-xs text-emerald-500 mt-1">Commissions prévisionnelles : {fmtCur(stats.commission_total)}</p>
+
+          <div className="card">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h2 className="text-sm font-semibold text-gray-700">Classement et atteinte des objectifs (agents et produits actifs)</h2>
+              <ExportButtons disabled={!d.objectifs.agents.length}
+                onExcel={() => exportExcel({ filename: 'classement_agents', columns: CLASSEMENT, rows: d.objectifs.agents })}
+                onPdf={() => exportPdf({ filename: 'classement_agents', title: 'Classement des agents', subtitle: period.label, columns: CLASSEMENT, rows: d.objectifs.agents })} />
             </div>
-            <div className="w-10 h-10 bg-emerald-200 rounded-xl flex items-center justify-center shrink-0">
-              <Award size={20} className="text-emerald-700" />
-            </div>
+            <ObjectifsTable data={d.objectifs} />
           </div>
-        </div>
-      </div>
 
-      {/* Graphiques */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="card">
-          <h2 className="font-semibold text-gray-800 mb-4">Tendance mensuelle</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={stats.monthly_trend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#3b82f6" radius={[4,4,0,0]} name="Prospects" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="card">
-          <h2 className="font-semibold text-gray-800 mb-4">Top secteurs</h2>
-          {stats.by_sector.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={stats.by_sector} dataKey="count" nameKey="secteur_activite"
-                  cx="50%" cy="50%" outerRadius={70}
-                  label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`}
-                  labelLine={false} fontSize={10}
-                >
-                  {stats.by_sector.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : <p className="text-sm text-gray-400 text-center py-10">Aucune donnée</p>}
-        </div>
-      </div>
-
-      {/* Statistiques par produit */}
-      {stats.by_product && stats.by_product.length > 0 && (
-        <div className="card">
-          <div className="flex items-center gap-2 mb-4">
-            <Package size={18} className="text-purple-600" />
-            <h2 className="font-semibold text-gray-800">Statistiques par produit</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-left text-gray-500 text-xs uppercase tracking-wide">
-                  <th className="pb-3 font-medium">Produit</th>
-                  <th className="pb-3 font-medium text-right">Prime annuelle</th>
-                  <th className="pb-3 font-medium text-right">Prospects</th>
-                  <th className="pb-3 font-medium text-right">Bénéficiaires</th>
-                  <th className="pb-3 font-medium text-right">Clients</th>
-                  <th className="pb-3 font-medium text-right">Primes totales</th>
-                  <th className="pb-3 font-medium text-right">Commissions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {stats.by_product.map(p => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="py-3 font-medium text-gray-800">{p.nom}</td>
-                    <td className="py-3 text-right text-gray-500">{fmtCur(p.prime_annuelle)}</td>
-                    <td className="py-3 text-right">{fmt(p.total_prospects)}</td>
-                    <td className="py-3 text-right text-blue-700 font-medium">{fmt(p.total_beneficiaires)}</td>
-                    <td className="py-3 text-right text-emerald-600 font-medium">{fmt(p.total_clients)}</td>
-                    <td className="py-3 text-right text-blue-700 font-medium">{fmtCur(p.total_primes)}</td>
-                    <td className="py-3 text-right text-purple-700">{fmtCur(p.total_commissions)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              {stats.by_product.length > 1 && (
-                <tfoot>
-                  <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-gray-800 text-sm">
-                    <td className="py-3 text-xs uppercase tracking-wide text-gray-500" colSpan={2}>Totaux</td>
-                    <td className="py-3 text-right">{fmt(stats.by_product.reduce((s,p) => s + Number(p.total_prospects||0), 0))}</td>
-                    <td className="py-3 text-right text-blue-700">{fmt(stats.by_product.reduce((s,p) => s + Number(p.total_beneficiaires||0), 0))}</td>
-                    <td className="py-3 text-right text-emerald-700">{fmt(stats.by_product.reduce((s,p) => s + Number(p.total_clients||0), 0))}</td>
-                    <td className="py-3 text-right text-blue-700">{fmtCur(stats.by_product.reduce((s,p) => s + Number(p.total_primes||0), 0))}</td>
-                    <td className="py-3 text-right text-purple-700">{fmtCur(stats.by_product.reduce((s,p) => s + Number(p.total_commissions||0), 0))}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Performance des agents */}
-      <div className="card">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h2 className="font-semibold text-gray-800">Performance des agents</h2>
-          {/* Sélecteur de période */}
-          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-            {PERIODS.map(p => (
-              <button
-                key={p.value}
-                onClick={() => handlePeriodChange(p.value)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  period === p.value ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {p.label}
-              </button>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {[['Par produit (actifs)', d.par_produit], ['Par branche', d.par_branche]].map(([title, rows]) => (
+              <div key={title} className="card overflow-x-auto">
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">{title}</h2>
+                {rows.length === 0 ? <p className="text-sm text-gray-400">Aucune opération sur la période</p> : (
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-gray-100 text-left text-xs text-gray-500 uppercase">
+                      <th className="pb-2 font-medium" /><th className="pb-2 font-medium text-right">Souscriptions</th><th className="pb-2 font-medium text-right">Renouvellements</th>
+                    </tr></thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {rows.map(r => (
+                        <tr key={r.id || r.nom}>
+                          <td className="py-2 font-medium">{r.nom}</td>
+                          <td className="py-2 text-right tabular-nums">{fmtMoney(r.prime_souscriptions)}<span className="block text-[11px] text-gray-400">{r.nb_souscriptions} contrat(s)</span></td>
+                          <td className="py-2 text-right tabular-nums">{fmtMoney(r.prime_renouvellements)}<span className="block text-[11px] text-gray-400">{r.nb_renouvellements} renouv.</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             ))}
           </div>
-        </div>
-
-        {loading && (
-          <div className="flex justify-center py-6">
-            <div className="w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
-
-        {!loading && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-left text-gray-500 text-xs uppercase tracking-wide">
-                  <th className="pb-3 font-medium cursor-pointer hover:text-gray-800" onClick={() => handleSort('nom')}>
-                    <span className="flex items-center gap-1">
-                      Agent
-                      <span className={`text-xs ${sortKey === 'nom' ? 'text-blue-500' : 'text-gray-300'}`}>
-                        {sortKey === 'nom' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
-                      </span>
-                    </span>
-                  </th>
-                  <SortTh label="Total"                  sortKey="total_prospects"  current={sortKey} dir={sortDir} onSort={handleSort} />
-                  <SortTh label={currentPeriod.short}    sortKey="period_prospects" current={sortKey} dir={sortDir} onSort={handleSort} />
-                  <SortTh label="Clients"                sortKey="total_clients"    current={sortKey} dir={sortDir} onSort={handleSort} />
-                  <SortTh label="Primes"                 sortKey="prime_total"      current={sortKey} dir={sortDir} onSort={handleSort} />
-                  <th className="pb-3 font-medium text-right">Atteinte prospects</th>
-                  <th className="pb-3 font-medium text-right">Atteinte primes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {paginatedAgents.map(a => (
-                  <tr key={a.id} className="hover:bg-gray-50">
-                    <td className="py-3 font-medium">
-                      {a.type_agent === 'morale'
-                        ? (a.raison_sociale || a.nom)
-                        : `${a.prenom} ${a.nom}`}
-                    </td>
-                    <td className="py-3 text-right">{fmt(a.total_prospects)}</td>
-                    <td className="py-3 text-right font-medium text-blue-700">{fmt(a.period_prospects)}</td>
-                    <td className="py-3 text-right text-emerald-600 font-medium">{fmt(a.total_clients)}</td>
-                    <td className="py-3 text-right">
-                      <div>
-                        <span className="text-blue-700 font-medium">{fmtCur(a.prime_total)}</span>
-                        {Number(a.prime_clients) > 0 && (
-                          <div className="text-xs text-emerald-600">{fmtCur(a.prime_clients)} clients</div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3 pl-2">
-                      <AchievementBar
-                        value={Number(a.period_prospects)}
-                        target={Number(a.objectif_period_prospects)}
-                      />
-                    </td>
-                    <td className="py-3 pl-2">
-                      <AchievementBar
-                        value={Number(a.period_prime_total)}
-                        target={Number(a.objectif_period_primes)}
-                      />
-                    </td>
-                  </tr>
-                ))}
-
-                {sortedAgents.length > 0 && (
-                  <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-gray-800">
-                    <td className="py-3 text-xs uppercase tracking-wide text-gray-500">Totaux</td>
-                    <td className="py-3 text-right">{fmt(sortedAgents.reduce((s,a) => s + Number(a.total_prospects||0), 0))}</td>
-                    <td className="py-3 text-right text-blue-700">{fmt(sortedAgents.reduce((s,a) => s + Number(a.period_prospects||0), 0))}</td>
-                    <td className="py-3 text-right text-emerald-700">{fmt(sortedAgents.reduce((s,a) => s + Number(a.total_clients||0), 0))}</td>
-                    <td className="py-3 text-right text-blue-700">{fmtCur(totalPrimes)}</td>
-                    <td className="py-3"></td>
-                    <td className="py-3"></td>
-                  </tr>
-                )}
-
-                {sortedAgents.length === 0 && (
-                  <tr><td colSpan={7} className="py-8 text-center text-gray-400">Aucun agent enregistré</td></tr>
-                )}
-              </tbody>
-            </table>
-            <Pagination page={page} totalPages={totalPages} total={sortedAgents.length} onPageChange={setPage} />
-          </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   )
 }

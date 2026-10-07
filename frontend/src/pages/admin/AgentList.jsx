@@ -1,465 +1,182 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { api } from '../../api'
+import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Plus, Edit, Trash2, RefreshCw, UserX, ArrowRight, Copy, CheckCircle, AlertTriangle, ArrowLeftRight, ChevronUp, ChevronDown } from 'lucide-react'
+import { Plus, Edit, Trash2, KeyRound, ArrowLeftRight, PauseCircle, PlayCircle, Search, Users } from 'lucide-react'
+import { api } from '../../api'
+import { Spinner, PageHeader, Empty, Badge, Modal, ExportButtons, errMsg } from '../../components/ui'
+import TransferModal from '../../components/TransferModal'
 import Pagination from '../../components/Pagination'
+import { personName, fmtDate, fmtTel, STATUTS_AGENT } from '../../utils/format'
+import { exportExcel, exportPdf } from '../../utils/export'
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 15
 
-const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
-const fmtCur = n => fmt(n)
+const COLUMNS = [
+  { label: 'Agent', value: a => personName(a) },
+  { label: 'Identifiant', value: 'username' },
+  { label: 'Niveau', value: a => (a.parent_agent_id ? `Junior de ${personName(a, 'parent_')}` : 'Sénior') },
+  { label: 'Téléphone', value: 'telephone' },
+  { label: 'Statut', value: a => STATUTS_AGENT[a.statut]?.label },
+  { label: 'Prospects', value: 'total_prospects', type: 'number' },
+  { label: 'Clients', value: 'total_clients', type: 'number' },
+  { label: 'Dernière activité', value: a => a.last_activity_at, type: 'date' },
+]
 
-// Modal suppression avec transfert ou suppression des prospects
-function DeleteModal({ agent, agents, onConfirm, onClose }) {
-  const [transferTo, setTransferTo] = useState('')
-  const [transferType, setTransferType] = useState('all')
-  const [mode, setMode] = useState('transfer')
-  const others = agents.filter(a => a.id !== agent.id)
-
-  const agentName = agent.type_agent === 'morale' ? (agent.raison_sociale || agent.nom) : `${agent.prenom} ${agent.nom}`
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center shrink-0">
-            <AlertTriangle size={20} className="text-red-600" />
-          </div>
-          <div>
-            <h3 className="font-bold text-gray-900">Supprimer {agentName}</h3>
-            <p className="text-sm text-gray-500 mt-0.5">Cet agent a <strong>{fmt(agent.total_prospects)}</strong> prospect(s)</p>
-          </div>
-        </div>
-
-        {agent.total_prospects > 0 && (
-          <div className="space-y-3 mb-5">
-            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border-2 transition-colors"
-              style={{ borderColor: mode === 'transfer' ? '#3b82f6' : '#e5e7eb' }}>
-              <input type="radio" name="mode" value="transfer" checked={mode === 'transfer'} onChange={() => setMode('transfer')} className="mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-gray-800">Transférer les prospects</p>
-                <p className="text-xs text-gray-500">Assigner les prospects à un autre agent</p>
-              </div>
-            </label>
-
-            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border-2 transition-colors"
-              style={{ borderColor: mode === 'delete' ? '#ef4444' : '#e5e7eb' }}>
-              <input type="radio" name="mode" value="delete" checked={mode === 'delete'} onChange={() => setMode('delete')} className="mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-gray-800">Supprimer les prospects</p>
-                <p className="text-xs text-red-500">Action irréversible — tous les prospects seront supprimés</p>
-              </div>
-            </label>
-
-            {mode === 'transfer' && (
-              <div className="space-y-3 pl-1">
-                <div>
-                  <label className="label">Prospects à transférer</label>
-                  <div className="flex gap-2">
-                    {[
-                      { value: 'all',      label: 'Tous' },
-                      { value: 'physique', label: 'Particuliers' },
-                      { value: 'morale',   label: 'Entreprises' },
-                    ].map(opt => (
-                      <label key={opt.value}
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 cursor-pointer text-xs font-medium transition-all
-                          ${transferType === opt.value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
-                        <input type="radio" name="deleteTransferType" value={opt.value}
-                          checked={transferType === opt.value} onChange={() => setTransferType(opt.value)}
-                          className="sr-only" />
-                        {opt.label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="label">Transférer vers</label>
-                  <select className="input" value={transferTo} onChange={e => setTransferTo(e.target.value)}>
-                    <option value="">Sélectionner un agent...</option>
-                    {others.map(a => (
-                      <option key={a.id} value={a.id}>
-                        {a.type_agent === 'morale' ? (a.raison_sociale || a.nom) : `${a.prenom} ${a.nom}`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button onClick={onClose} className="btn btn-secondary flex-1 justify-center">Annuler</button>
-          <button
-            onClick={() => onConfirm(
-              agent.id,
-              mode === 'transfer' ? transferTo : null,
-              mode === 'transfer' && transferType !== 'all' ? transferType : null
-            )}
-            disabled={mode === 'transfer' && !transferTo && agent.total_prospects > 0}
-            className="btn btn-danger flex-1 justify-center">
-            <Trash2 size={15} />Supprimer
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Modal transfert de portefeuille (sans suppression de l'agent)
-function TransferModal({ agent, agents, onConfirm, onClose }) {
-  const [transferTo, setTransferTo] = useState('')
-  const [transferType, setTransferType] = useState('all')
-  const others = agents.filter(a => a.id !== agent.id && a.is_active)
-
-  const agentName = agent.type_agent === 'morale' ? (agent.raison_sociale || agent.nom) : `${agent.prenom} ${agent.nom}`
-
-  const typeOptions = [
-    { value: 'all',      label: 'Tous les prospects',          count: agent.total_prospects },
-    { value: 'physique', label: 'Particuliers uniquement',      count: null },
-    { value: 'morale',   label: 'Entreprises uniquement',       count: null },
-  ]
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
-            <ArrowLeftRight size={20} className="text-blue-600" />
-          </div>
-          <div>
-            <h3 className="font-bold text-gray-900">Transférer le portefeuille</h3>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Portefeuille de <strong>{agentName}</strong> — L'agent source sera conservé.
-            </p>
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <label className="label">Prospects à transférer</label>
-          <div className="space-y-2">
-            {typeOptions.map(opt => (
-              <label key={opt.value}
-                className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all
-                  ${transferType === opt.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                <input type="radio" name="transferType" value={opt.value}
-                  checked={transferType === opt.value} onChange={() => setTransferType(opt.value)}
-                  className="accent-blue-600" />
-                <span className="text-sm font-medium text-gray-800">{opt.label}</span>
-                {opt.count !== null && (
-                  <span className="ml-auto text-xs text-gray-400">{fmt(opt.count)} prospect(s)</span>
-                )}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-5">
-          <label className="label">Transférer vers</label>
-          <select className="input" value={transferTo} onChange={e => setTransferTo(e.target.value)}>
-            <option value="">Sélectionner un agent...</option>
-            {others.map(a => (
-              <option key={a.id} value={a.id}>
-                {a.type_agent === 'morale' ? (a.raison_sociale || a.nom) : `${a.prenom} ${a.nom}`} ({fmt(a.total_prospects)} prospects)
-              </option>
-            ))}
-          </select>
-          {others.length === 0 && (
-            <p className="text-xs text-amber-600 mt-2">Aucun autre agent actif disponible.</p>
-          )}
-        </div>
-
-        <div className="flex gap-3">
-          <button onClick={onClose} className="btn btn-secondary flex-1 justify-center">Annuler</button>
-          <button
-            onClick={() => onConfirm(agent.id, transferTo, transferType === 'all' ? null : transferType)}
-            disabled={!transferTo}
-            className="btn btn-primary flex-1 justify-center">
-            <ArrowRight size={15} />Transférer
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Modal affichage des identifiants après reset
-function CredentialModal({ agentName, creds, onClose }) {
-  const [copied, setCopied] = useState(false)
-  const copyAll = () => {
-    navigator.clipboard.writeText(`Identifiant: ${creds.username || ''}\nMot de passe temporaire: ${creds.temp_password}`)
-    setCopied(true); setTimeout(() => setCopied(false), 2000)
+function DeleteModal({ agent, onClose, onTransfer, onDone }) {
+  const [saving, setSaving] = useState(false)
+  const [blocked, setBlocked] = useState(null)
+  const submit = async () => {
+    setSaving(true)
+    try {
+      const r = await api.delete(`/agents/${agent.id}`)
+      toast.success(r.data.message)
+      onDone()
+    } catch (err) {
+      if (err.response?.status === 409) setBlocked(err.response.data)
+      else toast.error(errMsg(err))
+    } finally { setSaving(false) }
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <h3 className="font-bold text-gray-900 mb-1">Mot de passe réinitialisé</h3>
-        <p className="text-sm text-gray-500 mb-4">
-          Communiquez ce mot de passe temporaire à <strong>{agentName}</strong>
-        </p>
-        <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-4">
-          <p className="text-xs text-gray-500 mb-1">Mot de passe temporaire</p>
-          <p className="text-xl font-mono font-bold tracking-widest text-gray-900">{creds.temp_password}</p>
+    <Modal title={`Supprimer ${personName(agent)}`} onClose={onClose}>
+      {blocked ? (
+        <div className="space-y-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+            <p className="font-semibold mb-1">{blocked.error}</p>
+            <p>{blocked.clients} client(s), {blocked.prospects} prospect(s){blocked.juniors ? `, ${blocked.juniors} Junior(s) rattaché(s)` : ''}.</p>
+            {blocked.juniors > 0 && <p className="mt-1">Rattachez d'abord ses Juniors à un autre Sénior ou supprimez-les.</p>}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="btn btn-secondary flex-1 justify-center">Fermer</button>
+            {(blocked.clients > 0 || blocked.prospects > 0) && <button onClick={onTransfer} className="btn btn-primary flex-1 justify-center"><ArrowLeftRight size={15} />Transférer le portefeuille</button>}
+          </div>
         </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 mb-4">
-          Ce mot de passe sera affiché une seule fois. L'agent devra le changer à la prochaine connexion. Le portefeuille de l'agent n'est pas affecté.
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">L'agent passera au statut « Supprimé » : il ne pourra plus se connecter et ne sera plus proposé dans les listes. Son historique et ses commissions déjà acquises sont conservés et restent dus.</p>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="btn btn-secondary flex-1 justify-center">Annuler</button>
+            <button onClick={submit} disabled={saving} className="btn btn-danger flex-1 justify-center">{saving ? 'Vérification…' : 'Supprimer'}</button>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <button onClick={copyAll} className="btn btn-secondary flex-1 justify-center">
-            {copied ? <CheckCircle size={14} className="text-emerald-600" /> : <Copy size={14} />}
-            {copied ? 'Copié !' : 'Copier'}
-          </button>
-          <button onClick={onClose} className="btn btn-primary flex-1 justify-center">Fermer</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-
-const SORT_FIELDS = {
-  nom: (a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`),
-  prenom: (a, b) => `${a.prenom} ${a.nom}`.localeCompare(`${b.prenom} ${b.nom}`),
-  total_prospects: (a, b) => Number(b.total_prospects) - Number(a.total_prospects),
-  total_clients: (a, b) => Number(b.total_clients) - Number(a.total_clients),
-}
-
-function SortTh({ label, sortKey, current, dir, onSort, align = 'right' }) {
-  const active = current === sortKey
-  const Icon = active ? (dir === 'asc' ? ChevronUp : ChevronDown) : ChevronDown
-  return (
-    <th
-      className={`pb-3 font-medium cursor-pointer select-none hover:text-gray-800 transition-colors text-${align}`}
-      onClick={() => onSort(sortKey)}
-    >
-      <span className={`inline-flex items-center gap-1 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
-        {label}
-        <Icon size={12} className={active ? 'text-blue-500' : 'text-gray-300'} />
-      </span>
-    </th>
+      )}
+    </Modal>
   )
 }
 
 export default function AgentList() {
   const navigate = useNavigate()
-  const [agents, setAgents] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [deleteTarget, setDeleteTarget] = useState(null)
-  const [transferTarget, setTransferTarget] = useState(null)
-  const [resetCreds, setResetCreds] = useState(null)
-  const [resetAgentName, setResetAgentName] = useState('')
-  const [sortKey, setSortKey] = useState('nom')
-  const [sortDir, setSortDir] = useState('asc')
+  const [rows, setRows] = useState(null)
+  const [filters, setFilters] = useState({ search: '', statut: '', niveau: '' })
   const [page, setPage] = useState(1)
+  const [transfer, setTransfer] = useState(null)
+  const [del, setDel] = useState(null)
+  const [creds, setCreds] = useState(null)
 
-  const load = () => {
-    setLoading(true)
-    api.get('/agents').then(r => setAgents(r.data)).finally(() => setLoading(false))
+  const load = () => api.get('/agents', { params: filters.statut === 'supprime' ? { inclure_supprimes: 1 } : {} }).then(r => setRows(r.data))
+  useEffect(() => { load() }, [filters.statut === 'supprime'])
+  const setF = (k, v) => { setFilters(p => ({ ...p, [k]: v })); setPage(1) }
+
+  const changeStatut = async (a, action) => {
+    if (action === 'suspendre' && !confirm(`Suspendre ${personName(a)} ? Sa connexion sera bloquée immédiatement.`)) return
+    try { const r = await api.patch(`/agents/${a.id}/statut`, { action }); toast.success(r.data.message); load() } catch (err) { toast.error(errMsg(err)) }
   }
-  useEffect(load, [])
-
-  const handleSort = key => {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(key); setSortDir('asc') }
-    setPage(1)
-  }
-
-  const sortedAgents = [...agents].sort((a, b) => {
-    const cmp = SORT_FIELDS[sortKey] ? SORT_FIELDS[sortKey](a, b) : 0
-    return sortDir === 'asc' ? cmp : -cmp
-  })
-  const totalPages   = Math.ceil(sortedAgents.length / PAGE_SIZE)
-  const paginatedAgents = sortedAgents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-
-  const handleDelete = async (agentId, transferTo) => {
-    try {
-      await api.delete(`/agents/${agentId}`, { data: { transfer_to: transferTo || undefined } })
-      toast.success('Agent supprimé')
-      setDeleteTarget(null)
-      load()
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Erreur lors de la suppression')
-    }
+  const resetPwd = async a => {
+    if (!confirm(`Réinitialiser le mot de passe de ${personName(a)} ?`)) return
+    try { const r = await api.post(`/agents/${a.id}/reset-password`); setCreds({ name: personName(a), ...r.data.credentials }) } catch (err) { toast.error(errMsg(err)) }
   }
 
-  const handleTransferPortfolio = async (agentId, transferTo, type) => {
-    try {
-      const r = await api.post(`/agents/${agentId}/transfer-portfolio`, {
-        transfer_to: transferTo,
-        ...(type ? { type } : {})
-      })
-      toast.success(r.data.message)
-      setTransferTarget(null)
-      load()
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Erreur lors du transfert')
-    }
-  }
-
-  const handleResetPassword = async agent => {
-    try {
-      const r = await api.post(`/agents/${agent.id}/reset-password`)
-      setResetAgentName(`${agent.prenom} ${agent.nom}`)
-      setResetCreds(r.data.credentials)
-    } catch {
-      toast.error('Erreur lors de la réinitialisation')
-    }
-  }
+  const s = filters.search.toLowerCase()
+  const shown = (rows || []).filter(a =>
+    (!filters.statut || a.statut === filters.statut) &&
+    (!filters.niveau || (filters.niveau === 'junior') === !!a.parent_agent_id) &&
+    (!s || `${personName(a)} ${a.username} ${a.telephone}`.toLowerCase().includes(s)))
+  const paginated = shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <div>
-      {deleteTarget && (
-        <DeleteModal agent={deleteTarget} agents={agents} onConfirm={handleDelete} onClose={() => setDeleteTarget(null)} />
+      {transfer && <TransferModal agent={transfer.agent} motif={transfer.motif} onClose={() => setTransfer(null)} onDone={() => { setTransfer(null); load() }} />}
+      {del && <DeleteModal agent={del} onClose={() => setDel(null)} onDone={() => { setDel(null); load() }}
+        onTransfer={() => { setTransfer({ agent: del, motif: 'suppression' }); setDel(null) }} />}
+      {creds && (
+        <Modal title="Mot de passe réinitialisé" subtitle={creds.name} onClose={() => setCreds(null)}>
+          <p className="text-sm text-gray-500 mb-2">Mot de passe temporaire à communiquer :</p>
+          <p className="text-2xl font-mono font-bold tracking-widest text-center bg-gray-50 rounded-xl py-4">{creds.temp_password}</p>
+        </Modal>
       )}
-      {transferTarget && (
-        <TransferModal agent={transferTarget} agents={agents} onConfirm={handleTransferPortfolio} onClose={() => setTransferTarget(null)} />
-      )}
-      {resetCreds && (
-        <CredentialModal agentName={resetAgentName} creds={resetCreds} onClose={() => setResetCreds(null)} />
-      )}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Agents Commerciaux Séniores</h1>
-          <p className="text-gray-500 text-sm mt-0.5">
-            {agents.filter(a => !a.parent_agent_id).length} Agent(s) Séniore(s) —{' '}
-            {agents.filter(a => a.parent_agent_id).length} Agent(s) Juniore(s)
-          </p>
+
+      <PageHeader title="Agents commerciaux" subtitle="L'administrateur crée les Séniors ; chaque Sénior crée ses Juniors.">
+        <ExportButtons disabled={!shown.length}
+          onExcel={() => exportExcel({ filename: 'agents', columns: COLUMNS, rows: shown })}
+          onPdf={() => exportPdf({ filename: 'agents', title: 'Agents commerciaux', columns: COLUMNS, rows: shown })} />
+        <Link to="/admin/agents/create" className="btn btn-primary"><Plus size={16} />Nouvel agent Sénior</Link>
+      </PageHeader>
+
+      <div className="card mb-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input className="input pl-9" placeholder="Nom, identifiant, téléphone…" value={filters.search} onChange={e => setF('search', e.target.value)} />
         </div>
-        <button onClick={() => navigate('/admin/agents/create')} className="btn btn-primary">
-          <Plus size={16} />Nouvel Agent Séniore
-        </button>
+        <select className="input" value={filters.statut} onChange={e => setF('statut', e.target.value)}>
+          <option value="">Tous les statuts (hors supprimés)</option>
+          {Object.entries(STATUTS_AGENT).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+        <select className="input" value={filters.niveau} onChange={e => setF('niveau', e.target.value)}>
+          <option value="">Séniors et Juniors</option>
+          <option value="senior">Séniors</option>
+          <option value="junior">Juniors</option>
+        </select>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : agents.length === 0 ? (
-        <div className="card text-center py-14">
-          <UserX size={40} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">Aucun agent enregistré</p>
-          <button onClick={() => navigate('/admin/agents/create')} className="btn btn-primary mt-4">
-            <Plus size={16} />Créer le premier agent
-          </button>
-        </div>
-      ) : (
+      {!rows ? <Spinner /> : shown.length === 0 ? <Empty icon={Users} text="Aucun agent" /> : (
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wide">
-                <SortTh label="Nom" sortKey="nom" current={sortKey} dir={sortDir} onSort={handleSort} align="left" />
-                <SortTh label="Prénom" sortKey="prenom" current={sortKey} dir={sortDir} onSort={handleSort} align="left" />
-                <th className="pb-3 font-medium text-left">Contact</th>
-                <SortTh label="Prospects" sortKey="total_prospects" current={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortTh label="Clients" sortKey="total_clients" current={sortKey} dir={sortDir} onSort={handleSort} />
+              <tr className="border-b border-gray-100 text-left text-xs text-gray-500 uppercase tracking-wide">
+                <th className="pb-3 font-medium">Agent</th>
+                <th className="pb-3 font-medium hidden md:table-cell">Niveau</th>
+                <th className="pb-3 font-medium hidden lg:table-cell">Contact</th>
+                <th className="pb-3 font-medium text-right">Prospects</th>
+                <th className="pb-3 font-medium text-right">Clients</th>
+                <th className="pb-3 font-medium hidden lg:table-cell">Dernière activité</th>
                 <th className="pb-3 font-medium text-center">Statut</th>
                 <th className="pb-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {paginatedAgents.map(agent => {
-                const convRate = agent.total_prospects > 0
-                  ? ((agent.total_clients / agent.total_prospects) * 100).toFixed(0)
-                  : 0
-                return (
-                  <tr key={agent.id} className={`hover:bg-gray-50 ${agent.parent_agent_id ? 'bg-purple-50/30' : ''}`}>
-                    <td className="py-3">
-                      {agent.type_agent === 'morale' ? (
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-gray-900">{agent.raison_sociale || agent.nom}</span>
-                            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">Morale</span>
-                            {agent.parent_agent_id && (
-                              <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">Agent Juniore</span>
-                            )}
-                          </div>
-                          {agent.representant_legal && (
-                            <p className="text-xs text-gray-400 mt-0.5">Rép. : {agent.representant_legal}</p>
-                          )}
-                          {agent.parent_agent_id && (
-                            <p className="text-xs text-orange-500 mt-0.5">
-                              Agent : {agent.parent_prenom} {agent.parent_nom || agent.parent_raison_sociale}
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-gray-900">{agent.nom}</span>
-                            {agent.parent_agent_id && (
-                              <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">Agent Juniore</span>
-                            )}
-                          </div>
-                          {agent.parent_agent_id && (
-                            <p className="text-xs text-orange-500 mt-0.5">
-                              Agent : {agent.parent_prenom} {agent.parent_nom || agent.parent_raison_sociale}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-3 text-gray-700">
-                      {agent.type_agent === 'morale' ? '' : agent.prenom}
-                    </td>
-                    <td className="py-3 text-gray-500">
-                      <div className="text-xs space-y-0.5">
-                        {agent.email && <p>{agent.email}</p>}
-                        {agent.telephone && <p>{agent.telephone}</p>}
-                        <p className="text-gray-400">@{agent.username}</p>
+              {paginated.map(a => (
+                <tr key={a.id} className={`hover:bg-gray-50 ${a.statut === 'supprime' ? 'opacity-60' : ''}`}>
+                  <td className="py-3">
+                    <p className="font-medium text-gray-900">{personName(a)}</p>
+                    <p className="text-xs text-gray-400">@{a.username}</p>
+                  </td>
+                  <td className="py-3 hidden md:table-cell text-xs">
+                    {a.parent_agent_id
+                      ? <><span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 font-medium">Junior</span><span className="block text-gray-400 mt-1">de {personName(a, 'parent_')}</span></>
+                      : <><span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">Sénior</span>{a.total_juniors > 0 && <span className="block text-gray-400 mt-1">{a.total_juniors} Junior(s)</span>}</>}
+                  </td>
+                  <td className="py-3 text-gray-600 hidden lg:table-cell">{fmtTel(a.telephone)}</td>
+                  <td className="py-3 text-right">{a.total_prospects}</td>
+                  <td className="py-3 text-right">{a.total_clients}</td>
+                  <td className="py-3 text-xs text-gray-500 hidden lg:table-cell">{fmtDate(a.last_activity_at)}</td>
+                  <td className="py-3 text-center"><Badge def={STATUTS_AGENT} value={a.statut} /></td>
+                  <td className="py-3 text-right">
+                    {a.statut !== 'supprime' && (
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => navigate(`/admin/agents/${a.id}/edit`)} className="btn btn-secondary btn-sm" title="Modifier / objectifs"><Edit size={13} /></button>
+                        {a.statut === 'actif'
+                          ? <button onClick={() => changeStatut(a, 'suspendre')} className="btn btn-secondary btn-sm" title="Suspendre"><PauseCircle size={13} /></button>
+                          : <button onClick={() => changeStatut(a, 'reactiver')} className="btn btn-success btn-sm" title="Réactiver"><PlayCircle size={13} /></button>}
+                        <button onClick={() => setTransfer({ agent: a, motif: 'manuel' })} className="btn btn-secondary btn-sm" title="Transférer le portefeuille"><ArrowLeftRight size={13} /></button>
+                        <button onClick={() => resetPwd(a)} className="btn btn-secondary btn-sm" title="Réinitialiser le mot de passe"><KeyRound size={13} /></button>
+                        <button onClick={() => setDel(a)} className="btn btn-danger btn-sm" title="Supprimer"><Trash2 size={13} /></button>
                       </div>
-                    </td>
-                    <td className="py-3 text-right">
-                      <div>
-                        <span className="font-medium text-gray-900">{fmt(agent.total_prospects)}</span>
-                        <div className="text-xs text-gray-400">conv. {convRate}%</div>
-                      </div>
-                    </td>
-                    <td className="py-3 text-right text-emerald-700 font-medium">{fmt(agent.total_clients)}</td>
-                    <td className="py-3 text-center">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        agent.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {agent.is_active ? 'Actif' : 'Inactif'}
-                      </span>
-                    </td>
-                    <td className="py-3 text-right">
-                      <div className="flex items-center gap-1.5 justify-end">
-                        <button
-                          onClick={() => navigate(`/admin/agents/${agent.id}/edit`)}
-                          className="btn btn-secondary btn-sm"
-                          title={agent.parent_agent_id ? 'Modification réservée à l\'agent parent' : 'Modifier'}
-                          disabled={!!agent.parent_agent_id}
-                        >
-                          <Edit size={13} />
-                        </button>
-                        <button
-                          onClick={() => setTransferTarget(agent)}
-                          className="btn btn-secondary btn-sm" title="Transférer le portefeuille"
-                          disabled={agent.total_prospects === 0}
-                        >
-                          <ArrowLeftRight size={13} />
-                        </button>
-                        <button
-                          onClick={() => handleResetPassword(agent)}
-                          className="btn btn-secondary btn-sm" title="Réinitialiser le mot de passe"
-                        >
-                          <RefreshCw size={13} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteTarget(agent)}
-                          className="btn btn-danger btn-sm" title="Supprimer"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
-          <Pagination page={page} totalPages={totalPages} total={agents.length} onPageChange={setPage} />
+          <Pagination page={page} totalPages={Math.ceil(shown.length / PAGE_SIZE)} total={shown.length} onPageChange={setPage} />
         </div>
       )}
     </div>

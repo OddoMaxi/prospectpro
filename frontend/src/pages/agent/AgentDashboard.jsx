@@ -1,329 +1,125 @@
+// Tableau de bord unique du commercial : performances, objectifs, échéances et commissions.
+// Un Sénior bascule entre sa vue personnelle et la vue consolidée de son équipe.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Target, FileText, Users, RefreshCw, Wallet, CalendarClock, Plus } from 'lucide-react'
 import { api } from '../../api'
 import { useAuth } from '../../context/AuthContext'
-import StatCard from '../../components/StatCard'
-import { Users, UserCheck, TrendingUp, DollarSign, Target, Calendar, PlusCircle, ArrowRight, Banknote, UsersRound, Package } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-
-const STATUS_LABELS = { prospect: 'Prospect', en_cours: 'En cours', client: 'Client', perdu: 'Perdu' }
-const STATUS_COLORS = { prospect: '#3b82f6', en_cours: '#f59e0b', client: '#10b981', perdu: '#ef4444' }
-const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
-const fmtDate = d => d ? new Date(d).toLocaleDateString('fr-FR') : '-'
-
-const PERIODS = [
-  { value: 'semaine',   label: 'Semaine' },
-  { value: 'mois',      label: 'Mois' },
-  { value: 'trimestre', label: 'Trimestre' },
-  { value: 'semestre',  label: 'Semestre' },
-  { value: 'annee',     label: 'Année' },
-]
-
-function getLevel(pct) {
-  if (pct >= 100) return { label: 'Objectif dépassé !', color: 'text-emerald-600', bg: 'bg-emerald-500' }
-  if (pct >= 80)  return { label: 'Excellent',          color: 'text-blue-600',    bg: 'bg-blue-500' }
-  if (pct >= 60)  return { label: 'En bonne voie',      color: 'text-amber-600',   bg: 'bg-amber-500' }
-  if (pct >= 30)  return { label: 'À améliorer',        color: 'text-orange-600',  bg: 'bg-orange-500' }
-  return                  { label: 'Insuffisant',        color: 'text-red-600',     bg: 'bg-red-500' }
-}
-
-function AchievementBar({ label, value, max, fmtFn = fmt }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
-  const over = max > 0 && value > max
-  const level = getLevel(over ? 100 : pct)
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-1.5">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
-        <span className="text-sm font-bold text-gray-900">
-          {fmtFn(value)}<span className="text-gray-400 font-normal"> / {fmtFn(max)}</span>
-        </span>
-      </div>
-      <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all ${level.bg}`} style={{ width: `${Math.min(over ? 100 : pct, 100)}%` }} />
-      </div>
-      <div className="flex justify-between mt-1">
-        <span className={`text-xs font-semibold ${level.color}`}>{level.label}</span>
-        <span className="text-xs text-gray-500">{over ? '≥ 100%' : `${pct.toFixed(0)}%`}</span>
-      </div>
-    </div>
-  )
-}
-
-const fmtAxisDay   = d => { if (!d) return ''; const [,, day] = d.split('-'); return day }
-const fmtAxisMonth = m => { if (!m) return ''; const [y, mo] = m.split('-'); return `${mo}/${String(y).slice(2)}` }
+import { useExercice } from '../../context/ExerciceContext'
+import { usePeriod, PeriodSelector, Kpi, ObjectifsTable, Progress } from '../../components/dashboard'
+import { Spinner } from '../../components/ui'
+import { fmtMoney, fmtNum, fmtPct, fmtDate, fmtMois, personName } from '../../utils/format'
 
 export default function AgentDashboard() {
   const { user } = useAuth()
-  const [stats, setStats] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [period, setPeriod] = useState('mois')
+  const { annee } = useExercice()
+  const isSenior = !user.parent_agent_id
+  const period = usePeriod(annee, 'mois')
+  const [vue, setVue] = useState('moi')
+  const [d, setD] = useState(null)
+  const [ech, setEch] = useState(null)
 
   useEffect(() => {
-    setLoading(true)
-    api.get('/stats/agent', { params: { period } })
-      .then(r => setStats(r.data))
-      .finally(() => setLoading(false))
-  }, [period])
+    setD(null)
+    api.get('/stats/dashboard', { params: { ...period.params, vue } }).then(r => setD(r.data))
+  }, [period.debut, period.fin, period.type, vue])
+  useEffect(() => { api.get('/contrats/echeances', { params: { jours: 60 } }).then(r => setEch(r.data)) }, [])
 
-  if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>
-  if (!stats) return null
-
-  const pieData = stats.by_status.map(s => ({ name: STATUS_LABELS[s.statut] || s.statut, value: s.count, color: STATUS_COLORS[s.statut] || '#6b7280' }))
-
-  const isDaily = period === 'semaine' || period === 'mois'
-  const trendData = stats.period_trend || []
-
-  const hasObjectives = stats.objectif_period_prospects > 0 || stats.objectif_period_primes > 0 || stats.objectif_period_commissions > 0
+  const c = d?.courant, p = d?.precedente
+  const me = d?.objectifs.agents.find(a => a.id === user.id)
+  const obj = vue === 'equipe' ? d?.objectifs.global : me
+  const mesEch = (ech || []).filter(e => vue === 'equipe' || e.agent_id === user.id).filter(e => e.jours_restants >= 0)
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between flex-wrap gap-3">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Bonjour, {user?.prenom} !</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Voici votre tableau de bord commercial</p>
+          <h1 className="text-xl font-bold text-gray-900">Bonjour {personName(user)}</h1>
+          <p className="text-sm text-gray-500">{period.label} · comparaison avec la période précédente</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
-            {PERIODS.map(p => (
-              <button
-                key={p.value}
-                onClick={() => setPeriod(p.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  period === p.value
-                    ? 'bg-white text-blue-700 shadow-sm font-semibold'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <Link to="/agent/prospects/create" className="btn btn-primary hidden sm:inline-flex">
-            <PlusCircle size={16} />Nouveau prospect
-          </Link>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        <StatCard title="Total prospects"  value={fmt(stats.total_prospects)}   icon={Users}      color="blue" />
-        <StatCard title="Période en cours" value={fmt(stats.period_prospects)}  icon={Calendar}   color="orange" />
-        <StatCard title="Clients"          value={fmt(stats.total_clients)}     icon={UserCheck}  color="green" />
-        <StatCard title="Taux conversion"  value={`${stats.conversion_rate}%`}  icon={TrendingUp} color="purple" />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="card flex items-start gap-3">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-blue-50 text-blue-600">
-            <Banknote size={22} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-gray-500 font-medium">Primes prévisionnelles (période)</p>
-            <p className="text-lg font-bold text-gray-900 mt-0.5">{fmt(stats.period_prime_total)}</p>
-            <p className="text-xs text-emerald-600 mt-0.5">Clients (total) : {fmt(stats.prime_clients)}</p>
-          </div>
-        </div>
-        <div className="card flex items-start gap-3">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-green-50 text-green-600">
-            <DollarSign size={22} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-gray-500 font-medium">Commission prévisionnelle (période)</p>
-            <p className="text-lg font-bold text-gray-900 mt-0.5">{fmt(stats.period_commission_total)}</p>
-            <p className="text-xs text-emerald-600 mt-0.5">Clients (total) : {fmt(stats.commission_clients)}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-5">
-        {/* Objectifs */}
-        <div className="card">
-          <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Target size={18} className="text-blue-500" />
-            Atteinte des objectifs — {PERIODS.find(p => p.value === period)?.label}
-          </h2>
-          {hasObjectives ? (
-            <div className="space-y-5">
-              <AchievementBar
-                label="Prospects"
-                value={stats.period_prospects}
-                max={stats.objectif_period_prospects}
-              />
-              <AchievementBar
-                label="Primes prévisionnelles"
-                value={stats.period_prime_total}
-                max={stats.objectif_period_primes}
-                fmtFn={fmt}
-              />
-              <AchievementBar
-                label="Commissions prévisionnelles"
-                value={stats.period_commission_total}
-                max={stats.objectif_period_commissions}
-                fmtFn={fmt}
-              />
+        <div className="flex flex-wrap items-center gap-2">
+          {isSenior && (
+            <div className="inline-flex rounded-lg bg-gray-100 p-0.5">
+              {[['moi', 'Mes résultats'], ['equipe', 'Mon équipe']].map(([v, l]) => (
+                <button key={v} onClick={() => setVue(v)} className={`px-3 py-1.5 text-xs font-medium rounded-md ${vue === v ? 'bg-white shadow text-blue-700' : 'text-gray-600'}`}>{l}</button>
+              ))}
             </div>
-          ) : (
-            <p className="text-sm text-gray-400 text-center py-6">
-              Aucun objectif défini. Contactez l'administrateur.
-            </p>
           )}
-        </div>
-
-        {/* Répartition par statut */}
-        <div className="card">
-          <h2 className="font-semibold text-gray-800 mb-4">Répartition par statut</h2>
-          {pieData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70}
-                  label={({ name, value }) => `${name}: ${value}`} labelLine={false} fontSize={11}>
-                  {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : <p className="text-sm text-gray-400 text-center py-10">Aucune donnée</p>}
+          <PeriodSelector period={period} types={['mois', 'trimestre', 'annee']} />
         </div>
       </div>
 
-      {/* Activité */}
-      <div className="card">
-        <h2 className="font-semibold text-gray-800 mb-4">
-          Activité — {PERIODS.find(p => p.value === period)?.label}
-        </h2>
-        {trendData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis
-                dataKey={isDaily ? 'day' : 'month'}
-                tick={{ fontSize: 11 }}
-                tickFormatter={isDaily ? fmtAxisDay : fmtAxisMonth}
-              />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip
-                labelFormatter={v => isDaily
-                  ? new Date(v).toLocaleDateString('fr-FR')
-                  : fmtAxisMonth(v)
-                }
-              />
-              <Bar dataKey="count" fill="#3b82f6" radius={[4,4,0,0]} name="Prospects" />
-            </BarChart>
-          </ResponsiveContainer>
-        ) : <p className="text-sm text-gray-400 text-center py-10">Aucune activité sur cette période</p>}
-      </div>
-
-      {/* Statistiques par produit */}
-      {stats.by_product?.length > 0 && (
-        <div className="card">
-          <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Package size={18} className="text-blue-500" />
-            Statistiques par produit
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left py-2 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Produit</th>
-                  <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Prospects</th>
-                  <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Clients</th>
-                  <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Prime totale</th>
-                  <th className="text-right py-2 pl-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Commission</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {stats.by_product.map(p => (
-                  <tr key={p.product_id} className="hover:bg-gray-50 transition-colors">
-                    <td className="py-3 pr-4">
-                      <span className="font-medium text-gray-900">{p.product_nom}</span>
-                      <span className="ml-2 text-xs text-gray-400">{p.product_taux}%</span>
-                    </td>
-                    <td className="py-3 px-3 text-right font-medium text-gray-700">{fmt(p.total_prospects)}</td>
-                    <td className="py-3 px-3 text-right">
-                      <span className="font-medium text-emerald-600">{fmt(p.total_clients)}</span>
-                    </td>
-                    <td className="py-3 px-3 text-right font-medium text-gray-700">{fmt(p.prime_total)}</td>
-                    <td className="py-3 pl-3 text-right font-semibold text-blue-600">{fmt(p.commission_total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-gray-200">
-                  <td className="pt-3 pr-4 text-xs font-semibold text-gray-500 uppercase">Total</td>
-                  <td className="pt-3 px-3 text-right font-bold text-gray-900">
-                    {fmt(stats.by_product.reduce((s, p) => s + Number(p.total_prospects), 0))}
-                  </td>
-                  <td className="pt-3 px-3 text-right font-bold text-emerald-600">
-                    {fmt(stats.by_product.reduce((s, p) => s + Number(p.total_clients), 0))}
-                  </td>
-                  <td className="pt-3 px-3 text-right font-bold text-gray-900">
-                    {fmt(stats.by_product.reduce((s, p) => s + Number(p.prime_total), 0))}
-                  </td>
-                  <td className="pt-3 pl-3 text-right font-bold text-blue-600">
-                    {fmt(stats.by_product.reduce((s, p) => s + Number(p.commission_total), 0))}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Section sous-agents */}
-      {stats.sous_agent_count > 0 && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-800 flex items-center gap-2">
-              <UsersRound size={18} className="text-purple-500" />
-              Mon équipe de sous-agents
-            </h2>
-            <Link to="/agent/sous-agents" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
-              Gérer <ArrowRight size={14} />
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-purple-50 rounded-xl p-4">
-              <p className="text-xs text-purple-600 font-medium">Sous-agents actifs</p>
-              <p className="text-2xl font-bold text-purple-900 mt-1">{fmt(stats.sous_agent_count)}</p>
-            </div>
-            <div className="bg-green-50 rounded-xl p-4">
-              <p className="text-xs text-green-600 font-medium">Ma commission (tous)</p>
-              <p className="text-xl font-bold text-green-900 mt-1">{fmt(stats.commission_sous_agents)}</p>
-              <p className="text-xs text-green-600 mt-0.5">Clients : {fmt(stats.commission_sous_agents_clients)}</p>
-            </div>
-            <div className="bg-blue-50 rounded-xl p-4 flex flex-col justify-between">
-              <p className="text-xs text-blue-600 font-medium">Taux de commission</p>
-              <p className="text-xs text-blue-500 mt-1">Défini par l'administrateur pour chaque sous-agent</p>
-              <Link to="/agent/sous-agents" className="mt-2 text-xs text-blue-600 font-medium hover:underline flex items-center gap-1">
-                Voir le détail <ArrowRight size={12} />
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {stats.recents?.length > 0 && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-800">Derniers prospects</h2>
-            <Link to="/agent/prospects" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
-              Voir tout <ArrowRight size={14} />
-            </Link>
-          </div>
-          <div className="space-y-2">
-            {stats.recents.map(p => (
-              <div key={p.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                <div className={`w-2 h-2 rounded-full shrink-0 ${p.statut === 'client' ? 'bg-emerald-500' : p.statut === 'perdu' ? 'bg-red-400' : p.statut === 'en_cours' ? 'bg-yellow-400' : 'bg-blue-400'}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{p.nom}{p.prenom ? ` ${p.prenom}` : ''}</p>
-                  <p className="text-xs text-gray-400">{fmtDate(p.date_prospection)}</p>
+      {!d ? <Spinner /> : (
+        <>
+          <div className="card">
+            <h2 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2"><Target size={16} className="text-blue-600" />Atteinte des objectifs {vue === 'equipe' ? "de l'équipe" : ''}</h2>
+            {!obj || (!obj.objectif_nb && !obj.objectif_montant) ? (
+              <p className="text-sm text-gray-400">Aucun objectif fixé sur les produits actifs.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <div className="flex justify-between text-sm mb-1"><span>Contrats souscrits</span><span className="font-semibold">{fmtNum(obj.realise_nb)} / {fmtNum(obj.objectif_nb)}</span></div>
+                  <Progress value={obj.atteinte_nb} /><p className="text-xs text-gray-500 mt-1">{fmtPct(obj.atteinte_nb)} atteint</p>
                 </div>
-                <span className="text-xs font-medium text-gray-500 shrink-0">{fmt(p.montant_potentiel)}</span>
+                <div>
+                  <div className="flex justify-between text-sm mb-1"><span>Prime pure</span><span className="font-semibold">{fmtMoney(obj.realise_montant)} / {fmtMoney(obj.objectif_montant)}</span></div>
+                  <Progress value={obj.atteinte_montant} /><p className="text-xs text-gray-500 mt-1">{fmtPct(obj.atteinte_montant)} atteint</p>
+                </div>
               </div>
-            ))}
+            )}
           </div>
-        </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Kpi title="Production" icon={FileText} value={fmtMoney(c.production.prime_ttc)} sub={`${fmtNum(c.production.nb)} contrat(s)`} cur={c.production.prime_ttc} prev={p.production.prime_ttc} />
+            <Kpi title="Prospects / conversions" icon={Users} tone="purple" value={`${fmtNum(c.pipeline.crees)} / ${fmtNum(c.pipeline.convertis)}`} sub={`Taux de conversion ${fmtPct(c.pipeline.taux)}`} cur={c.pipeline.convertis} prev={p.pipeline.convertis} />
+            <Kpi title="Renouvellements" icon={RefreshCw} tone="green" value={fmtNum(c.renouvellements.nb)} sub={`dont ${c.renouvellements.anticipes} anticipé(s)`} cur={c.renouvellements.nb} prev={p.renouvellements.nb} />
+            <Kpi title={`Commissions de ${fmtMois(d.mois_courant)}`} icon={Wallet} tone="orange" value={fmtMoney(d.commissions_mois_courant)}
+              sub={<>Reste à percevoir : <Link to="/agent/commissions" className="text-blue-600 hover:underline">{fmtMoney(d.commissions_reste_a_payer)}</Link></>} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="card">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><CalendarClock size={15} />Échéances à venir (60 jours)</h2>
+                <Link to="/agent/echeances" className="text-xs text-blue-600 hover:underline">Échéancier</Link>
+              </div>
+              <div className="flex gap-2 mb-3 text-xs">
+                {[[30, 'J-30', 'bg-red-50 text-red-700'], [45, 'J-45', 'bg-amber-50 text-amber-700'], [60, 'J-60', 'bg-yellow-50 text-yellow-700']].map(([j, l, cls], i, arr) => (
+                  <span key={l} className={`px-2.5 py-1 rounded-full font-medium ${cls}`}>{l} : {mesEch.filter(e => e.jours_restants <= j && (i === 0 || e.jours_restants > arr[i - 1][0])).length}</span>
+                ))}
+              </div>
+              {!ech ? <Spinner className="py-6" /> : mesEch.length === 0 ? <p className="text-sm text-gray-400">Aucune échéance dans les 60 jours.</p> : (
+                <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+                  {mesEch.slice(0, 15).map(e => (
+                    <Link key={e.id} to={`/agent/contrats/${e.id}`} className="flex items-center justify-between py-2 hover:bg-gray-50 px-1 rounded">
+                      <div><p className="text-sm font-medium">{personName(e, 'client_')}</p><p className="text-xs text-gray-400">{e.numero_contrat} · {fmtDate(e.date_echeance)}</p></div>
+                      <span className={`text-xs font-semibold ${e.jours_restants <= 30 ? 'text-red-600' : 'text-amber-600'}`}>J-{e.jours_restants}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+              <p className="text-[11px] text-gray-400 mt-2">Un renouvellement payé au plus tard à J-30 ouvre droit à la prime de performance.</p>
+            </div>
+
+            {isSenior && vue === 'equipe' ? (
+              <div className="card">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-gray-700">Mon équipe</h2>
+                  <Link to="/agent/juniors/create" className="btn btn-secondary btn-sm"><Plus size={13} />Nouveau Junior</Link>
+                </div>
+                <ObjectifsTable data={d.objectifs} showTeam={false} />
+              </div>
+            ) : (
+              <div className="card">
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">Mes commissions sur la période</h2>
+                {[['Commissions classiques', c.commissions.commission], ['Primes de performance', c.commissions.performance], ['Rétrocessions', c.commissions.retrocession], ['Total acquis', c.commissions.dues], ['Payé sur la période', c.commissions.payees]].map(([l, v], i) => (
+                  <div key={l} className={`flex justify-between py-2 text-sm ${i === 3 ? 'border-t border-gray-100 font-semibold' : ''}`}><span className="text-gray-600">{l}</span><span className={`tabular-nums ${v < 0 ? 'text-red-600' : ''}`}>{fmtMoney(v)}</span></div>
+                ))}
+                {isSenior && <p className="text-xs text-gray-400 mt-2">Inclut vos parts Sénior sur les ventes de vos Juniors.</p>}
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   )

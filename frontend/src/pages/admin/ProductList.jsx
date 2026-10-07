@@ -1,165 +1,105 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { api } from '../../api'
+import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Plus, Edit, Trash2, Package, ToggleLeft, ToggleRight, AlertTriangle } from 'lucide-react'
-import Pagination from '../../components/Pagination'
+import { Plus, Edit, Trash2, Package, PauseCircle, PlayCircle } from 'lucide-react'
+import { api } from '../../api'
+import { Spinner, PageHeader, Empty, Badge, ExportButtons, errMsg } from '../../components/ui'
+import { fmtMoney, fmtRate, STATUTS_PRODUIT } from '../../utils/format'
+import { exportExcel, exportPdf } from '../../utils/export'
 
-const PAGE_SIZE = 10
-
-const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0))
-const fmtCur = n => fmt(n)
-
-function DeleteModal({ product, onConfirm, onClose }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center shrink-0">
-            <AlertTriangle size={20} className="text-red-600" />
-          </div>
-          <div>
-            <h3 className="font-bold text-gray-900">Supprimer « {product.nom} »</h3>
-            <p className="text-sm text-gray-500 mt-1">
-              Les prospects liés à ce produit seront conservés mais le lien sera supprimé.
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-3 mt-5">
-          <button onClick={onClose} className="btn btn-secondary flex-1 justify-center">Annuler</button>
-          <button onClick={() => onConfirm(product.id)} className="btn btn-danger flex-1 justify-center">
-            <Trash2 size={15} />Supprimer
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
+const COLUMNS = [
+  { label: 'Branche', value: 'branche_nom' },
+  { label: 'Produit', value: 'nom' },
+  { label: 'Prime pure', value: 'prime_pure', type: 'money' },
+  { label: 'Prime commerciale', value: 'prime_commerciale', type: 'money' },
+  { label: 'Prime TTC', value: 'prime_ttc', type: 'money' },
+  { label: 'Comm. souscription %', value: 'taux_commission', type: 'number' },
+  { label: 'Comm. renouvellement %', value: 'taux_renouvellement', type: 'number' },
+  { label: 'Performance %', value: p => (p.performance_active ? p.taux_performance : null), type: 'number' },
+  { label: 'Statut', value: p => STATUTS_PRODUIT[p.statut]?.label },
+]
 
 export default function ProductList() {
   const navigate = useNavigate()
-  const [products, setProducts] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [deleteTarget, setDeleteTarget] = useState(null)
-  const [page, setPage] = useState(1)
+  const [rows, setRows] = useState(null)
+  const [branche, setBranche] = useState('')
+  const load = () => api.get('/products').then(r => setRows(r.data))
+  useEffect(() => { load() }, [])
 
-  const load = () => {
-    setLoading(true)
-    api.get('/products').then(r => setProducts(r.data)).finally(() => setLoading(false))
+  const toggle = async p => {
+    const action = p.statut === 'actif' ? 'suspendre' : 'reactiver'
+    if (action === 'suspendre' && !confirm(`Suspendre « ${p.nom} » ? Plus aucune souscription ne sera possible ; les contrats existants continuent.`)) return
+    try { const r = await api.patch(`/products/${p.id}/statut`, { action }); toast.success(r.data.message); load() } catch (err) { toast.error(errMsg(err)) }
   }
-  useEffect(load, [])
-
-  const handleDelete = async id => {
-    try {
-      await api.delete(`/products/${id}`)
-      toast.success('Produit supprimé')
-      setDeleteTarget(null)
-      load()
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Erreur lors de la suppression')
-    }
+  const remove = async p => {
+    if (!confirm(`Supprimer « ${p.nom} » ? L'historique des ventes reste visible dans les statistiques.`)) return
+    try { await api.delete(`/products/${p.id}`); toast.success('Produit supprimé'); load() } catch (err) { toast.error(errMsg(err)) }
   }
 
-  const handleToggle = async product => {
-    try {
-      await api.put(`/products/${product.id}`, { ...product, is_active: !product.is_active })
-      toast.success(product.is_active ? 'Produit désactivé' : 'Produit activé')
-      load()
-    } catch {
-      toast.error('Erreur lors de la mise à jour')
-    }
-  }
+  const branches = rows ? [...new Map(rows.map(r => [r.branche_id, r.branche_nom || 'Sans branche'])).entries()] : []
+  const shown = rows ? rows.filter(r => !branche || r.branche_id === branche) : []
 
   return (
     <div>
-      {deleteTarget && <DeleteModal product={deleteTarget} onConfirm={handleDelete} onClose={() => setDeleteTarget(null)} />}
+      <PageHeader title="Produits d'assurance" subtitle={rows ? `${shown.length} produit(s)` : ''}>
+        <select className="input w-44" value={branche} onChange={e => setBranche(e.target.value)}>
+          <option value="">Toutes les branches</option>
+          {branches.map(([id, nom]) => <option key={id} value={id}>{nom}</option>)}
+        </select>
+        <ExportButtons disabled={!shown.length}
+          onExcel={() => exportExcel({ filename: 'produits', columns: COLUMNS, rows: shown })}
+          onPdf={() => exportPdf({ filename: 'produits', title: "Produits d'assurance", columns: COLUMNS, rows: shown })} />
+        <Link to="/admin/products/create" className="btn btn-primary"><Plus size={16} />Nouveau produit</Link>
+      </PageHeader>
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Produits d'assurance</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{products.length} produit(s) enregistré(s)</p>
-        </div>
-        <button onClick={() => navigate('/admin/products/create')} className="btn btn-primary">
-          <Plus size={16} />Nouveau produit
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : products.length === 0 ? (
-        <div className="card text-center py-14">
-          <Package size={40} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">Aucun produit d'assurance créé</p>
-          <button onClick={() => navigate('/admin/products/create')} className="btn btn-primary mt-4">
-            <Plus size={16} />Créer le premier produit
-          </button>
-        </div>
-      ) : (
+      {!rows ? <Spinner /> : shown.length === 0 ? <Empty icon={Package} text="Aucun produit" /> : (
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 text-left text-gray-500 text-xs uppercase tracking-wide">
+              <tr className="border-b border-gray-100 text-left text-xs text-gray-500 uppercase tracking-wide">
                 <th className="pb-3 font-medium">Produit</th>
-                <th className="pb-3 font-medium">Description</th>
-                <th className="pb-3 font-medium text-right">Prime annuelle</th>
-                <th className="pb-3 font-medium text-right">Taux agent</th>
-                <th className="pb-3 font-medium text-right">Taux Ag. Juniore</th>
+                <th className="pb-3 font-medium text-right">Prime pure</th>
+                <th className="pb-3 font-medium text-right hidden md:table-cell">Prime commerciale</th>
+                <th className="pb-3 font-medium text-right">Prime TTC</th>
+                <th className="pb-3 font-medium text-right hidden lg:table-cell">Commissions</th>
+                <th className="pb-3 font-medium text-center hidden lg:table-cell">Performance</th>
+                <th className="pb-3 font-medium text-right hidden md:table-cell">Contrats actifs</th>
                 <th className="pb-3 font-medium text-center">Statut</th>
                 <th className="pb-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(p => (
-                <tr key={p.id} className="hover:bg-gray-50">
-                  <td className="py-3 font-semibold text-gray-900">{p.nom}</td>
-                  <td className="py-3 text-gray-500 max-w-xs truncate">{p.description || '—'}</td>
-                  <td className="py-3 text-right font-medium text-blue-700">{fmtCur(p.prime_annuelle)}</td>
-                  <td className="py-3 text-right">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                      {p.taux_commission}%
-                    </span>
+              {shown.map(p => (
+                <tr key={p.id} className={`hover:bg-gray-50 ${p.statut !== 'actif' ? 'opacity-70' : ''}`}>
+                  <td className="py-3">
+                    <p className="font-medium text-gray-900">{p.nom}</p>
+                    <p className="text-xs text-gray-400">{p.branche_nom || 'Sans branche'}</p>
                   </td>
-                  <td className="py-3 text-right">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                      {p.taux_commission_sous_agent ?? 0}%
-                    </span>
+                  <td className="py-3 text-right tabular-nums">{fmtMoney(p.prime_pure)}</td>
+                  <td className="py-3 text-right tabular-nums hidden md:table-cell">{fmtMoney(p.prime_commerciale)}</td>
+                  <td className="py-3 text-right tabular-nums font-medium text-blue-700">{fmtMoney(p.prime_ttc)}</td>
+                  <td className="py-3 text-right text-xs hidden lg:table-cell">
+                    <p>Souscr. {fmtRate(p.taux_commission)} <span className="text-gray-400">(J. {fmtRate(p.taux_commission_sous_agent)})</span></p>
+                    <p>Renouv. {fmtRate(p.taux_renouvellement)} <span className="text-gray-400">(J. {fmtRate(p.taux_renouvellement_junior)})</span></p>
                   </td>
-                  <td className="py-3 text-center">
-                    <button
-                      onClick={() => handleToggle(p)}
-                      className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full transition-colors ${
-                        p.is_active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                      }`}
-                    >
-                      {p.is_active ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
-                      {p.is_active ? 'Actif' : 'Inactif'}
-                    </button>
+                  <td className="py-3 text-center text-xs hidden lg:table-cell">
+                    {p.performance_active ? <>{fmtRate(p.taux_performance)}<span className="block text-gray-400">J-{p.delai_anticipation_mois} mois</span></> : <span className="text-gray-300">Non</span>}
                   </td>
+                  <td className="py-3 text-right hidden md:table-cell">{p.nb_contrats_actifs}</td>
+                  <td className="py-3 text-center"><Badge def={STATUTS_PRODUIT} value={p.statut} /></td>
                   <td className="py-3 text-right">
-                    <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => navigate(`/admin/products/${p.id}/edit`)}
-                        className="btn btn-secondary btn-sm"
-                        title="Modifier"
-                      >
-                        <Edit size={13} />
+                    <div className="flex justify-end gap-1.5">
+                      <button onClick={() => navigate(`/admin/products/${p.id}/edit`)} className="btn btn-secondary btn-sm" title="Modifier"><Edit size={13} /></button>
+                      <button onClick={() => toggle(p)} className="btn btn-secondary btn-sm" title={p.statut === 'actif' ? 'Suspendre' : 'Réactiver'}>
+                        {p.statut === 'actif' ? <PauseCircle size={13} /> : <PlayCircle size={13} />}
                       </button>
-                      <button
-                        onClick={() => setDeleteTarget(p)}
-                        className="btn btn-danger btn-sm"
-                        title="Supprimer"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      <button onClick={() => remove(p)} className="btn btn-danger btn-sm" title="Supprimer"><Trash2 size={13} /></button>
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <Pagination page={page} totalPages={Math.ceil(products.length / PAGE_SIZE)} total={products.length} onPageChange={setPage} />
         </div>
       )}
     </div>
