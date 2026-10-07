@@ -19,8 +19,17 @@ const isoDate = v => {
   return D.isDate(s) ? s : null;
 };
 
+// Certaines colonnes/tables n'existent que sur les bases passées par les évolutions de juillet 2026
+async function hasColumn(q, table, column) {
+  return !!(await q.get('SELECT 1 FROM information_schema.columns WHERE table_name = ? AND column_name = ?', [table, column]));
+}
+async function hasTable(q, table) {
+  return !!(await q.get('SELECT to_regclass(?) AS t', [`public.${table}`])).t;
+}
+
 async function migrer(q) {
   const log = [];
+  const { normalize } = require('../utils/text');
 
   // Agents
   const susp = await q.run("UPDATE users SET statut = 'suspendu', statut_depuis = NOW() WHERE role = 'agent' AND is_active = 0 AND statut = 'actif'");
@@ -39,6 +48,30 @@ async function migrer(q) {
          statut = CASE WHEN is_active = 1 THEN 'actif' ELSE 'suspendu' END
        WHERE branche_id IS NULL`, [brancheId]);
     log.push(`${sansBranche.length} produit(s) rattaché(s) à la branche « Générale »`);
+  }
+  if (await hasColumn(q, 'products', 'montant_accessoire')) {
+    await q.run('UPDATE products SET accessoires = montant_accessoire WHERE COALESCE(accessoires, 0) = 0 AND COALESCE(montant_accessoire, 0) > 0');
+  }
+
+  // Professions et secteurs : listes saisies par les agents (juillet 2026) et valeurs utilisées sur les fiches
+  const sources = [
+    ['profession', (await hasTable(q, 'professions')) ? 'SELECT nom AS v FROM professions' : null, 'profession'],
+    ['secteur', (await hasTable(q, 'secteurs_activite')) ? 'SELECT nom AS v FROM secteurs_activite' : null, 'secteur_activite'],
+  ];
+  for (const [type, tableSql, col] of sources) {
+    const valeurs = [
+      ...(tableSql ? await q.all(tableSql) : []),
+      ...await q.all(`SELECT DISTINCT ${col} AS v FROM prospects WHERE ${col} IS NOT NULL AND ${col} <> ''
+                      UNION SELECT DISTINCT ${col} FROM clients WHERE ${col} IS NOT NULL AND ${col} <> ''`),
+    ];
+    let n = 0;
+    for (const { v } of valeurs) {
+      const r = await q.run(
+        `INSERT INTO referentiels (id, type, valeur, valeur_norm, statut) VALUES (?,?,?,?,'a_valider')
+         ON CONFLICT (type, valeur_norm) DO NOTHING`, [uuidv4(), type, String(v).trim(), normalize(v)]);
+      n += r.rowsAffected;
+    }
+    if (n) log.push(`${n} valeur(s) de ${type} ajoutée(s) au référentiel « à valider »`);
   }
 
   // Prospects
@@ -65,6 +98,9 @@ async function migrer(q) {
        AND NOT EXISTS (SELECT 1 FROM contrats k WHERE k.client_id = c.id)`);
   const periodeParClient = {};
   let nbContrats = 0;
+  const avecFrais = await hasColumn(q, 'client_products', 'cout_police');
+  const avecRenouv = await hasColumn(q, 'clients', 'statut_renouvellement');
+  const aRegulariser = [];
   for (const c of clients) {
     const effet = isoDate(c.date_effet) || isoDate(c.converted_at) || D.today();
     const fin = isoDate(c.date_fin);
@@ -82,32 +118,43 @@ async function migrer(q) {
     await q.run(
       'INSERT INTO contrats (id, numero_contrat, client_id, duree_mois, date_effet, created_at) VALUES (?,?,?,?,?,COALESCE(?, NOW()))',
       [contratId, numero, c.id, duree, effet, c.converted_at]);
-    // Montants historiques : la prime payée de la v1 sert de prime pure (base des anciennes commissions)
-    let total = 0;
+    // Montants historiques : la prime payée sert de prime pure (base des anciennes commissions),
+    // le coût de police et les accessoires saisis s'y ajoutent ; pas de taxe dans l'ancienne version.
+    let total = 0, totalCommerciale = 0;
     for (const l of lignes) {
       const prime = Math.round(Number(l.prime_payee) || 0);
+      const police = avecFrais ? Math.round(Number(l.cout_police) || 0) : 0;
+      const acc = avecFrais ? Math.round(Number(l.accessoire) || 0) : 0;
       total += prime;
+      totalCommerciale += prime + police + acc;
       await q.run('INSERT INTO contrat_produits (id, contrat_id, product_id, nb_beneficiaires) VALUES (?,?,?,?)',
         [uuidv4(), contratId, l.product_id, Math.max(1, Number(l.nb_beneficiaires) || 1)]);
       await q.run(
-        `INSERT INTO periode_lignes (id, periode_id, product_id, product_nom, nb_beneficiaires, prime_pure, prime_commerciale, prime_ttc)
-         VALUES (?,?,?,?,?,?,?,?)`,
-        [uuidv4(), periodeId, l.product_id, l.product_nom || l.nom_actuel, Math.max(1, Number(l.nb_beneficiaires) || 1), prime, prime, prime]);
+        `INSERT INTO periode_lignes (id, periode_id, product_id, product_nom, nb_beneficiaires, prime_pure, cout_police,
+           accessoires, prime_commerciale, prime_ttc)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [uuidv4(), periodeId, l.product_id, l.product_nom || l.nom_actuel, Math.max(1, Number(l.nb_beneficiaires) || 1),
+         prime, police, acc, prime + police + acc, prime + police + acc]);
     }
     await q.run(
       `INSERT INTO contrat_periodes (id, contrat_id, numero, type, date_debut, date_echeance, prime_pure, prime_commerciale,
          prime_ttc, montant_paye, date_paiement_integral, agent_id)
        VALUES (?,?,1,'souscription',?,?,?,?,?,?,?,?)`,
-      [periodeId, contratId, effet, D.addMonths(effet, duree), total, total, total, total, effet, c.agent_id]);
-    if (total > 0) {
+      [periodeId, contratId, effet, D.addMonths(effet, duree), total, totalCommerciale, totalCommerciale, totalCommerciale, effet, c.agent_id]);
+    if (totalCommerciale > 0) {
       await q.run(
         `INSERT INTO encaissements (id, periode_id, date_paiement, montant, mode, reference) VALUES (?,?,?,?,'reprise','Reprise de la version précédente')`,
-        [uuidv4(), periodeId, effet, total]);
+        [uuidv4(), periodeId, effet, totalCommerciale]);
     }
+    // Le statut de renouvellement manuel n'a ni date ni montant : à régulariser avec « Renouveler »
+    if (avecRenouv && c.statut_renouvellement === 'renouvele') aRegulariser.push(numero);
     periodeParClient[c.id] = { contratId, periodeId, numero, total };
     nbContrats++;
   }
   if (nbContrats) log.push(`${nbContrats} contrat(s) repris`);
+  if (aRegulariser.length) {
+    log.push(`À régulariser (marqués « renouvelés » dans l'ancienne version, sans période ni paiement) : ${aRegulariser.join(', ')}`);
+  }
 
   // Anciennes commissions → lignes, factures mensuelles et tranches
   const ancienne = await q.get("SELECT to_regclass('public.commissions') AS t");

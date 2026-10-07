@@ -519,6 +519,22 @@ async function initializeSchema() {
     }
   }
 
+  // Numéros de prospects/clients : séquence atomique (pas de MAX+1 concurrent), recalée sur l'existant
+  await pool.query('CREATE SEQUENCE IF NOT EXISTS numero_seq');
+  const maxNumero = await pool.query(`
+    SELECT GREATEST(
+      COALESCE((SELECT MAX(CAST(numero AS INTEGER)) FROM prospects WHERE numero ~ '^[0-9]+$'), 0),
+      COALESCE((SELECT MAX(CAST(numero AS INTEGER)) FROM clients WHERE numero ~ '^[0-9]+$'), 0)) AS v`);
+  const seq = await pool.query('SELECT last_value, is_called FROM numero_seq');
+  const courant = seq.rows[0].is_called ? Number(seq.rows[0].last_value) : 0;
+  if (Number(maxNumero.rows[0].v) > courant) await pool.query("SELECT setval('numero_seq', $1)", [Number(maxNumero.rows[0].v)]);
+  await pool.query(`DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'prospects_numero_unique') THEN
+      ALTER TABLE prospects ADD CONSTRAINT prospects_numero_unique UNIQUE (numero);
+    END IF;
+  EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'Doublons existants sur prospects.numero : contrainte non ajoutée';
+  END $$`);
+
   // Seed lieux — ON CONFLICT DO NOTHING remplace INSERT OR IGNORE de SQLite
   const lieuxCount = await pool.query('SELECT COUNT(*) c FROM lieux');
   if (Number(lieuxCount.rows[0].c) === 0) {

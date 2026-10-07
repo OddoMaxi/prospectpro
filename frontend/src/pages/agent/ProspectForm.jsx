@@ -25,9 +25,9 @@ function LocationSelect3({ villeValue, communeValue, quartierValue, onVilleChang
   const quartiers = communeValue ? getQuartiers(communeValue) : []
   return (
     <div className="grid grid-cols-3 gap-3">
-      <Field label="Ville">
+      <Field label="Région">
         <select className="input" value={villeValue} onChange={e => { onVilleChange(e.target.value); onCommuneChange(''); onQuartierChange('') }}>
-          <option value="">Ville...</option>
+          <option value="">Région...</option>
           {VILLES.map(v => <option key={v} value={v}>{v}</option>)}
         </select>
       </Field>
@@ -180,18 +180,18 @@ export default function ProspectForm() {
               ))}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Prénom" required><input className="input" value={form.prenom} onChange={e => f('prenom', e.target.value)} required placeholder="Mamadou" /></Field>
-              <Field label="Nom" required><input className="input" value={form.nom} onChange={e => f('nom', e.target.value)} required placeholder="DIALLO" /></Field>
+              <Field label="Prénom" required><input className="input" value={form.prenom} onChange={e => f('prenom', e.target.value.toUpperCase())} required placeholder="MAMADOU" /></Field>
+              <Field label="Nom" required><input className="input" value={form.nom} onChange={e => f('nom', e.target.value.toUpperCase())} required placeholder="DIALLO" /></Field>
             </div>
             <Field label="Date de naissance"><input type="date" className="input" value={form.date_naissance || ''} onChange={e => f('date_naissance', e.target.value)} /></Field>
           </div>
         ) : (
           <div className="card space-y-4">
             <h2 className="text-sm font-semibold text-gray-700">Entreprise</h2>
-            <Field label="Raison sociale" required><input className="input" value={form.nom} onChange={e => f('nom', e.target.value)} required placeholder="Entreprise SARL" /></Field>
+            <Field label="Raison sociale" required><input className="input" value={form.nom} onChange={e => f('nom', e.target.value.toUpperCase())} required placeholder="ENTREPRISE SARL" /></Field>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Prénom du contact"><input className="input" value={form.prenom_contact} onChange={e => f('prenom_contact', e.target.value)} /></Field>
-              <Field label="Nom du contact"><input className="input" value={form.nom_contact} onChange={e => f('nom_contact', e.target.value)} /></Field>
+              <Field label="Prénom du contact"><input className="input" value={form.prenom_contact} onChange={e => f('prenom_contact', e.target.value.toUpperCase())} /></Field>
+              <Field label="Nom du contact"><input className="input" value={form.nom_contact} onChange={e => f('nom_contact', e.target.value.toUpperCase())} /></Field>
             </div>
             <div>
               <label className="label">Siège social</label>
@@ -206,7 +206,7 @@ export default function ProspectForm() {
 
         <div className="card space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">Coordonnées</h2>
-          <Field label="Téléphone" required><input className="input" type="tel" value={form.telephone} required onChange={e => f('telephone', e.target.value)} placeholder="+224 6XX XX XX XX" /></Field>
+          <Field label="Téléphone" required><input className="input" type="tel" value={form.telephone} required onChange={e => f('telephone', e.target.value)} placeholder="6XX XX XX XX" /></Field>
           {!isPhysique && <Field label="Email"><input className="input" type="email" value={form.email || ''} onChange={e => f('email', e.target.value)} /></Field>}
           {isPhysique && (
             <>

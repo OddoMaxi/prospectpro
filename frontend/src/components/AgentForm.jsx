@@ -159,7 +159,7 @@ export default function AgentForm({ id, mode, backPath }) {
             </>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Téléphone" required><input className="input" type="tel" value={form.telephone} onChange={e => f('telephone', e.target.value)} required /></Field>
+            <Field label="Téléphone" required><input className="input" type="tel" placeholder="6XX XX XX XX" value={form.telephone} onChange={e => f('telephone', e.target.value)} required /></Field>
             <Field label="Email"><input className="input" type="email" value={form.email} onChange={e => f('email', e.target.value)} /></Field>
           </div>
         </div>

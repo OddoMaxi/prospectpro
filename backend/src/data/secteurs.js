@@ -1,0 +1,16 @@
+module.exports = [
+  'AGRICULTURE',
+  'ELEVAGE',
+  'PÊCHE',
+  'BTP',
+  'COMMERCE',
+  'RESTAURANT',
+  'HÔTELLERIE',
+  'INDUSTRIE',
+  'ARTISANAT',
+  'TRANSPORT / LOGISTIQUE',
+  'TÉLÉCOMMUNICATION',
+  'EDUCATION',
+  'FINANCE / ASSURANCE',
+  'AUTRES',
+];

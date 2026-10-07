@@ -22,12 +22,10 @@ const FIELDS = ['type', 'nom', 'prenom', 'nom_contact', 'prenom_contact', 'telep
 
 const telKey = t => String(t || '').replace(/\D/g, '').slice(-9);
 
+// Numéro unique partagé par les prospects et les clients
 async function nextNumero(q) {
-  const [lastP, lastC] = await Promise.all([
-    q.get("SELECT MAX(CAST(numero AS INTEGER)) v FROM prospects WHERE numero ~ '^[0-9]+$'"),
-    q.get("SELECT MAX(CAST(numero AS INTEGER)) v FROM clients WHERE numero ~ '^[0-9]+$'"),
-  ]);
-  return String(Math.max(Number(lastP?.v || 0), Number(lastC?.v || 0)) + 1).padStart(7, '0');
+  const r = await q.get("SELECT nextval('numero_seq') AS v");
+  return String(r.v).padStart(7, '0');
 }
 
 // Doublons potentiels parmi les prospects et clients de toute l'entreprise
