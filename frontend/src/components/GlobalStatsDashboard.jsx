@@ -152,7 +152,7 @@ function FinanceBlock({ title, icon: Icon, color, previsionnel, percu, percuLabe
 
 // Tableau de bord global de l'entreprise — identique pour l'administrateur et pour
 // chaque commercial (sénior ou juniore), consommant /api/stats/admin.
-export default function GlobalStatsDashboard({ title = 'Tableau de bord', subtitle = "Vue globale de l'activité commerciale" }) {
+export default function GlobalStatsDashboard({ title = 'Tableau de bord' }) {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState('mois')
@@ -197,7 +197,6 @@ export default function GlobalStatsDashboard({ title = 'Tableau de bord', subtit
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-900">{title}</h1>
-        <p className="text-gray-500 text-sm mt-0.5">{subtitle}</p>
       </div>
 
       {/* Agents / Prospects / Clients / Conversion */}

@@ -9,7 +9,7 @@ import { exportExcel, exportPdf } from '../../utils/export'
 import { personName, fmtMoney, fmtDate, fmtTel } from '../../utils/format'
 
 const TRANCHES = [
-  { key: 'echu', label: 'Échus non renouvelés', test: j => j < 0, cls: 'bg-red-100 text-red-700' },
+  { key: 'echu', label: 'Expirés (non renouvelés)', test: j => j < 0, cls: 'bg-red-100 text-red-700' },
   { key: 'j30', label: 'J-30', test: j => j >= 0 && j <= 30, cls: 'bg-red-50 text-red-700' },
   { key: 'j45', label: 'J-45', test: j => j > 30 && j <= 45, cls: 'bg-amber-50 text-amber-700' },
   { key: 'j60', label: 'J-60', test: j => j > 45 && j <= 60, cls: 'bg-yellow-50 text-yellow-700' },
@@ -43,7 +43,7 @@ export default function Echeances() {
   return (
     <div>
       {relance && <RelanceModal contratId={relance} onClose={() => setRelance(null)} />}
-      <PageHeader title={title} subtitle="Contrats arrivant à échéance dans les 90 jours. Un renouvellement payé au plus tard à J-30 ouvre droit à la prime de performance.">
+      <PageHeader title={title}>
         <ExportButtons disabled={!list.length}
           onExcel={() => exportExcel({ filename: 'echeancier', columns: COLUMNS, rows: list })}
           onPdf={() => exportPdf({ filename: 'echeancier', title: 'Échéancier', subtitle: 'Contrats arrivant à échéance sous 90 jours', columns: COLUMNS, rows: list })} />

@@ -41,7 +41,7 @@ export default function ProductList() {
 
   return (
     <div>
-      <PageHeader title="Produits d'assurance" subtitle={rows ? `${shown.length} produit(s)` : ''}>
+      <PageHeader title="Produits d'assurance">
         <select className="input w-44" value={branche} onChange={e => setBranche(e.target.value)}>
           <option value="">Toutes les branches</option>
           {branches.map(([id, nom]) => <option key={id} value={id}>{nom}</option>)}

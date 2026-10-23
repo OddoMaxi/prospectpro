@@ -12,6 +12,7 @@ import { exportExcel, exportPdf } from '../../utils/export'
 const PAGE_SIZE = 15
 
 const COLUMNS = [
+  { label: 'N°ID', value: 'numero_agent' },
   { label: 'Agent', value: a => personName(a) },
   { label: 'Identifiant', value: 'username' },
   { label: 'Niveau', value: a => (a.parent_agent_id ? `Junior de ${personName(a, 'parent_')}` : 'Sénior') },
@@ -89,7 +90,7 @@ export default function AgentList() {
   const shown = (rows || []).filter(a =>
     (!filters.statut || a.statut === filters.statut) &&
     (!filters.niveau || (filters.niveau === 'junior') === !!a.parent_agent_id) &&
-    (!s || `${personName(a)} ${a.username} ${a.telephone}`.toLowerCase().includes(s)))
+    (!s || `${a.numero_agent} ${personName(a)} ${a.username} ${a.telephone}`.toLowerCase().includes(s)))
   const paginated = shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
@@ -104,7 +105,7 @@ export default function AgentList() {
         </Modal>
       )}
 
-      <PageHeader title="Agents commerciaux" subtitle="L'administrateur crée les Séniors ; chaque Sénior crée ses Juniors.">
+      <PageHeader title="Agents commerciaux">
         <ExportButtons disabled={!shown.length}
           onExcel={() => exportExcel({ filename: 'agents', columns: COLUMNS, rows: shown })}
           onPdf={() => exportPdf({ filename: 'agents', title: 'Agents commerciaux', columns: COLUMNS, rows: shown })} />
@@ -147,7 +148,7 @@ export default function AgentList() {
                 <tr key={a.id} className={`hover:bg-gray-50 ${a.statut === 'supprime' ? 'opacity-60' : ''}`}>
                   <td className="py-3">
                     <p className="font-medium text-gray-900">{personName(a)}</p>
-                    <p className="text-xs text-gray-400">@{a.username}</p>
+                    <p className="text-xs text-gray-400"><span className="font-mono text-gray-600">N°{a.numero_agent}</span> · @{a.username}</p>
                   </td>
                   <td className="py-3 hidden md:table-cell text-xs">
                     {a.parent_agent_id

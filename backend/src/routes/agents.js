@@ -8,13 +8,14 @@ const { ah, HttpError } = require('../utils/http');
 const { audit } = require('../utils/audit');
 const { personName } = require('../utils/names');
 const { portefeuille, transfererPortefeuille } = require('../utils/affectations');
+const { nextNumeroAgent } = require('../utils/numeroAgent');
 
 const router = express.Router();
 
 const MULTIPLIERS = { annuel: 12, semestre: 6, trimestre: 3, mensuel: 1 };
 const PERIODES = Object.keys(MULTIPLIERS);
 
-const AGENT_COLS = `u.id, u.nom, u.prenom, u.sexe, u.email, u.telephone, u.username, u.type_agent,
+const AGENT_COLS = `u.id, u.numero_agent, u.nom, u.prenom, u.sexe, u.email, u.telephone, u.username, u.type_agent,
   u.raison_sociale, u.representant_legal, u.parent_agent_id, u.statut, u.statut_depuis,
   u.last_activity_at, u.interim_agent_id, u.created_at, u.deleted_at`;
 
@@ -118,21 +119,23 @@ async function createAgent(req, parentId) {
   const id = uuidv4();
   const interim = parentId ? null : await checkInterim(req.body.interim_agent_id, id);
 
-  await tx(async q => {
+  const numero_agent = await tx(async q => {
+    const numero_agent = await nextNumeroAgent(q, parentId);
     await q.run(
-      `INSERT INTO users (id, nom, prenom, sexe, email, telephone, role, username, password_hash,
+      `INSERT INTO users (id, numero_agent, nom, prenom, sexe, email, telephone, role, username, password_hash,
          must_change_password, type_agent, raison_sociale, representant_legal, parent_agent_id, interim_agent_id)
-       VALUES (?,?,?,?,?,?,'agent',?,?,1,?,?,?,?,?)`,
-      [id, idt.nom, idt.prenom, idt.sexe, idt.email, idt.telephone, username,
+       VALUES (?,?,?,?,?,?,?,'agent',?,?,1,?,?,?,?,?)`,
+      [id, numero_agent, idt.nom, idt.prenom, idt.sexe, idt.email, idt.telephone, username,
        bcrypt.hashSync(tempPassword, 10), idt.type_agent, idt.raison_sociale, idt.representant_legal,
        parentId, interim]
     );
     await saveObjectives(q, id, req.body.product_objectives, req.user.id);
     await audit(req, parentId ? 'creation_junior' : 'creation_senior',
-      { type: 'agent', id, label: personName(idt), apres: { ...idt, username, objectifs: cleanObjectives(req.body.product_objectives) } }, q);
+      { type: 'agent', id, label: personName(idt), apres: { numero_agent, ...idt, username, objectifs: cleanObjectives(req.body.product_objectives) } }, q);
+    return numero_agent;
   });
 
-  return { agent: { id, nom: idt.nom, prenom: idt.prenom, username }, credentials: { username, temp_password: tempPassword } };
+  return { agent: { id, numero_agent, nom: idt.nom, prenom: idt.prenom, username }, credentials: { numero_agent, username, temp_password: tempPassword } };
 }
 
 async function updateAgent(req, agentId) {

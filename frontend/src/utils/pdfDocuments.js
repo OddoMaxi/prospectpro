@@ -24,7 +24,7 @@ export async function facturePdf(f) {
       l.client_nom ? personName(l, 'client_') : '—',
       l.operation === 'renouvellement' ? 'Renouvellement' : l.operation === 'souscription' ? 'Souscription' : '—',
       NATURES_LIGNE[l.nature] || l.nature,
-      ROLES_LIGNE[l.role] || '—',
+      l.role === 'senior' ? `Quote-part Sénior (vente de ${personName(l, 'source_')})` : ROLES_LIGNE[l.role] || '—',
       l.base ? fmtMoney(l.base) : '—',
       l.taux ? fmtRate(l.taux) : '—',
       fmtMoney(l.montant),
@@ -38,7 +38,9 @@ export async function facturePdf(f) {
   const st = f.sous_totaux || {}
   const resume = [
     ['Commissions classiques', fmtMoney(st.commission)],
+    ...(st.quote_part_commission ? [['Quote-part commissions (ventes Juniors)', fmtMoney(st.quote_part_commission)]] : []),
     ['Primes de performance', fmtMoney(st.performance)],
+    ...(st.quote_part_performance ? [['Quote-part primes de performance (Juniors)', fmtMoney(st.quote_part_performance)]] : []),
     ...(st.retrocession ? [['Rétrocessions', fmtMoney(st.retrocession)]] : []),
     ...(st.ajustement ? [['Ajustements', fmtMoney(st.ajustement)]] : []),
     ['Total de la facture', fmtMoney(f.total)],

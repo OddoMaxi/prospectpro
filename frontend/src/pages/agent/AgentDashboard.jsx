@@ -35,7 +35,6 @@ export default function AgentDashboard() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Bonjour {personName(user)}</h1>
-          <p className="text-sm text-gray-500">{period.label} · comparaison avec la période précédente</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isSenior && (
@@ -112,10 +111,15 @@ export default function AgentDashboard() {
             ) : (
               <div className="card">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">Mes commissions sur la période</h2>
-                {[['Commissions classiques', c.commissions.commission], ['Primes de performance', c.commissions.performance], ['Rétrocessions', c.commissions.retrocession], ['Total acquis', c.commissions.dues], ['Payé sur la période', c.commissions.payees]].map(([l, v], i) => (
-                  <div key={l} className={`flex justify-between py-2 text-sm ${i === 3 ? 'border-t border-gray-100 font-semibold' : ''}`}><span className="text-gray-600">{l}</span><span className={`tabular-nums ${v < 0 ? 'text-red-600' : ''}`}>{fmtMoney(v)}</span></div>
+                {[
+                  ['Commissions classiques (mes ventes)', c.commissions.commission - c.commissions.quote_part_commission],
+                  ...(isSenior ? [['Quote-part commissions (ventes de mes Juniors)', c.commissions.quote_part_commission]] : []),
+                  ['Primes de performance (mes ventes)', c.commissions.performance - c.commissions.quote_part_performance],
+                  ...(isSenior ? [['Quote-part primes de performance (mes Juniors)', c.commissions.quote_part_performance]] : []),
+                  ['Rétrocessions', c.commissions.retrocession], ['Total acquis', c.commissions.dues], ['Payé sur la période', c.commissions.payees],
+                ].map(([l, v]) => (
+                  <div key={l} className={`flex justify-between py-2 text-sm ${l === 'Total acquis' ? 'border-t border-gray-100 font-semibold' : ''}`}><span className="text-gray-600">{l}</span><span className={`tabular-nums ${v < 0 ? 'text-red-600' : ''}`}>{fmtMoney(v)}</span></div>
                 ))}
-                {isSenior && <p className="text-xs text-gray-400 mt-2">Inclut vos parts Sénior sur les ventes de vos Juniors.</p>}
               </div>
             )}
           </div>

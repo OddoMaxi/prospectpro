@@ -35,7 +35,7 @@ router.get('/', authenticateToken, ah(async (req, res) => {
   if (statut) { sql += ' AND f.statut = ?'; args.push(statut); }
   if (annee) { sql += ' AND f.mois LIKE ?'; args.push(`${annee}-%`); }
   if (mois) { sql += ' AND f.mois = ?'; args.push(mois); }
-  sql += ' ORDER BY f.mois DESC, u.nom';
+  sql += ' ORDER BY f.mois DESC, u.nom, f.created_at DESC';
   res.json(await all(sql, args));
 }));
 
@@ -65,10 +65,17 @@ router.get('/:id', authenticateToken, ah(async (req, res) => {
     all(`SELECT p.*, u.nom AS created_by_nom, u.prenom AS created_by_prenom FROM facture_paiements p
          LEFT JOIN users u ON u.id = p.created_by WHERE p.facture_id = ? ORDER BY p.date_paiement, p.created_at`, [f.id]),
   ]);
-  const sum = nature => lignes.filter(l => l.nature === nature).reduce((s, l) => s + Number(l.montant), 0);
+  // Quote-part Sénior : part reçue par le Sénior sur les opérations de ses Juniors, isolée de ses propres ventes
+  const sum = (nature, quotePart) => round(lignes
+    .filter(l => l.nature === nature && (quotePart === undefined || (l.role === 'senior') === quotePart))
+    .reduce((s, l) => s + Number(l.montant), 0));
   res.json({
     ...f, lignes, paiements, reste: round(f.total - f.total_paye),
-    sous_totaux: { commission: sum('commission'), performance: sum('performance'), retrocession: sum('retrocession'), ajustement: sum('ajustement') },
+    sous_totaux: {
+      commission: sum('commission', false), quote_part_commission: sum('commission', true),
+      performance: sum('performance', false), quote_part_performance: sum('performance', true),
+      retrocession: sum('retrocession'), ajustement: sum('ajustement'),
+    },
   });
 }));
 

@@ -142,15 +142,12 @@ router.get('/', authenticateToken, ah(async (req, res) => {
   const args = [];
   let sql = `SELECT p.*, u.nom AS agent_nom, u.prenom AS agent_prenom, u.raison_sociale AS agent_raison_sociale,
       u.type_agent AS agent_type_agent
-    FROM prospects p JOIN users u ON u.id = p.agent_id WHERE p.deleted_at IS NULL`;
+    FROM prospects p JOIN users u ON u.id = p.agent_id WHERE p.deleted_at IS NULL AND p.statut NOT IN ('converti','client')`;
   const ids = await scopeIds(req.user);
   sql += scopeClause(ids, 'p.agent_id', args);
   if (agent_id) { sql += ' AND p.agent_id = ?'; args.push(agent_id); }
   if (type) { sql += ' AND p.type = ?'; args.push(type); }
-  if (statut) {
-    if (statut === 'converti') sql += " AND p.statut IN ('converti','client')";
-    else { sql += ' AND p.statut = ?'; args.push(statut); }
-  }
+  if (statut) { sql += ' AND p.statut = ?'; args.push(statut); }
   if (niveau_interet) { sql += ' AND p.niveau_interet = ?'; args.push(niveau_interet); }
   if (annee) { sql += ' AND EXTRACT(YEAR FROM p.date_prospection) = ?'; args.push(Number(annee)); }
   if (date_debut) { sql += ' AND p.date_prospection >= ?'; args.push(date_debut); }
@@ -218,6 +215,10 @@ router.patch('/:id/statut', authenticateToken, ah(async (req, res) => {
 // Conversion : création du client, du contrat (période de souscription) et premier encaissement éventuel
 router.post('/:id/convert', authenticateToken, ah(async (req, res) => {
   const p = await loadProspect(req, { ownOnly: true });
+  // Seul l'agent propriétaire actuel du prospect peut le convertir (pas l'admin, ni le Sénior)
+  if (p.agent_id !== req.user.id) {
+    throw new HttpError(403, "Seul l'agent propriétaire de ce prospect peut le transformer en client");
+  }
   if (!STATUTS_MODIFIABLES.includes(p.statut) || p.statut === 'perdu') {
     throw new HttpError(400, 'Ce prospect ne peut pas être converti (déjà converti ou perdu)');
   }

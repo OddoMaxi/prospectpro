@@ -148,6 +148,8 @@ router.post('/', authenticateToken, ah(async (req, res) => {
 router.post('/:id/renouveler', authenticateToken, ah(async (req, res) => {
   const c = await loadContrat(req, req.params.id);
   if (c.statut === 'resilie') throw new HttpError(400, 'Contrat résilié');
+  // Échéance dépassée sans renouvellement payé : le contrat est expiré, un nouveau contrat doit être créé
+  if (c.statut_calcule === 'expire') throw new HttpError(400, 'Contrat expiré : il ne peut plus être renouvelé. Créez un nouveau contrat pour le client.');
   const paiement = req.body.paiement && Number(req.body.paiement.montant) > 0 ? req.body.paiement : null;
   const r = await tx(async q => {
     const der = await q.get("SELECT * FROM contrat_periodes WHERE contrat_id = ? AND statut = 'active' ORDER BY numero DESC LIMIT 1", [c.id]);

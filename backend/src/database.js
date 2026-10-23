@@ -108,7 +108,9 @@ async function initializeSchema() {
     ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP DEFAULT NOW(),
     ADD COLUMN IF NOT EXISTS interim_agent_id TEXT,
     ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS deleted_by TEXT`);
+    ADD COLUMN IF NOT EXISTS deleted_by TEXT,
+    ADD COLUMN IF NOT EXISTS numero_agent TEXT`);
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS users_numero_agent ON users (numero_agent)');
 
   await pool.query(`CREATE TABLE IF NOT EXISTS prospects (
     id TEXT PRIMARY KEY,
@@ -385,9 +387,12 @@ async function initializeSchema() {
     validee_le TIMESTAMP,
     validee_par TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(agent_id, mois)
+    updated_at TIMESTAMP DEFAULT NOW()
   )`);
+  // Plusieurs factures par agent et par mois, mais une seule en brouillon à la fois
+  await pool.query('ALTER TABLE factures DROP CONSTRAINT IF EXISTS factures_agent_id_mois_key');
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS factures_brouillon_agent_mois
+    ON factures (agent_id, mois) WHERE statut = 'brouillon'`);
 
   await pool.query(`CREATE TABLE IF NOT EXISTS facture_paiements (
     id TEXT PRIMARY KEY,
@@ -565,6 +570,10 @@ async function initializeSchema() {
   // Reprise des données de la version précédente (une seule fois)
   const log = await require('./migrations/v2').migrationV2(tx);
   if (log && log.length) console.log(`Migration des données :\n  - ${log.join('\n  - ')}`);
+
+  // N°ID des agents créés avant l'introduction de la numérotation
+  const nb = await tx(q => require('./utils/numeroAgent').attribuerNumerosManquants(q));
+  if (nb) console.log(`N°ID attribué à ${nb} agent(s) existant(s)`);
 }
 
 module.exports = { db, pool, tx, initializeSchema, get, all, run, DEFAULT_PARAMETRES };

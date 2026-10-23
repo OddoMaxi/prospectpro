@@ -51,7 +51,7 @@ export default function ClientList() {
   const title = isAdmin ? 'Clients' : 'Mes clients'
   return (
     <div>
-      <PageHeader title={title} subtitle={`Exercice ${annee} · ${list.length} client(s) acquis ou sous contrat sur l'exercice`}>
+      <PageHeader title={title}>
         <ExportButtons disabled={!list.length}
           onExcel={() => exportExcel({ filename: 'clients', columns: COLUMNS, rows: list })}
           onPdf={() => exportPdf({ filename: 'clients', title: 'Portefeuille clients', subtitle: `Exercice ${annee}`, columns: COLUMNS, rows: list })} />

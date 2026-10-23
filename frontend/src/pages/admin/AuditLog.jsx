@@ -49,7 +49,7 @@ export default function AuditLog() {
 
   return (
     <div>
-      <PageHeader title="Journal d'audit" subtitle="Créations, suspensions, suppressions, transferts, paiements et modifications sensibles.">
+      <PageHeader title="Journal d'audit">
         <ExportButtons disabled={!list.length}
           onExcel={() => exportExcel({ filename: 'journal_audit', columns: COLUMNS, rows: list })}
           onPdf={() => exportPdf({ filename: 'journal_audit', title: "Journal d'audit", columns: COLUMNS.slice(0, 4), rows: list })} />

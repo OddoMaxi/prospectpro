@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ArrowLeft, RefreshCw, Wallet, XCircle, MessageCircle, Undo2 } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Wallet, XCircle, MessageCircle, Undo2, FilePlus } from 'lucide-react'
 import { api } from '../../api'
 import { useAuth, useBase } from '../../context/AuthContext'
 import RelanceModal from '../../components/RelanceModal'
+import ContratForm from '../../components/ContratForm'
 import { Spinner, Badge, Modal, Field, MoneyInput, errMsg } from '../../components/ui'
 import {
   personName, fmtMoney, fmtDate, fmtRate, today, MODES_PAIEMENT, STATUTS_CONTRAT, NATURES_LIGNE, ROLES_LIGNE, STATUTS_FACTURE,
@@ -43,8 +44,10 @@ export default function ContratDetail() {
 
   const derniere = c.periodes.filter(p => p.statut === 'active').slice(-1)[0]
   const actif = c.statut !== 'resilie'
-  const peutRenouveler = actif && derniere?.date_paiement_integral
-  const resteDerniere = derniere ? derniere.prime_ttc - derniere.montant_paye : 0
+  // Expiré (échéance dépassée sans renouvellement payé) : plus de renouvellement, un nouveau contrat est créé
+  const expire = c.statut_calcule === 'expire'
+  const peutRenouveler = actif && !expire && derniere?.date_paiement_integral
+  const resteDerniere = derniere && !(expire && derniere.type === 'renouvellement') ? derniere.prime_ttc - derniere.montant_paye : 0
 
   const run = async (fn, after) => {
     setSaving(true)
@@ -59,7 +62,8 @@ export default function ContratDetail() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
-      {modal?.type === 'relance' && <RelanceModal contratId={c.id} onClose={() => setModal(null)} />}
+      {modal?.type === 'nouveau' && <ContratForm client={c.client} onClose={() => setModal(null)} onDone={() => { setModal(null); navigate(`${base}/clients/${c.client_id}`) }} />}
+      {modal?.type === 'relance' &&<RelanceModal contratId={c.id} onClose={() => setModal(null)} />}
       {modal?.type === 'encaisser' && (
         <Modal title="Enregistrer un encaissement" subtitle={`Période ${modal.periode.numero} · prime TTC ${fmtMoney(modal.periode.prime_ttc)}`} onClose={() => setModal(null)}>
           <form onSubmit={e => { e.preventDefault(); run(() => api.post(`/contrats/periodes/${modal.periode.id}/encaissements`, pay)) }} className="space-y-4">
@@ -100,7 +104,8 @@ export default function ContratDetail() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {actif && <button onClick={() => setModal({ type: 'relance' })} className="btn btn-secondary"><MessageCircle size={15} />Relancer</button>}
+          {actif && !expire && <button onClick={() => setModal({ type: 'relance' })} className="btn btn-secondary"><MessageCircle size={15} />Relancer</button>}
+          {expire && <button onClick={() => setModal({ type: 'nouveau' })} className="btn btn-primary"><FilePlus size={15} />Nouveau contrat</button>}
           {peutRenouveler && <button onClick={() => { setPay(emptyPay('')); setModal({ type: 'renouveler' }) }} className="btn btn-primary"><RefreshCw size={15} />Renouveler</button>}
           {actif && derniere && resteDerniere > 0 && <button onClick={() => openEncaisser(derniere)} className="btn btn-success"><Wallet size={15} />Encaisser</button>}
           {isAdmin && actif && <button onClick={() => setModal({ type: 'resilier' })} className="btn btn-danger"><XCircle size={15} />Résilier</button>}
@@ -136,7 +141,7 @@ export default function ContratDetail() {
                   <td className="py-2.5 text-right tabular-nums hidden md:table-cell">{fmtMoney(p.prime_commerciale)}</td>
                   <td className="py-2.5 text-right tabular-nums font-medium">{fmtMoney(p.prime_ttc)}</td>
                   <td className="py-2.5 text-right tabular-nums">{fmtMoney(p.montant_paye)}</td>
-                  <td className="py-2.5 text-xs">{p.date_paiement_integral ? <span className="text-emerald-700">{fmtDate(p.date_paiement_integral)}</span> : actif ? <button onClick={() => openEncaisser(p)} className="text-blue-600 hover:underline">Reste {fmtMoney(p.prime_ttc - p.montant_paye)}</button> : '—'}</td>
+                  <td className="py-2.5 text-xs">{p.date_paiement_integral ? <span className="text-emerald-700">{fmtDate(p.date_paiement_integral)}</span> : actif && !(expire && p.type === 'renouvellement') ? <button onClick={() => openEncaisser(p)} className="text-blue-600 hover:underline">Reste {fmtMoney(p.prime_ttc - p.montant_paye)}</button> : '—'}</td>
                   <td className="py-2.5 text-xs hidden md:table-cell">{personName(p, 'agent_')}</td>
                 </tr>
                 {p.encaissements.map(e => (

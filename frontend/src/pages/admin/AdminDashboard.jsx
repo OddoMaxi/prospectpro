@@ -47,7 +47,6 @@ export default function AdminDashboard() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Tableau de bord</h1>
-          <p className="text-sm text-gray-500">{period.label} · comparaison avec la période précédente et la même période N-1</p>
         </div>
         <PeriodSelector period={period} />
       </div>

@@ -2,23 +2,16 @@ const { v4: uuidv4 } = require('uuid');
 const D = require('./dates');
 const { round } = require('./tarif');
 
-// Facture brouillon de l'agent pour le mois donné ; si ce mois est déjà validé,
-// la ligne est reportée sur le premier mois suivant encore en brouillon.
+// Facture brouillon de l'agent pour le mois donné. Si les factures de ce mois sont déjà validées,
+// une nouvelle facture brouillon est ouverte sur le même mois : un agent peut avoir plusieurs factures par mois.
 async function factureBrouillon(q, agentId, mois) {
-  let m = mois;
-  for (let i = 0; i < 240; i++) {
-    const f = await q.get('SELECT id, statut FROM factures WHERE agent_id = ? AND mois = ?', [agentId, m]);
-    if (!f) {
-      const n = await q.get('SELECT COUNT(*) c FROM factures WHERE mois = ?', [m]);
-      const id = uuidv4();
-      const numero = `FC-${m.replace('-', '')}-${String(Number(n.c) + 1).padStart(4, '0')}`;
-      await q.run('INSERT INTO factures (id, numero, agent_id, mois) VALUES (?,?,?,?)', [id, numero, agentId, m]);
-      return { id, mois: m };
-    }
-    if (f.statut === 'brouillon') return { id: f.id, mois: m };
-    m = D.nextMonth(m);
-  }
-  throw new Error('Aucune facture brouillon disponible');
+  const f = await q.get("SELECT id FROM factures WHERE agent_id = ? AND mois = ? AND statut = 'brouillon'", [agentId, mois]);
+  if (f) return { id: f.id, mois };
+  const n = await q.get('SELECT COUNT(*) c FROM factures WHERE mois = ?', [mois]);
+  const id = uuidv4();
+  const numero = `FC-${mois.replace('-', '')}-${String(Number(n.c) + 1).padStart(4, '0')}`;
+  await q.run('INSERT INTO factures (id, numero, agent_id, mois) VALUES (?,?,?,?)', [id, numero, agentId, mois]);
+  return { id, mois };
 }
 
 async function recalcFacture(q, factureId) {

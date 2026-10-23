@@ -57,6 +57,8 @@ export default function ProspectList({ admin = false }) {
 
   const canEdit = p => !admin && p.agent_id === user?.id && MODIFIABLES.includes(p.statut)
   const canAct = p => (admin || p.agent_id === user?.id) && MODIFIABLES.includes(p.statut)
+  // Seul l'agent propriétaire actuel du prospect peut le transformer en client
+  const canConvert = p => !admin && p.agent_id === user?.id && MODIFIABLES.includes(p.statut) && p.statut !== 'perdu'
 
   const handleDelete = async p => {
     if (!confirm(`Supprimer le prospect ${personName(p)} ?`)) return
@@ -75,7 +77,7 @@ export default function ProspectList({ admin = false }) {
     <div>
       {convertId && <ContratForm prospectId={convertId} onClose={() => setConvertId(null)} onDone={() => { setConvertId(null); load() }} />}
 
-      <PageHeader title={title} subtitle={`Exercice ${annee} · ${rows.length} prospect(s)`}>
+      <PageHeader title={title}>
         <ExportButtons disabled={!rows.length}
           onExcel={() => exportExcel({ filename: 'prospects', columns: COLUMNS, rows })}
           onPdf={() => exportPdf({ filename: 'prospects', title, subtitle: `Exercice ${annee}`, columns: COLUMNS, rows })} />
@@ -93,7 +95,7 @@ export default function ProspectList({ admin = false }) {
         </select>
         <select className="input" value={filters.statut} onChange={e => setF('statut', e.target.value)}>
           <option value="">Tous les statuts</option>
-          {['prospect', 'en_cours', 'perdu', 'converti'].map(k => <option key={k} value={k}>{STATUTS_PROSPECT[k].label}</option>)}
+          {['prospect', 'en_cours', 'perdu'].map(k => <option key={k} value={k}>{STATUTS_PROSPECT[k].label}</option>)}
         </select>
         <select className="input" value={filters.niveau_interet} onChange={e => setF('niveau_interet', e.target.value)}>
           <option value="">Tout intérêt</option>
@@ -153,11 +155,10 @@ export default function ProspectList({ admin = false }) {
                   <td className="py-3 text-right">
                     <div className="flex items-center gap-1.5 justify-end">
                       {canEdit(p) && <button onClick={() => navigate(`/agent/prospects/${p.id}/edit`)} className="btn btn-secondary btn-sm" title="Modifier"><Edit size={13} /></button>}
-                      {canAct(p) && p.statut !== 'perdu' && (
+                      {canConvert(p) && (
                         <button onClick={() => setConvertId(p.id)} className="btn btn-success btn-sm" title="Convertir en client"><UserCheck size={13} /></button>
                       )}
                       {canAct(p) && <button onClick={() => handleDelete(p)} className="btn btn-danger btn-sm" title="Supprimer"><Trash2 size={13} /></button>}
-                      {!canAct(p) && p.client_id && <button onClick={() => navigate(`${admin ? '/admin' : '/agent'}/clients/${p.client_id}`)} className="text-xs text-blue-600 hover:underline">Voir le client</button>}
                     </div>
                   </td>
                 </tr>

@@ -84,10 +84,15 @@ export default function FactureDetail() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         {[
-          ['Commissions', st.commission], ['Primes de performance', st.performance], ['Rétrocessions', st.retrocession], ['Ajustements', st.ajustement],
+          ['Commissions', st.commission],
+          // Quote-part du Sénior sur les opérations de ses Juniors
+          ...(st.quote_part_commission ? [['Quote-part commissions (Juniors)', st.quote_part_commission]] : []),
+          ['Primes de performance', st.performance],
+          ...(st.quote_part_performance ? [['Quote-part performance (Juniors)', st.quote_part_performance]] : []),
+          ['Rétrocessions', st.retrocession], ['Ajustements', st.ajustement],
           ['Total', f.total], ['Payé', f.total_paye], ['Reste à payer', f.reste],
-        ].map(([l, v], i) => (
-          <div key={l} className={`card py-3 px-4 ${i === 6 ? 'bg-amber-50 border-amber-100' : ''}`}><p className="text-xs text-gray-500">{l}</p><p className={`font-bold tabular-nums ${v < 0 ? 'text-red-600' : ''}`}>{fmtMoney(v)}</p></div>
+        ].map(([l, v], i, all) => (
+          <div key={l} className={`card py-3 px-4 ${i === all.length - 1 ? 'bg-amber-50 border-amber-100' : ''}`}><p className="text-xs text-gray-500">{l}</p><p className={`font-bold tabular-nums ${v < 0 ? 'text-red-600' : ''}`}>{fmtMoney(v)}</p></div>
         ))}
       </div>
       {f.statut === 'brouillon' && <p className="text-xs text-gray-500">Facture en brouillon : elle se complète automatiquement au fil du mois. L'administrateur la valide avant paiement.</p>}

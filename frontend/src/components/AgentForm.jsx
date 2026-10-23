@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Copy, CheckCircle, User, Building2, UserPlus, History } from 'lucide-react'
+import { ArrowLeft, Copy, CheckCircle, User, Building2, UserPlus, History, Plus, Trash2 } from 'lucide-react'
 import { api } from '../api'
 import { Spinner, Field, errMsg } from './ui'
 import { fmtMoney, fmtNum, fmtDateTime, personName } from '../utils/format'
@@ -18,7 +18,7 @@ const mult = p => HORIZONS.find(h => h.value === p)?.mult ?? 12
 
 function Credentials({ credentials, label, onDone }) {
   const [copied, setCopied] = useState(false)
-  const copy = () => navigator.clipboard.writeText(`Identifiant : ${credentials.username}\nMot de passe temporaire : ${credentials.temp_password}`)
+  const copy = () => navigator.clipboard.writeText(`N°ID : ${credentials.numero_agent}\nIdentifiant : ${credentials.username}\nMot de passe temporaire : ${credentials.temp_password}`)
     .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
   return (
     <div className="max-w-md mx-auto">
@@ -31,6 +31,7 @@ function Credentials({ credentials, label, onDone }) {
           </div>
         </div>
         <div className="bg-white rounded-xl border border-emerald-200 p-4 mb-4 space-y-3">
+          <div><p className="text-xs text-gray-500 uppercase">N°ID agent</p><p className="text-lg font-mono font-bold">{credentials.numero_agent}</p></div>
           <div><p className="text-xs text-gray-500 uppercase">Identifiant</p><p className="text-lg font-mono font-bold">{credentials.username}</p></div>
           <div><p className="text-xs text-gray-500 uppercase">Mot de passe temporaire</p><p className="text-lg font-mono font-bold tracking-widest">{credentials.temp_password}</p></div>
         </div>
@@ -51,6 +52,8 @@ export default function AgentForm({ id, mode, backPath }) {
   const [typeAgent, setTypeAgent] = useState('physique')
   const [form, setForm] = useState({ nom: '', prenom: '', sexe: '', raison_sociale: '', representant_legal: '', email: '', telephone: '', interim_agent_id: '', parent_agent_id: '' })
   const [objectives, setObjectives] = useState(null)
+  const [products, setProducts] = useState([])
+  const [draft, setDraft] = useState({ product_id: '', objectif_mensuel: '', periode: 'annuel' })
   const [agent, setAgent] = useState(null)
   const [interims, setInterims] = useState([])
   const [saving, setSaving] = useState(false)
@@ -70,11 +73,10 @@ export default function AgentForm({ id, mode, backPath }) {
             interim_agent_id: a.interim_agent_id || '', parent_agent_id: a.parent_agent_id || '',
           })
         }
-        const existing = a?.product_objectives || []
-        setObjectives(pr.data.map(p => {
-          const ex = existing.find(o => o.product_id === p.id)
-          return { product_id: p.id, product_nom: p.nom, prime_pure: p.prime_pure, objectif_mensuel: ex ? String(ex.objectif_mensuel) : '', periode: ex?.periode || 'annuel' }
-        }))
+        setProducts(pr.data)
+        setObjectives((a?.product_objectives || []).map(o => ({
+          product_id: o.product_id, product_nom: o.product_nom, prime_pure: o.prime_pure, objectif_mensuel: String(o.objectif_mensuel), periode: o.periode || 'annuel',
+        })))
       })
       .catch(() => { toast.error('Agent introuvable'); navigate(backPath) })
     if (mode === 'admin') api.get('/agents/selectable').then(r => setInterims(r.data.filter(a => a.id !== id))).catch(() => {})
@@ -107,6 +109,16 @@ export default function AgentForm({ id, mode, backPath }) {
   if (credentials) return <Credentials credentials={credentials} label={label} onDone={() => navigate(backPath)} />
   if (!objectives) return <Spinner />
 
+  // Objectifs ajoutés un par un : un produit ne peut figurer qu'une fois
+  const disponibles = products.filter(p => !objectives.some(o => o.product_id === p.id))
+  const addObjective = () => {
+    const p = products.find(x => x.id === draft.product_id)
+    if (!p) return toast.error('Choisissez un produit')
+    if (!(Number(draft.objectif_mensuel) > 0)) return toast.error('Indiquez un nombre de contrats supérieur à 0')
+    setObjectives(prev => [...prev, { product_id: p.id, product_nom: p.nom, prime_pure: p.prime_pure, objectif_mensuel: draft.objectif_mensuel, periode: draft.periode }])
+    setDraft({ product_id: '', objectif_mensuel: '', periode: 'annuel' })
+  }
+
   const totalPrime = objectives.reduce((s, o) => s + (Number(o.objectif_mensuel) || 0) * mult(o.periode) * (Number(o.prime_pure) || 0), 0)
 
   return (
@@ -114,7 +126,7 @@ export default function AgentForm({ id, mode, backPath }) {
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate(backPath)} className="btn btn-secondary btn-sm"><ArrowLeft size={15} />Retour</button>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">{isEdit ? `Modifier : ${personName(agent)}` : `Nouvel ${label}`}</h1>
+          <h1 className="text-xl font-bold text-gray-900">{isEdit ? `Modifier : ${personName(agent)}${agent?.numero_agent ? ` (N°${agent.numero_agent})` : ''}` : `Nouvel ${label}`}</h1>
           <p className="text-sm text-gray-500">
             {isJunior && mode === 'admin' && agent ? `Junior de ${personName(agent, 'parent_')} — objectifs normalement fixés par son Sénior` : label}
           </p>
@@ -166,9 +178,9 @@ export default function AgentForm({ id, mode, backPath }) {
 
         <div className="card">
           <h2 className="text-sm font-semibold text-gray-700">Objectifs commerciaux</h2>
-          <p className="text-xs text-gray-400 mb-4">Nombre de contrats à souscrire par mois et par produit. Toute modification conserve les anciennes valeurs dans l'historique.</p>
-          {objectives.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">Aucun produit actif.</p> : (
-            <div className="overflow-x-auto">
+          <p className="text-xs text-gray-400 mb-4">Ajoutez les objectifs produit par produit (nombre de contrats à souscrire par mois). Toute modification conserve les anciennes valeurs dans l'historique.</p>
+          {objectives.length === 0 ? <p className="text-sm text-gray-400 py-3 text-center">Aucun objectif ajouté.</p> : (
+            <div className="overflow-x-auto mb-4">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 text-xs text-gray-500 uppercase tracking-wide">
@@ -177,6 +189,7 @@ export default function AgentForm({ id, mode, backPath }) {
                     <th className="pb-2 text-right font-medium w-32">Affichage</th>
                     <th className="pb-2 text-right font-medium">Objectif (nb)</th>
                     <th className="pb-2 text-right font-medium">Objectif (prime pure)</th>
+                    <th className="pb-2 w-10"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -190,16 +203,41 @@ export default function AgentForm({ id, mode, backPath }) {
                         <td className="py-2"><select className="input" value={o.periode} onChange={e => set('periode', e.target.value)}>{HORIZONS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}</select></td>
                         <td className="py-2 text-right font-semibold text-blue-700">{nb ? fmtNum(nb) : '—'}</td>
                         <td className="py-2 text-right font-semibold text-emerald-700">{nb ? fmtMoney(nb * o.prime_pure) : '—'}</td>
+                        <td className="py-2 text-right">
+                          <button type="button" onClick={() => setObjectives(prev => prev.filter((_, j) => j !== i))} className="btn btn-danger btn-sm" title="Retirer cet objectif"><Trash2 size={13} /></button>
+                        </td>
                       </tr>
                     )
                   })}
                 </tbody>
                 {totalPrime > 0 && (
-                  <tfoot><tr className="border-t-2 border-gray-200 text-sm font-semibold"><td className="pt-2" colSpan={4}>Total</td><td className="pt-2 text-right text-emerald-700">{fmtMoney(totalPrime)}</td></tr></tfoot>
+                  <tfoot><tr className="border-t-2 border-gray-200 text-sm font-semibold"><td className="pt-2" colSpan={4}>Total</td><td className="pt-2 text-right text-emerald-700">{fmtMoney(totalPrime)}</td><td /></tr></tfoot>
                 )}
               </table>
             </div>
           )}
+          {disponibles.length > 0 ? (
+            <div className="flex flex-wrap items-end gap-2 bg-gray-50 rounded-xl p-3">
+              <div className="flex-1 min-w-[180px]">
+                <label className="text-xs text-gray-500">Produit</label>
+                <select className="input" value={draft.product_id} onChange={e => setDraft(d => ({ ...d, product_id: e.target.value }))}>
+                  <option value="">Choisir un produit…</option>
+                  {disponibles.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}
+                </select>
+              </div>
+              <div className="w-28">
+                <label className="text-xs text-gray-500">Contrats / mois</label>
+                <input type="number" min="1" className="input text-right" value={draft.objectif_mensuel} placeholder="0"
+                  onChange={e => setDraft(d => ({ ...d, objectif_mensuel: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addObjective() } }} />
+              </div>
+              <div className="w-32">
+                <label className="text-xs text-gray-500">Affichage</label>
+                <select className="input" value={draft.periode} onChange={e => setDraft(d => ({ ...d, periode: e.target.value }))}>{HORIZONS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}</select>
+              </div>
+              <button type="button" onClick={addObjective} className="btn btn-primary"><Plus size={15} />Ajouter</button>
+            </div>
+          ) : products.length === 0 && <p className="text-sm text-gray-400 text-center">Aucun produit actif.</p>}
         </div>
 
         {mode === 'admin' && isJunior && (

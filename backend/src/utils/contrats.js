@@ -55,6 +55,10 @@ async function encaisser(q, periodeId, paiement, userId) {
      JOIN contrats c ON c.id = p.contrat_id WHERE p.id = ?`, [periodeId]);
   if (!p || p.statut !== 'active') throw new HttpError(404, 'Période introuvable');
   if (p.contrat_statut === 'resilie') throw new HttpError(400, 'Contrat résilié');
+  // Un renouvellement doit être soldé au plus tard à l'échéance (= début de la nouvelle période)
+  if (p.type === 'renouvellement' && paiement.date_paiement > p.date_debut) {
+    throw new HttpError(400, "Contrat expiré : le renouvellement devait être payé au plus tard à l'échéance. Créez un nouveau contrat pour le client.");
+  }
 
   const reste = round(p.prime_ttc - p.montant_paye);
   const montant = round(paiement.montant);

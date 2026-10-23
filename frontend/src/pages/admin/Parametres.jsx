@@ -45,7 +45,7 @@ export default function Parametres() {
 
   return (
     <form onSubmit={save} className="max-w-3xl mx-auto">
-      <PageHeader title="Paramètres" subtitle="Délais et seuils modifiables sans intervention du développeur. Les taux de commission et de taxe se règlent sur les produits et les branches.">
+      <PageHeader title="Paramètres">
         <button disabled={saving} className="btn btn-primary"><Save size={16} />{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
       </PageHeader>
       <div className="space-y-5">

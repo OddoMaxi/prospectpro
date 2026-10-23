@@ -68,6 +68,8 @@ async function metrics(r, f) {
       return get(`SELECT COALESCE(SUM(cl.montant),0) dues,
              COALESCE(SUM(CASE WHEN cl.nature = 'commission' THEN cl.montant END),0) commission,
              COALESCE(SUM(CASE WHEN cl.nature = 'performance' THEN cl.montant END),0) performance,
+             COALESCE(SUM(CASE WHEN cl.nature = 'commission' AND cl.role = 'senior' THEN cl.montant END),0) quote_part_commission,
+             COALESCE(SUM(CASE WHEN cl.nature = 'performance' AND cl.role = 'senior' THEN cl.montant END),0) quote_part_performance,
              COALESCE(SUM(CASE WHEN cl.nature = 'retrocession' THEN cl.montant END),0) retrocession
            FROM commission_lignes cl LEFT JOIN products pr ON pr.id = cl.product_id
            WHERE cl.date_acquisition BETWEEN ? AND ? ${cc.sql}`, [r.debut, r.fin, ...cc.args]);
@@ -106,7 +108,8 @@ async function metrics(r, f) {
       taux: echus.echus ? Math.round(echus.renouveles / echus.echus * 1000) / 10 : null,
     },
     encaissements: Math.round(enc.v),
-    commissions: { dues: comm.dues, commission: comm.commission, performance: comm.performance, retrocession: comm.retrocession, payees: payees.v },
+    commissions: { dues: comm.dues, commission: comm.commission, performance: comm.performance, retrocession: comm.retrocession, payees: payees.v,
+      quote_part_commission: comm.quote_part_commission, quote_part_performance: comm.quote_part_performance },
     pipeline: { crees: crees.v, convertis: convertis.v, taux: crees.v ? Math.round(convertis.v / crees.v * 1000) / 10 : null },
   };
 }

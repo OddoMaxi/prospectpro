@@ -53,7 +53,7 @@ export default function BranchList() {
   return (
     <div>
       {edit !== undefined && <BranchModal branche={edit} onClose={() => setEdit(undefined)} onSaved={() => { setEdit(undefined); load() }} />}
-      <PageHeader title="Branches d'assurance" subtitle="Les produits sont créés dans une branche ; les rapports peuvent être filtrés par branche.">
+      <PageHeader title="Branches d'assurance">
         <button onClick={() => setEdit(null)} className="btn btn-primary"><Plus size={16} />Nouvelle branche</button>
       </PageHeader>
       {!rows ? <Spinner /> : rows.length === 0 ? (

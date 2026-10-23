@@ -32,7 +32,7 @@ export default function Affectations() {
 
   return (
     <div>
-      <PageHeader title="Historique des affectations" subtitle="Le rattachement client → agent n'est jamais écrasé : chaque transfert est conservé.">
+      <PageHeader title="Historique des affectations">
         <ExportButtons disabled={!list.length}
           onExcel={() => exportExcel({ filename: 'affectations', columns: COLUMNS, rows: list })}
           onPdf={() => exportPdf({ filename: 'affectations', title: 'Historique des affectations', columns: COLUMNS, rows: list })} />

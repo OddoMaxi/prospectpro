@@ -48,7 +48,7 @@ export default function ContratList() {
 
   return (
     <div>
-      <PageHeader title={isAdmin ? 'Contrats' : 'Mes contrats'} subtitle={`Contrats en vigueur pendant l'exercice ${annee} · ${list.length}`}>
+      <PageHeader title={isAdmin ? 'Contrats' : 'Mes contrats'}>
         <ExportButtons disabled={!list.length}
           onExcel={() => exportExcel({ filename: 'contrats', columns: COLUMNS, rows: list })}
           onPdf={() => exportPdf({ filename: 'contrats', title: 'Contrats', subtitle: `Exercice ${annee}`, columns: COLUMNS, rows: list })} />

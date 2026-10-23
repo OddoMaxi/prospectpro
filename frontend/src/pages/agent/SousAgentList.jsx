@@ -25,7 +25,7 @@ export default function SousAgentList() {
           <p className="text-2xl font-mono font-bold tracking-widest text-center bg-gray-50 rounded-xl py-4">{creds.temp_password}</p>
         </Modal>
       )}
-      <PageHeader title="Mes agents Juniors" subtitle="Leurs performances consolidées sont sur votre tableau de bord (vue « Mon équipe »).">
+      <PageHeader title="Mes agents Juniors">
         <Link to="/agent/juniors/create" className="btn btn-primary"><Plus size={16} />Nouveau Junior</Link>
       </PageHeader>
       {!rows ? <Spinner /> : rows.length === 0 ? <Empty icon={Users} text="Aucun agent Junior" /> : (
@@ -45,7 +45,7 @@ export default function SousAgentList() {
             <tbody className="divide-y divide-gray-50">
               {rows.map(a => (
                 <tr key={a.id} className="hover:bg-gray-50">
-                  <td className="py-3"><p className="font-medium text-gray-900">{personName(a)}</p><p className="text-xs text-gray-400">@{a.username}</p></td>
+                  <td className="py-3"><p className="font-medium text-gray-900">{personName(a)}</p><p className="text-xs text-gray-400"><span className="font-mono text-gray-600">N°{a.numero_agent}</span> · @{a.username}</p></td>
                   <td className="py-3 text-gray-600 hidden sm:table-cell">{fmtTel(a.telephone)}</td>
                   <td className="py-3 text-right">{a.total_prospects}</td>
                   <td className="py-3 text-right">{a.total_clients}</td>

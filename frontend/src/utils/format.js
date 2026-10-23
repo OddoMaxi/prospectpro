@@ -105,4 +105,4 @@ export const NATURES_LIGNE = {
   ajustement: 'Ajustement',
 }
 
-export const ROLES_LIGNE = { direct: 'Vente directe', junior: 'Part Junior', senior: 'Part Sénior' }
+export const ROLES_LIGNE = { direct: 'Vente directe', junior: 'Part Junior', senior: 'Quote-part Sénior' }

@@ -49,7 +49,7 @@ export default function Referentiels() {
         </Modal>
       )}
 
-      <PageHeader title="Référentiels Profession et Secteur" subtitle="Les valeurs nouvelles saisies par les agents arrivent ici « à valider ».">
+      <PageHeader title="Référentiels Profession et Secteur">
         {Object.entries(TYPES).map(([k, l]) => <button key={k} onClick={() => setType(k)} className={`btn btn-sm ${type === k ? 'btn-primary' : 'btn-secondary'}`}>{l}</button>)}
       </PageHeader>
       <div className="flex gap-2 mb-4">

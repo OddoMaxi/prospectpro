@@ -148,7 +148,6 @@ export default function ProspectForm() {
         <button onClick={() => navigate(-1)} className="btn btn-secondary btn-sm"><ArrowLeft size={15} />Retour</button>
         <div>
           <h1 className="text-xl font-bold text-gray-900">{isEdit ? 'Modifier le prospect' : 'Nouveau prospect'}</h1>
-          <p className="text-sm text-gray-500">{isEdit ? 'Modifier les informations' : 'Les doublons (même téléphone, même nom et date de naissance, même raison sociale) sont signalés avant l\'enregistrement.'}</p>
         </div>
       </div>
 

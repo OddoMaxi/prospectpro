@@ -42,7 +42,7 @@ export default function FactureList() {
 
   return (
     <div>
-      <PageHeader title={title} subtitle={`Exercice ${annee} · une facture par agent et par mois`}>
+      <PageHeader title={title}>
         <ExportButtons disabled={!list.length}
           onExcel={() => exportExcel({ filename: 'factures_commissions', columns: COLUMNS, rows: list })}
           onPdf={() => exportPdf({ filename: 'factures_commissions', title, subtitle: `Exercice ${annee}`, columns: COLUMNS, rows: list })} />
