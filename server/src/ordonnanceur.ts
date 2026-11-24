@@ -16,6 +16,7 @@ import { appliquerReorganisationsDifferees } from './modules/organisation/servic
 import { scellerEcritures } from './modules/comptabilite/moteur.js';
 import { expirerDossiers } from './modules/production/dossiers.js';
 import { envoyerRappels, traiterEcheances } from './modules/production/renouvellement.js';
+import { etablirFactures } from './modules/commercial/factures.js';
 
 export interface Traitement { nom: string; cron: string; libelle: string; executer: () => Promise<unknown> }
 
@@ -36,6 +37,11 @@ export const TRAITEMENTS: Traitement[] = [
   quotidien('ages-limites', 'Enfants atteignant l\'âge limite : notification et sortie (REF-RG-009)', '0 6 * * *', q => traiterAgesLimites(q, systeme, aujourdhui())),
   quotidien('propositions-expiration', 'Expiration des propositions non finalisées (PROD-RG-001)', '10 0 * * *', q => expirerDossiers(q)),
   quotidien('echeances-polices', 'Échéances : renouvellement par versements, polices échues puis expirées (PROD-RG-025 à 027)', '20 0 * * *', q => traiterEcheances(q, systeme)),
+  // Le 1er de chaque mois, factures du mois écoulé (COM-RG-042)
+  quotidien('factures-commissions', 'Établissement des factures mensuelles de commissions (COM-RG-042)', '30 1 1 * *', q => {
+    const d = new Date(); d.setUTCDate(0);
+    return etablirFactures(q, systeme, d.toISOString().slice(0, 7));
+  }),
   quotidien('rappels-renouvellement', 'Rappels de renouvellement J-30, J-15, J-7, J-1 (PROD-RG-021)', '0 8 * * *', q => envoyerRappels(q)),
   quotidien('reclamations-escalade', 'Escalade des réclamations sans réponse à l\'échéance (§ 8.10)', '0 7 * * *', q => escaladerReclamations(q, systeme)),
 ];

@@ -155,6 +155,9 @@ export const DELEGATIONS: { type: string; niveaux: { niveau: number; profils: st
   { type: 'SCHEMA_COMPTABLE', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
   { type: 'EXTOURNE_ECRITURE', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
   { type: 'AGREMENT_INTERVENANT', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }, { niveau: 2, profils: ['CONFORMITE'] }] },
+  { type: 'FACTURE_COMMISSION', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }] },
+  { type: 'PAIEMENT_COMMISSION', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
+  { type: 'AFFECTATION_COMMISSION', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
   { type: 'ANNULATION_ERREUR', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }, { niveau: 2, profils: ['DAF'] }] },
   { type: 'RESTITUTION_COMPTE_PRODUCTION', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }, { niveau: 2, profils: ['DAF'] }] },
 ];
@@ -275,6 +278,8 @@ export const MODELES_NOTIFICATION: { code: string; canal: string; contenu: strin
   { code: 'RAPPEL_ECHEANCE', canal: 'SMS', contenu: 'Prospect Pro : votre police n° {{police}} arrive à échéance le {{echeance}}. Prime de renouvellement : {{prime}}, reste à payer {{reste}}. Paiement au bureau {{bureau}}, par monnaie électronique ou à la caisse du siège.' },
   { code: 'POLICE_RENOUVELEE', canal: 'SMS', contenu: 'Prospect Pro : votre police n° {{police}} est renouvelée du {{debut}} au {{fin}}. Vos cartes sont actives.' },
   { code: 'VERSEMENT_RECU', canal: 'SMS', contenu: 'Prospect Pro : versement {{numero}} de {{montant}} reçu pour la police {{police}}. Cumul : {{cumul}} ; reste à payer pour le renouvellement : {{reste}}.' },
+  { code: 'FACTURE_COMMISSION_ETABLIE', canal: 'SMS', contenu: 'Prospect Pro : votre facture de commissions {{numero}} du mois {{mois}} est établie, net à payer {{net}}. Vérifiez-la et émettez-la depuis votre application.' },
+  { code: 'PAIEMENT_EXECUTE', canal: 'SMS', contenu: 'Prospect Pro : paiement {{numero}} de {{montant}} exécuté vers {{etablissement}}. L\'avis de paiement est disponible dans votre espace.' },
   { code: 'POLICE_EMISE', canal: 'SMS', contenu: 'Prospect Pro : votre police n° {{police}} est émise, effet le {{date_effet}}, prime payée {{prime}}. Vos documents (bulletin, conditions générales, quittance, attestation) sont disponibles dans votre espace assuré.' },
   { code: 'APPROVISIONNEMENT_CONFIRME', canal: 'SMS', contenu: 'Prospect Pro : approvisionnement {{numero}} de {{montant}} confirmé sur le compte de production du bureau {{bureau}}. Nouveau solde : {{solde}}.' },
   { code: 'COMPTE_PRODUCTION_SEUIL', canal: 'SMS', contenu: 'Prospect Pro : le solde du compte de production du bureau {{bureau}} est passé sous votre seuil d\'alerte : {{solde}}. Pensez à l\'approvisionner.' },
@@ -474,6 +479,17 @@ export const MODELES_DOCUMENTS: { code: string; libelle: string; contenu: string
     code: 'AVENANT_BENEFICIAIRES', libelle: 'Avenant de désignation des bénéficiaires',
     contenu: ['# Avenant n° {{numero}} – Bénéficiaires du capital décès', 'Police n° {{police}}', '| Bénéficiaire | Quotité | Rang |', '{{#beneficiaires}}| {{nom}} | {{quotite}} | {{rang}} |', '{{/beneficiaires}}', '',
       'En saisissant le code reçu par SMS, le souscripteur confirme cette désignation, qui remplace la précédente sans incidence sur la prime.', '---', 'Conakry, le {{date_document}}'].join('\n'),
+  },
+  {
+    code: 'FACTURE_COMMISSION', libelle: 'Facture mensuelle de commissions',
+    contenu: ['# Facture de commissions n° {{numero}}', 'Établie au titre du mandat d\'autofacturation pour : {{intervenant}} – mois de {{mois}}', '| Police | Quittance | Nature | Montant |',
+      '{{#lignes}}| {{police}} | {{quittance}} | {{nature}} | {{montant}} |', '{{/lignes}}', '| Brut | Avoir | Retenue à la source | Net à payer |', '| {{brut}} | {{avoir}} | {{retenue}} | {{net}} |', '---',
+      'Le commercial vérifie la facture et l\'émet par code à usage unique, ou dépose sa propre facture portant la même référence et le même montant.'].join('\n'),
+  },
+  {
+    code: 'AVIS_PAIEMENT', libelle: 'Avis de paiement',
+    contenu: ['# Avis de paiement {{numero}}', 'Bénéficiaire : {{beneficiaire}}', 'Objet : {{objet}}', '| Libellé | Montant |', '{{#detail}}| {{libelle}} | {{montant}} |', '{{/detail}}',
+      'Montant versé : {{montant}} – destination : {{etablissement}}.', '---', 'Conakry, le {{date_document}}'].join('\n'),
   },
   {
     code: 'RECU_VERSEMENT', libelle: 'Reçu de versement programmé',
