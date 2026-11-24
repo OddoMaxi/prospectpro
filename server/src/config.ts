@@ -21,6 +21,10 @@ const schema = z.object({
   CLE_MAITRESSE_LOCALE: z.string().regex(/^[0-9a-f]{64}$/i).optional(),
   VAULT_ADDR: z.string().url().optional(),
   VAULT_TOKEN: z.string().optional(),
+  /** Stockage des documents (PDF/A produits, pièces déposées) : répertoire en ajout seul, sauvegardé avec la base. */
+  STOCKAGE_DIR: z.string().default('./stockage'),
+  /** Ordonnanceur (traitements planifiés et distribution des événements) : désactivable pour les tests. */
+  ORDONNANCEUR_ACTIF: z.enum(['OUI', 'NON']).default('OUI'),
 });
 
 export type Config = z.infer<typeof schema>;

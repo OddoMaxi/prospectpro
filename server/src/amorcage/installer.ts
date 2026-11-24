@@ -12,7 +12,7 @@ import { attribuerProfil, creerUtilisateur } from '../modules/habilitations/serv
 import { creerTiers } from '../modules/referentiels/tiers.js';
 import { creerCompteGeneral, creerNature } from '../modules/comptabilite/plan.js';
 import {
-  COMPTES_PROPOSES, DELEGATIONS, DEPARTEMENTS, NATURES_COMPTE, FONCTION_ADMIN, FONCTIONS_SYSTEME, INCOMPATIBILITES, MATRICE, MODELES_NOTIFICATION,
+  COMPTES_PROPOSES, DELEGATIONS, DEPARTEMENTS, MOTIFS_BLOCAGE, NATURES_COMPTE, FONCTION_ADMIN, FONCTIONS_SYSTEME, INCOMPATIBILITES, MATRICE, MODELES_NOTIFICATION,
   PARAMETRES, PROFILS, REGLES_LEGALES,
 } from './referentiel-initial.js';
 
@@ -96,6 +96,11 @@ export async function installer(q: Executant, admin: CompteInitial, direction: C
   }
   for (const m of MODELES_NOTIFICATION) {
     await q.query(`INSERT INTO modele_notification (code, canal, langue, contenu, actif) VALUES ($1,$2,'fr',$3,true)`, [m.code, m.canal, m.contenu]);
+  }
+
+  for (const m of MOTIFS_BLOCAGE) {
+    await q.query('INSERT INTO motif_blocage_ref (code, libelle_assure, libelle_prestataire, module_deposant, actif, definitif) VALUES ($1,$2,$3,$4,true,$5)',
+      [m.code, m.assure, m.prestataire, m.modules, m.definitif ?? false]);
   }
 
   // Natures et comptes proposés (FIN-RG-078, § 11.10)

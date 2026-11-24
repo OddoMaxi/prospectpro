@@ -8,6 +8,8 @@ import { routesAuth } from './http/routes-auth.js';
 import { routesAdministration } from './http/routes-administration.js';
 import { routesReferentiels } from './http/routes-referentiels.js';
 import { routesCatalogue } from './http/routes-catalogue.js';
+import { routesSocle } from './http/routes-socle.js';
+import { configurerStockage, StockageLocal } from './moteurs/documents.js';
 // Enregistrement des opérations soumises à validation
 import './modules/parametrage/service.js';
 import './modules/referentiels/societe.js';
@@ -19,6 +21,7 @@ export function creerApplication(config: Config) {
     ? new GardienVault(config.VAULT_ADDR, config.VAULT_TOKEN)
     : new GardienLocal(Buffer.from(config.CLE_MAITRESSE_LOCALE!, 'hex'));
   const ctx: ContexteAuth = { jwtSecret: config.JWT_SECRET, chiffrement: new MoteurChiffrement(gardien) };
+  configurerStockage(new StockageLocal(config.STOCKAGE_DIR));
 
   const app = express();
   app.disable('x-powered-by');
@@ -33,7 +36,7 @@ export function creerApplication(config: Config) {
   app.get('/api/sante', (_req, res) => { res.json({ statut: 'ok', version: '3.0.0-lot1' }); });
   app.use('/api/auth', routesAuth(ctx));
   app.use('/api/admin', authentifier(ctx), routesAdministration());
-  app.use('/api', authentifier(ctx), routesReferentiels(ctx), routesCatalogue());
+  app.use('/api', authentifier(ctx), routesReferentiels(ctx), routesCatalogue(), routesSocle());
   app.use('/api', (_req, res) => { res.status(404).json({ code: 'NON_TROUVE', message: 'Route inconnue' }); });
   app.use(gestionErreurs);
   return { app, ctx };

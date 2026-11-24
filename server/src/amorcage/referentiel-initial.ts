@@ -261,6 +261,22 @@ export const MODELES_NOTIFICATION: { code: string; canal: string; contenu: strin
   { code: 'OTP_VERIFICATION_TELEPHONE', canal: 'SMS', contenu: 'Prospect Pro : code de vérification de votre numéro : {{code}}.' },
   { code: 'COORDONNEE_MODIFIEE', canal: 'SMS', contenu: 'Prospect Pro : vos coordonnées de paiement ont été modifiées ({{etablissement}}, se terminant par {{fin}}). Aucun paiement n\'y sera fait avant {{heures}} heures. Si vous n\'êtes pas à l\'origine de ce changement, contactez-nous immédiatement.' },
   { code: 'ENFANT_AGE_LIMITE', canal: 'SMS', contenu: 'Prospect Pro : {{enfant}} atteint le {{date}} l\'âge limite de sa couverture. Sans justificatif (scolarité, handicap) transmis avant cette date, il sortira de la couverture à l\'échéance suivante.' },
+  { code: 'RECLAMATION_RECUE', canal: 'SMS', contenu: 'Prospect Pro : votre réclamation n° {{numero}} est enregistrée. Une réponse vous sera apportée au plus tard le {{echeance}}.' },
+  { code: 'RECLAMATION_REPONDUE', canal: 'SMS', contenu: 'Prospect Pro : une réponse à votre réclamation n° {{numero}} est disponible dans votre espace assuré ou auprès de votre bureau.' },
+  { code: 'ACCEPTATION_DOCUMENT', canal: 'SMS', contenu: 'Prospect Pro : code {{code}} pour accepter « {{document}} » (réf. {{empreinte}}). Valable 5 minutes. Ne le communiquez qu\'à la personne qui vous assiste, après avoir lu le document.' },
+];
+
+/**
+ * Référentiel initial des motifs de blocage (§ 3.7). Modules déposants : PRD, SAN, SIN, CNF, COM, ASSURE, ENTREPRISE, SYSTEME.
+ * Ajouter un cas de blocage = ajouter une ligne (ARC-RG-013).
+ */
+export const MOTIFS_BLOCAGE: { code: string; assure: string; prestataire: string; modules: string; definitif?: boolean }[] = [
+  { code: 'SORTIE_EFFECTIF', assure: 'Vous ne faites plus partie de l\'effectif assuré par votre employeur ou groupement. Rapprochez-vous de lui.', prestataire: 'Carte non valide', modules: 'ENTREPRISE,PRD' },
+  { code: 'DECES_DECLARE', assure: 'Un décès a été déclaré : carte suspendue à titre conservatoire. Si c\'est une erreur, contactez votre bureau.', prestataire: 'Carte non valide', modules: 'SIN' },
+  { code: 'DECES_CONSTATE', assure: 'Décès constaté à la réception de l\'acte de décès.', prestataire: 'Carte non valide', modules: 'SIN', definitif: true },
+  { code: 'CARTE_PERDUE_VOLEE', assure: 'Carte déclarée perdue ou volée. Demandez une nouvelle carte à votre bureau ou dans votre espace assuré.', prestataire: 'Carte opposée', modules: 'ASSURE,PRD' },
+  { code: 'ALERTE_FRAUDE_CONFORMITE', assure: 'Votre dossier est en cours de vérification. Contactez votre bureau.', prestataire: 'Carte non valide', modules: 'SAN,CNF' },
+  { code: 'AGE_LIMITE', assure: 'L\'âge limite de couverture est atteint. Transmettez un justificatif de scolarité ou de handicap pour rétablir la couverture.', prestataire: 'Carte non valide', modules: 'SYSTEME,PRD' },
 ];
 
 /** Natures de comptes (FIN-RG-078) : tranche par défaut et contrôles associés. Paramétrables ensuite. */

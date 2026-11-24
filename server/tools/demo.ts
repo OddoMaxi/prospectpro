@@ -10,6 +10,8 @@ import type { AddressInfo } from 'node:net';
 import pg from 'pg';
 import { chargerConfig } from '../src/config.js';
 import { fermerPool, getPool, initialiserPool, transaction } from '../src/db/pool.js';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { migrer } from '../src/db/migrer.js';
 import { installer } from '../src/amorcage/installer.js';
 import { brancherAdaptateur, Simulateur } from '../src/moteurs/notifications.js';
@@ -44,7 +46,7 @@ initialiserPool(URL_DEMO);
 const sms = new Simulateur();
 brancherAdaptateur('SMS', { envoyer: async (a, t) => { info(`📱 SMS simulé vers ${a} : « ${t} »`); return sms.envoyer(a, t); } });
 
-const config = chargerConfig({ NODE_ENV: 'development', DATABASE_URL: URL_DEMO, JWT_SECRET: randomBytes(32).toString('hex'), CLE_MAITRESSE_LOCALE: randomBytes(32).toString('hex') });
+const config = chargerConfig({ NODE_ENV: 'development', DATABASE_URL: URL_DEMO, JWT_SECRET: randomBytes(32).toString('hex'), CLE_MAITRESSE_LOCALE: randomBytes(32).toString('hex'), STOCKAGE_DIR: join(tmpdir(), `prospectpro-demo-${Date.now()}`), ORDONNANCEUR_ACTIF: 'NON' });
 const { app } = creerApplication(config);
 const serveur = app.listen(0);
 const URL_API = `http://127.0.0.1:${(serveur.address() as AddressInfo).port}/api`;
@@ -235,6 +237,39 @@ try {
   const naissance = (ans: number) => `${Number(AUJOURDHUI.slice(0, 4)) - ans}${AUJOURDHUI.slice(4)}`;
   const tarif = await api('POST', '/catalogue/tarification', jGest, { formuleId, membres: [{ qualite: 'ASSURE_PRINCIPAL', dateNaissance: naissance(35) }, { qualite: 'ENFANT', dateNaissance: naissance(5) }] });
   constat(tarif.corps.primeTotale === 410_000, `Produit validé par le comité ; prime calculée : ${tarif.corps.primeNette} (nette) + ${tarif.corps.accessoires} (accessoires) = ${tarif.corps.primeTotale} GNF`);
+
+  titre('Documents et acceptation électronique (DIG-RG-001, 002)');
+  attendu(await api('POST', '/modeles', jAdmin, { code: 'ATTESTATION', libelle: 'Attestation', niveauSignature: 'CODE_USAGE_UNIQUE',
+    contenu: '# Attestation\nNous attestons que {{assure}} est client de {{societe_raison_sociale}}.\n---\nFait à Conakry, le {{date_document}}.' }), 201, 'modèle');
+  const signataire = attendu(await api('POST', '/tiers', jAdmin, { nature: 'PHYSIQUE', nom: 'CAMARA', prenoms: 'Fanta', date_naissance: '1988-08-08', telephone: '+224621999001' }), 201, 'signataire').corps.id;
+  await getPool().query('UPDATE tiers SET telephone_verifie = true WHERE id = $1', [signataire]);
+  const { genererDocument } = await import('../src/moteurs/documents.js');
+  const { Acteur } = await import('../src/noyau/acteur.js');
+  const doc = await transaction(moi.corps.id, q => genererDocument(q, new Acteur(moi.corps.id), { modeleCode: 'ATTESTATION', typeDocument: 'ATTESTATION', objet: { type: 'tiers', id: signataire }, variables: { assure: 'Fanta CAMARA' } }));
+  info('Un module métier produit une attestation à partir du modèle (ici appelé directement, faute de module Souscription)');
+  const fichier = await fetch(`${URL_API}/documents/${doc.id}/fichier`, { headers: { Authorization: `Bearer ${jAdmin}` } });
+  const octets = Buffer.from(await fichier.arrayBuffer());
+  constat(fichier.status === 200 && octets.subarray(0, 5).toString() === '%PDF-' && octets.toString('latin1').includes('pdfaid:part'), `PDF/A produit et scellé (empreinte ${doc.empreinte.slice(0, 12)}…), avec les mentions légales de la Compagnie`);
+  attendu(await api('POST', `/documents/${doc.id}/acceptation/code`, jAdmin, { signataireId: signataire }), 200, 'code');
+  const codeAcc = sms.dernier('+224621999001')!.texte.match(/code (\d{6})/)![1];
+  const acc = await api('POST', `/documents/${doc.id}/acceptation`, jAdmin, { signataireId: signataire, code: codeAcc });
+  constat(acc.statut === 201, `Acceptée par code SMS lié à l'empreinte : dossier de preuve enregistré (${acc.corps.horodatage})`);
+  const verif = await api('GET', `/documents/${doc.id}/verification`, jAdmin);
+  constat(verif.corps.integre === true, 'Le fichier stocké correspond toujours à son empreinte scellée');
+
+  titre('Réclamations (§ 8.10)');
+  const rec = attendu(await api('POST', '/reclamations', jGest, { tiersId: signataire, canal: 'SMS', objet: 'SANTE', description: 'Remboursement refusé' }), 201, 'réclamation');
+  constat(/^REC\d{10}$/.test(rec.corps.numero), `Réclamation ${rec.corps.numero} enregistrée ; réponse due le ${rec.corps.echeance} (15 jours ouvrables) ; accusé SMS envoyé`);
+  attendu(await api('POST', `/reclamations/${rec.corps.id}/affectation`, jGest, { gestionnaireId: (await api('GET', '/auth/moi', jGest)).corps.id }), 204, 'affectation');
+  attendu(await api('POST', `/reclamations/${rec.corps.id}/reponse`, jGest, { reponse: 'Prestation prise en charge après réexamen.' }), 204, 'réponse');
+  constat((await api('GET', `/reclamations/${rec.corps.id}`, jGest)).corps.statut === 'REPONDUE', 'Affectée, traitée, réponse notifiée au réclamant');
+
+  titre('Motifs de blocage (§ 3.7)');
+  const bl = attendu(await api('POST', `/tiers/${signataire}/blocages`, jGest, { code: 'CARTE_PERDUE_VOLEE', justification: 'Déclaration au bureau' }), 201, 'blocage');
+  const vue = await api('GET', `/tiers/${signataire}/blocages`, jGest);
+  constat(vue.corps.bloque === true, 'Carte déclarée perdue : la personne est bloquée tant que le motif est actif');
+  attendu(await api('POST', `/blocages/${bl.corps.id}/levee`, jGest, { justification: 'Nouvelle carte remise' }), 204, 'levée');
+  constat((await api('GET', `/tiers/${signataire}/blocages`, jGest)).corps.bloque === false, 'Motif levé (justifié, tracé) : la personne est débloquée');
 
   titre('Verrouillage après échecs de connexion');
   let tentative = 0, rep: Rep;

@@ -68,7 +68,7 @@ export async function exigerFicheComplete(q: Executant, date = aujourdhui()): Pr
 }
 
 /** REF-RG-011 : variables de modèle des mentions légales, en vigueur à la date du document. */
-export async function mentionsLegales(q: Executant, date: string): Promise<Record<string, string>> {
+export async function mentionsLegales(q: Executant, date: string) {
   const f = await ficheSociete(q, date);
   const capital = f.capital_social ? `${Number(f.capital_social).toLocaleString('fr-FR').replace(/ /g, ' ')} GNF` : '';
   return {
