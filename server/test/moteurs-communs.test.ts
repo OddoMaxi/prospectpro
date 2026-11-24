@@ -149,8 +149,8 @@ describe('Documents (DIG-RG-001 à 007)', () => {
 
   it('refuse de produire un document tant que la fiche de la Compagnie est incomplète (REF-RG-010)', async () => {
     t = await personne('SOUSCRIPTEUR');
-    await transaction(admin.utilisateurId, q => creerModeleDocument(q, admin, { code: 'QUITTANCE', libelle: 'Quittance', contenu: MODELE, niveauSignature: 'CODE_USAGE_UNIQUE', dateEffet: '2020-01-01' }));
-    await expect(transaction(admin.utilisateurId, q => genererDocument(q, admin, { modeleCode: 'QUITTANCE', typeDocument: 'QUITTANCE', objet: { type: 'tiers', id: t }, variables: {} })))
+    await transaction(admin.utilisateurId, q => creerModeleDocument(q, admin, { code: 'QUITTANCE_ESSAI', libelle: 'Quittance', contenu: MODELE, niveauSignature: 'CODE_USAGE_UNIQUE', dateEffet: '2020-01-01' }));
+    await expect(transaction(admin.utilisateurId, q => genererDocument(q, admin, { modeleCode: 'QUITTANCE_ESSAI', typeDocument: 'QUITTANCE', objet: { type: 'tiers', id: t }, variables: {} })))
       .rejects.toMatchObject({ code: 'FICHE_SOCIETE_INCOMPLETE' });
     const d = await transaction(admin.utilisateurId, q => proposerModificationSociete(q, admin, { dateEffet: '2020-01-01', motif: 'Fiche initiale', valeurs: {
       raison_sociale: 'CGS Assurances', activite: 'Assurance', forme_juridique: 'SA', capital_social: 5_000_000_000, numero_agrement: 'AGR-1', pays: 'Guinée',
@@ -160,9 +160,9 @@ describe('Documents (DIG-RG-001 à 007)', () => {
 
   it('produit un PDF/A scellé à partir du modèle en vigueur, avec les mentions légales ; une variable manquante est refusée', async () => {
     const variables = { numero: 'Q2026000001', souscripteur: 'BAH Ibrahima', police: '1011000001234', lignes: [{ libelle: 'Prime nette', montant: 400_000 }, { libelle: 'Accessoires', montant: 10_000 }] };
-    await expect(transaction(admin.utilisateurId, q => genererDocument(q, admin, { modeleCode: 'QUITTANCE', typeDocument: 'QUITTANCE', objet: { type: 'tiers', id: t }, variables: { numero: 'x' } })))
+    await expect(transaction(admin.utilisateurId, q => genererDocument(q, admin, { modeleCode: 'QUITTANCE_ESSAI', typeDocument: 'QUITTANCE', objet: { type: 'tiers', id: t }, variables: { numero: 'x' } })))
       .rejects.toMatchObject({ code: 'VARIABLE_MANQUANTE' });
-    const r = await transaction(admin.utilisateurId, q => genererDocument(q, admin, { modeleCode: 'QUITTANCE', typeDocument: 'QUITTANCE', objet: { type: 'tiers', id: t }, variables }));
+    const r = await transaction(admin.utilisateurId, q => genererDocument(q, admin, { modeleCode: 'QUITTANCE_ESSAI', typeDocument: 'QUITTANCE', objet: { type: 'tiers', id: t }, variables }));
     docId = r.id;
     const pdf = await readFile(join(STOCKAGE_TEST, r.fichierRef));
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
@@ -182,7 +182,7 @@ describe('Documents (DIG-RG-001 à 007)', () => {
     expect((await getPool().query('SELECT imprime FROM document WHERE id = $1', [docId])).rows[0].imprime).toBe(1);
     // Altération du fichier sur le disque : détectée
     const ref = (await getPool().query('SELECT fichier_ref FROM document WHERE id = $1', [docId])).rows[0].fichier_ref;
-    const autre = await transaction(admin.utilisateurId, q => genererDocument(q, admin, { modeleCode: 'QUITTANCE', typeDocument: 'QUITTANCE', objet: { type: 'tiers', id: t }, variables: { numero: 'Q2', souscripteur: 'X', police: 'Y', lignes: [] } }));
+    const autre = await transaction(admin.utilisateurId, q => genererDocument(q, admin, { modeleCode: 'QUITTANCE_ESSAI', typeDocument: 'QUITTANCE', objet: { type: 'tiers', id: t }, variables: { numero: 'Q2', souscripteur: 'X', police: 'Y', lignes: [] } }));
     const chemin = join(STOCKAGE_TEST, autre.fichierRef);
     await chmod(chemin, 0o640);
     await writeFile(chemin, Buffer.concat([await readFile(chemin), Buffer.from('%falsifie')]));
@@ -219,7 +219,7 @@ describe('Documents (DIG-RG-001 à 007)', () => {
   it('un code envoyé pour une version du document ne vaut pas pour une autre ; signature certifiée exigée selon le modèle', async () => {
     const s = await personne('SIGNATAIRE');
     await getPool().query('UPDATE tiers SET telephone_verifie = true WHERE id = $1', [s]);
-    const d = await transaction(admin.utilisateurId, q => genererDocument(q, admin, { modeleCode: 'QUITTANCE', typeDocument: 'QUITTANCE', objet: { type: 'tiers', id: s }, variables: { numero: 'Q3', souscripteur: 'S', police: 'P', lignes: [] } }));
+    const d = await transaction(admin.utilisateurId, q => genererDocument(q, admin, { modeleCode: 'QUITTANCE_ESSAI', typeDocument: 'QUITTANCE', objet: { type: 'tiers', id: s }, variables: { numero: 'Q3', souscripteur: 'S', police: 'P', lignes: [] } }));
     await transaction(admin.utilisateurId, q => demanderAcceptation(q, admin, d.id, s));
     const code = sms.dernier(await telephoneDe(s))!.texte.match(/code (\d{6})/)![1]!;
     await getPool().query(`UPDATE document SET empreinte = repeat('0', 64) WHERE id = $1`, [d.id]);
@@ -238,7 +238,7 @@ describe('Ordonnanceur', () => {
     await c.connect();
     const planifies = (await c.query(`SELECT name FROM pgboss.schedule ORDER BY name`)).rows.map(r => r.name);
     await c.end();
-    expect(planifies).toEqual(['ages-limites', 'organisation-differee', 'reclamations-escalade', 'scellement-ecritures', 'societe-du-jour']);
+    expect(planifies).toEqual(['ages-limites', 'organisation-differee', 'propositions-expiration', 'reclamations-escalade', 'scellement-ecritures', 'societe-du-jour']);
     await arreter();
   }, 30_000);
 });

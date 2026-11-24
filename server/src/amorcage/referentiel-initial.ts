@@ -155,6 +155,7 @@ export const DELEGATIONS: { type: string; niveaux: { niveau: number; profils: st
   { type: 'SCHEMA_COMPTABLE', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
   { type: 'EXTOURNE_ECRITURE', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
   { type: 'AGREMENT_INTERVENANT', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }, { niveau: 2, profils: ['CONFORMITE'] }] },
+  { type: 'ANNULATION_ERREUR', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }, { niveau: 2, profils: ['DAF'] }] },
   { type: 'RESTITUTION_COMPTE_PRODUCTION', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }, { niveau: 2, profils: ['DAF'] }] },
 ];
 
@@ -190,6 +191,8 @@ export const PARAMETRES: P[] = [
   ['BUREAU_ALERTE_CODES', 'Nombre de codes bureau utilisés déclenchant l\'alerte', 'REF', 'ENTIER', '90'],
   // Commercial (chapitre 7)
   ['COM_APPRO_MINIMUM', 'Montant minimum d\'approvisionnement du compte de production (GNF)', 'COM', 'MONTANT', '10000000'],
+  ['COM_CLE_APPORTEUR', 'Clé de répartition : part de l\'apporteur (junior) dans la commission de la police', 'COM', 'TAUX', '0.30'],
+  ['COM_CLE_PRESCRIPTEUR', 'Clé de répartition : part du prescripteur dans la commission de la police', 'COM', 'TAUX', '0.20'],
   ['COM_ANNULATION_ERREUR_HEURES', 'Délai d\'annulation pour erreur (heures)', 'COM', 'DUREE', '48'],
   ['COM_INACTIVITE_MOIS', 'Inactivité d\'un compte de production avant alerte (mois)', 'COM', 'DUREE', '12'],
   ['COM_MODE_EMISSION', 'Mode d\'émission au bureau', 'COM', 'LISTE', 'COMPTE_PRODUCTION'],
@@ -268,6 +271,7 @@ export const MODELES_NOTIFICATION: { code: string; canal: string; contenu: strin
   { code: 'ENFANT_AGE_LIMITE', canal: 'SMS', contenu: 'Prospect Pro : {{enfant}} atteint le {{date}} l\'âge limite de sa couverture. Sans justificatif (scolarité, handicap) transmis avant cette date, il sortira de la couverture à l\'échéance suivante.' },
   { code: 'RECLAMATION_RECUE', canal: 'SMS', contenu: 'Prospect Pro : votre réclamation n° {{numero}} est enregistrée. Une réponse vous sera apportée au plus tard le {{echeance}}.' },
   { code: 'RECLAMATION_REPONDUE', canal: 'SMS', contenu: 'Prospect Pro : une réponse à votre réclamation n° {{numero}} est disponible dans votre espace assuré ou auprès de votre bureau.' },
+  { code: 'POLICE_EMISE', canal: 'SMS', contenu: 'Prospect Pro : votre police n° {{police}} est émise, effet le {{date_effet}}, prime payée {{prime}}. Vos documents (bulletin, conditions générales, quittance, attestation) sont disponibles dans votre espace assuré.' },
   { code: 'APPROVISIONNEMENT_CONFIRME', canal: 'SMS', contenu: 'Prospect Pro : approvisionnement {{numero}} de {{montant}} confirmé sur le compte de production du bureau {{bureau}}. Nouveau solde : {{solde}}.' },
   { code: 'COMPTE_PRODUCTION_SEUIL', canal: 'SMS', contenu: 'Prospect Pro : le solde du compte de production du bureau {{bureau}} est passé sous votre seuil d\'alerte : {{solde}}. Pensez à l\'approvisionner.' },
   { code: 'ACCEPTATION_DOCUMENT', canal: 'SMS', contenu: 'Prospect Pro : code {{code}} pour accepter « {{document}} » (réf. {{empreinte}}). Valable 5 minutes. Ne le communiquez qu\'à la personne qui vous assiste, après avoir lu le document.' },
@@ -419,7 +423,54 @@ export const SCHEMAS: { codeEvt: string; typeEvenement: string; journal: string;
 ];
 
 /** Modèles de documents nécessaires au lot 2 (annexe F), modifiables ensuite par le comité. */
+const CONTRAT = [
+  'Souscripteur : {{souscripteur}}',
+  'Produit : {{produit}} – formule {{formule}}',
+  'Période de garantie : du {{date_effet}} au {{date_fin}} inclus',
+  '## Personnes assurées',
+  '| Nom | Qualité | Date de naissance |',
+  '{{#assures}}| {{nom}} | {{qualite}} | {{naissance}} |',
+  '{{/assures}}',
+  '## Garanties',
+  '| Garantie | Plafond ou capital | Prise en charge | Carence |',
+  '{{#garanties}}| {{libelle}} | {{plafond}} | {{taux}} | {{carence}} |',
+  '{{/garanties}}',
+  '## Bénéficiaires du capital décès',
+  '| Bénéficiaire | Quotité |',
+  '{{#beneficiaires}}| {{nom}} | {{quotite}} |',
+  '{{/beneficiaires}}',
+  '## Prime',
+  '| Prime nette | Accessoires | Taxes | Prime totale |',
+  '| {{prime_nette}} | {{accessoires}} | {{taxes}} | {{prime_totale}} |',
+];
+
 export const MODELES_DOCUMENTS: { code: string; libelle: string; contenu: string }[] = [
+  {
+    code: 'RECAPITULATIF_SOUSCRIPTION', libelle: 'Récapitulatif de souscription',
+    contenu: ['# Récapitulatif de votre souscription', 'Dossier {{dossier}}', ...CONTRAT, '---',
+      'En saisissant le code reçu par SMS, vous acceptez ce récapitulatif, qui vaut bulletin d\'adhésion une fois la prime payée. Aucune déclaration de santé ne vous est demandée.'].join('\n'),
+  },
+  {
+    code: 'BULLETIN_ADHESION', libelle: 'Bulletin d\'adhésion valant conditions particulières',
+    contenu: ['# Bulletin d\'adhésion valant conditions particulières', 'Police n° {{police}}', ...CONTRAT, '---',
+      'Le présent bulletin a été accepté électroniquement par le souscripteur (code à usage unique). Les conditions générales du produit en font partie intégrante.'].join('\n'),
+  },
+  {
+    code: 'CONDITIONS_GENERALES', libelle: 'Conditions générales',
+    contenu: ['# Conditions générales – {{produit}}', 'Police n° {{police}}', '## Objet du contrat', 'Le contrat garantit les prestations décrites aux conditions particulières, dans les limites des plafonds, carences et exclusions du produit.',
+      '## Paiement de la prime', 'La prime de la première année est payée en totalité avant l\'émission. Le contrat naît à son paiement.',
+      '## Renouvellement', 'Le contrat se renouvelle par le paiement de la prime de la période suivante, au plus tard à l\'échéance.'].join('\n'),
+  },
+  {
+    code: 'QUITTANCE', libelle: 'Quittance',
+    contenu: ['# Quittance n° {{quittance}}', 'Police n° {{police}} – {{souscripteur}}', 'Période : du {{date_effet}} au {{date_fin}}', '| Libellé | Montant |',
+      '{{#lignes}}| {{libelle}} | {{montant}} |', '{{/lignes}}', 'Mode de paiement : {{mode_paiement}}.', '---', 'Fait à Conakry, le {{date_document}}.'].join('\n'),
+  },
+  {
+    code: 'ATTESTATION', libelle: 'Attestation d\'assurance',
+    contenu: ['# Attestation d\'assurance', '{{societe_raison_sociale}} atteste que les personnes ci-dessous sont assurées au titre de la police n° {{police}}, souscrite par {{souscripteur}} ({{produit}}, formule {{formule}}), du {{date_effet}} au {{date_fin}}.',
+      '| Nom | Qualité |', '{{#assures}}| {{nom}} | {{qualite}} |', '{{/assures}}', '---', 'Fait à Conakry, le {{date_document}}.'].join('\n'),
+  },
   {
     code: 'RECU_APPROVISIONNEMENT', libelle: 'Reçu d\'approvisionnement du compte de production',
     contenu: [

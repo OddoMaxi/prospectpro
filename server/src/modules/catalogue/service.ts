@@ -101,6 +101,8 @@ async function controler(q: Executant, op: OperationCatalogue): Promise<void> {
     case 'CREER_PRODUIT': {
       const p = op.produit;
       exiger(p.ageMax >= p.ageMin, 'AGES_INVALIDES', 'Âge maximal inférieur à l\'âge minimal');
+      const branche = await q.query('SELECT 1 FROM branche_comptable WHERE code = $1 AND supprime_le IS NULL', [p.brancheBcrg]);
+      exiger(branche.rowCount, 'BRANCHE_INCONNUE', `Branche ${p.brancheBcrg} inconnue : elle détermine les comptes de primes (§ 11.10)`);
       const existe = await q.query('SELECT 1 FROM produit WHERE code = $1', [p.code]);
       exiger(!existe.rowCount, 'CODE_PRODUIT_UTILISE', `Le code produit ${p.code} est déjà attribué`, 409);
       const modeles = await q.query('SELECT id FROM modele_document WHERE id = ANY($1) AND supprime_le IS NULL', [[p.modeleCgId, p.modeleCpId]]);
@@ -244,7 +246,7 @@ export async function detailFormule(q: Executant, formuleId: string) {
 export interface MembreTarife { qualite: Tarif['qualite']; dateNaissance: string }
 export interface Tarification {
   dateTarif: string; lignes: { qualite: string; age: number; primeNette: number }[];
-  primeNette: number; accessoires: number; taxes: { code: string; libelle: string; taux: number; base: number; montant: number }[]; primeTotale: number;
+  primeNette: number; accessoires: number; taxes: { code: string; libelle: string; taux: number; base: number; montant: number; codeTaxeId: string; compteId: string }[]; primeTotale: number;
 }
 
 /**
@@ -275,15 +277,15 @@ export async function tarifer(q: Executant, formuleId: string, membres: MembreTa
   const accessoires = Number(f.accessoires);
 
   // Taxes du produit en vigueur à la date : pour chaque code lié, la version du taux en vigueur
-  const tx = await q.query<{ code: string; libelle: string; taux: string; assiette: string }>(
-    `SELECT DISTINCT ON (ct.code) ct.code, ct.libelle, ct.taux, ct.assiette
+  const tx = await q.query<{ id: string; compte_id: string; code: string; libelle: string; taux: string; assiette: string }>(
+    `SELECT DISTINCT ON (ct.code) ct.id, ct.compte_id, ct.code, ct.libelle, ct.taux, ct.assiette
        FROM produit_taxe pt JOIN code_taxe lien ON lien.id = pt.code_taxe_id JOIN code_taxe ct ON ct.code = lien.code
       WHERE pt.produit_id = $1 AND pt.supprime_le IS NULL AND pt.date_effet <= $2 AND (pt.date_fin IS NULL OR pt.date_fin > $2)
         AND ct.date_effet <= $2 AND ct.supprime_le IS NULL
       ORDER BY ct.code, ct.date_effet DESC`, [f.produit_id, date]);
   const taxes = tx.rows.map(t => {
     const base = t.assiette === 'PRIME_NETTE' ? primeNette : primeNette + accessoires;
-    return { code: t.code, libelle: t.libelle, taux: Number(t.taux), base, montant: Math.round(base * Number(t.taux)) };
+    return { code: t.code, libelle: t.libelle, taux: Number(t.taux), base, montant: Math.round(base * Number(t.taux)), codeTaxeId: t.id, compteId: t.compte_id };
   });
   const primeTotale = primeNette + accessoires + taxes.reduce((s, t) => s + t.montant, 0);
   return { dateTarif, lignes, primeNette, accessoires, taxes, primeTotale };

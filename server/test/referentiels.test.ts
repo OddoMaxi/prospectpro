@@ -223,7 +223,7 @@ describe('Catalogue (§ 5.5)', () => {
     const taxe = (await getPool().query(`SELECT id FROM code_taxe WHERE code = 'TPA'`)).rows[0].id;
     const produit = (f: object) => ({
       type: 'CREER_PRODUIT', dateEffet: T, produit: {
-        code: '10', libelle: 'Santé famille', brancheBcrg: 'Assurance maladie', typeCouverture: 'FAMILLE', typeContrat: 'INDIVIDUEL',
+        code: '10', libelle: 'Santé famille', brancheBcrg: 'MALADIE', typeCouverture: 'FAMILLE', typeContrat: 'INDIVIDUEL',
         ageMin: 18, ageMax: 65, modeleCgId: cg.id, modeleCpId: cp.id, taxes: [taxe], formules: [f],
       },
     });
@@ -241,7 +241,7 @@ describe('Catalogue (§ 5.5)', () => {
       { qualite: 'ENFANT', dateNaissance: ajouterAnnees(T, -5) },
     ], T);
     expect(t).toMatchObject({ primeNette: 400_000, accessoires: 10_000, primeTotale: 430_500 });
-    expect(t.taxes).toEqual([{ code: 'TPA', libelle: 'Taxe sur primes d\'assurance', taux: 0.05, base: 410_000, montant: 20_500 }]);
+    expect(t.taxes).toMatchObject([{ code: 'TPA', libelle: 'Taxe sur primes d\'assurance', taux: 0.05, base: 410_000, montant: 20_500 }]);
     await expect(tarifer(getPool(), formuleId, [{ qualite: 'ASSURE_PRINCIPAL', dateNaissance: ajouterAnnees(T, -35) }, { qualite: 'CONJOINT', dateNaissance: '1980-01-01' }, { qualite: 'CONJOINT', dateNaissance: '1981-01-01' }], T))
       .rejects.toMatchObject({ code: 'COMPOSITION_DEPASSEE' });
   });

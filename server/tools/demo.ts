@@ -222,7 +222,7 @@ try {
   const [cg, cp] = [await modele('CG_SANTE'), await modele('CP_SANTE')];
   const garantieDeces = (ageMinDeces: number) => ({ code: 'DECES', libelle: 'Capital décès', type: 'DECES', tauxPriseEnCharge: 1, carenceJours: 0, beneficiaires: 'AYANTS_DROIT', modeCalcul: 'FORFAIT', capital: 2_000_000, ageMinDeces });
   const produit = (ageMinDeces: number) => ({ type: 'CREER_PRODUIT', dateEffet: AUJOURDHUI, produit: {
-    code: '10', libelle: 'Santé famille', brancheBcrg: 'Assurance maladie', typeCouverture: 'FAMILLE', typeContrat: 'INDIVIDUEL', ageMin: 18, ageMax: 65,
+    code: '10', libelle: 'Santé famille', brancheBcrg: 'MALADIE', typeCouverture: 'FAMILLE', typeContrat: 'INDIVIDUEL', ageMin: 18, ageMax: 65,
     modeleCgId: cg, modeleCpId: cp, formules: [{
       code: 'ESSENTIEL', libelle: 'Essentiel famille', composition: { conjointsMax: 1, enfantsMax: 4, personnesMax: 6 }, accessoires: 10_000,
       ticketModerateur: 0.2, plafondAnnuelPersonne: 5_000_000,
