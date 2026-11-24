@@ -17,6 +17,9 @@ if (config.NODE_ENV === 'production') throw new Error('Aucun adaptateur SMS de p
 const sms = new Simulateur();
 brancherAdaptateur('SMS', { envoyer: async (a, t) => { console.log(`[SMS simulé] ${a} : ${t}`); return sms.envoyer(a, t); } });
 
+if (config.SECOND_FACTEUR_DISPENSE.length) {
+  console.warn(`ATTENTION : second facteur désactivé pour ${config.SECOND_FACTEUR_DISPENSE.join(', ')} (essais uniquement, interdit en production)`);
+}
 const { app } = creerApplication(config);
 const arreter = config.ORDONNANCEUR_ACTIF === 'OUI' ? await demarrerOrdonnanceur(config.DATABASE_URL) : null;
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

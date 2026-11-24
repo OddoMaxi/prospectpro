@@ -20,7 +20,11 @@ import { entier } from '../../moteurs/parametres.js';
 import { profilsActifs } from '../habilitations/droits.js';
 import { nouveauSecret, uriTotp, verifierTotp } from './totp.js';
 
-export interface ContexteAuth { jwtSecret: string; chiffrement: MoteurChiffrement }
+export interface ContexteAuth {
+  jwtSecret: string; chiffrement: MoteurChiffrement;
+  /** Comptes dispensés du second facteur : essais en développement et en recette seulement (refusé en production par la configuration). */
+  dispenseSecondFacteur?: ReadonlySet<string>;
+}
 export type Etape = 'SECOND_FACTEUR' | 'ENROLEMENT_TOTP' | 'OUVERTE';
 export interface JetonSession { sid: string; uid: string; etape: Etape }
 
@@ -95,6 +99,12 @@ export async function connecter(q: Executant, ctx: ContexteAuth, acteur: Acteur,
   }
   await q.query('UPDATE utilisateur SET echecs_connexion = 0 WHERE id = $1', [u.id]);
 
+  if (ctx.dispenseSecondFacteur?.has(u.identifiant)) {
+    // Dispense d'essai : session ouverte au seul mot de passe, tracée comme telle au journal
+    await q.query('UPDATE utilisateur SET derniere_connexion = now() WHERE id = $1', [u.id]);
+    await journaliser(q, { ...acteur.trace(), utilisateurId: u.id, action: 'CONNEXION', objetType: 'utilisateur', objetId: u.id, apres: { methode: 'DISPENSE_ESSAI', etape: 'OUVERTE' } });
+    return { ...(await ouvrirSession(q, ctx, u, 'OUVERTE', acteur)), methode: 'DISPENSE_ESSAI' as const };
+  }
   if (!u.double_facteur) return terminer(q, ctx, u, acteur, 'MOT_DE_PASSE');
   const totp = await totpActif(q, u.id);
   if (totp) return { ...(await ouvrirSession(q, ctx, u, 'SECOND_FACTEUR', acteur)), methode: 'TOTP' as const };

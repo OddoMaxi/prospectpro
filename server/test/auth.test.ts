@@ -10,6 +10,7 @@ import {
 import { codeTotp } from '../src/modules/auth/totp.js';
 import { changerStatut } from '../src/modules/habilitations/service.js';
 import jwt from 'jsonwebtoken';
+import { chargerConfig } from '../src/config.js';
 import { fermer, installee, MDP, ouvrir, sms, utilisateur } from './outils.js';
 
 const ctx: ContexteAuth = { jwtSecret: randomBytes(32).toString('hex'), chiffrement: new MoteurChiffrement(new GardienLocal(randomBytes(32))) };
@@ -100,5 +101,24 @@ describe('TOTP obligatoire pour les comptes à privilèges', () => {
     await verifierJeton(getPool(), ctx, r2.jeton);
     await transaction(dg.utilisateurId, q => changerStatut(q, dg, u.utilisateurId!, 'SUSPENDU', 'Fin de contrat'));
     await expect(verifierJeton(getPool(), ctx, r2.jeton)).rejects.toMatchObject({ code: 'SESSION_INVALIDE' });
+  });
+});
+
+describe('Dispense de second facteur (essais)', () => {
+  it('ouvre directement la session d\'un compte dispensé, tracée comme telle', async () => {
+    const essai: ContexteAuth = { ...ctx, dispenseSecondFacteur: new Set(['direction']) };
+    const r = await etape(q => connecter(q, essai, poste, 'direction', MDP));
+    expect(r).toMatchObject({ etape: 'OUVERTE', methode: 'DISPENSE_ESSAI' });
+    const j = await getPool().query(`SELECT valeur_apres FROM journal_audit WHERE action = 'CONNEXION' ORDER BY rang DESC LIMIT 1`);
+    expect(j.rows[0].valeur_apres.methode).toBe('DISPENSE_ESSAI');
+    // Sans dispense, le même compte reste soumis au second facteur
+    expect((await etape(q => connecter(q, ctx, poste, 'direction', MDP))).etape).not.toBe('OUVERTE');
+  });
+
+  it('est refusée en production', () => {
+    expect(() => chargerConfig({
+      NODE_ENV: 'production', DATABASE_URL: 'postgres://x/y', JWT_SECRET: randomBytes(32).toString('hex'),
+      VAULT_ADDR: 'https://vault.local', VAULT_TOKEN: 't', SECOND_FACTEUR_DISPENSE: 'admin',
+    })).toThrow(/interdit en production/);
   });
 });

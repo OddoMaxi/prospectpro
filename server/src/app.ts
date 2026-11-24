@@ -22,7 +22,7 @@ export function creerApplication(config: Config) {
   const gardien = config.VAULT_ADDR && config.VAULT_TOKEN
     ? new GardienVault(config.VAULT_ADDR, config.VAULT_TOKEN)
     : new GardienLocal(Buffer.from(config.CLE_MAITRESSE_LOCALE!, 'hex'));
-  const ctx: ContexteAuth = { jwtSecret: config.JWT_SECRET, chiffrement: new MoteurChiffrement(gardien) };
+  const ctx: ContexteAuth = { jwtSecret: config.JWT_SECRET, chiffrement: new MoteurChiffrement(gardien), dispenseSecondFacteur: new Set(config.SECOND_FACTEUR_DISPENSE) };
   configurerStockage(new StockageLocal(config.STOCKAGE_DIR));
 
   const app = express();

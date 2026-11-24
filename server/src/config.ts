@@ -27,6 +27,8 @@ const schema = z.object({
   ORDONNANCEUR_ACTIF: z.enum(['OUI', 'NON']).default('OUI'),
   /** Interface compilée (web/dist) servie par le même serveur ; absente en développement (serveur Vite). */
   WEB_DIR: z.string().default('../web/dist'),
+  /** Identifiants dispensés du second facteur, séparés par des virgules : essais uniquement, interdit en production. */
+  SECOND_FACTEUR_DISPENSE: z.string().default('').transform(v => v.split(',').map(x => x.trim().toLowerCase()).filter(Boolean)),
 });
 
 export type Config = z.infer<typeof schema>;
@@ -40,6 +42,9 @@ export function chargerConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const c = r.data;
   if ((c.NODE_ENV === 'production' || c.NODE_ENV === 'recette') && !(c.VAULT_ADDR && c.VAULT_TOKEN)) {
     throw new Error('Configuration invalide : VAULT_ADDR et VAULT_TOKEN sont obligatoires en recette et en production.');
+  }
+  if (c.NODE_ENV === 'production' && c.SECOND_FACTEUR_DISPENSE.length) {
+    throw new Error('Configuration invalide : SECOND_FACTEUR_DISPENSE est interdit en production (double authentification obligatoire).');
   }
   if (c.NODE_ENV !== 'production' && c.NODE_ENV !== 'recette' && !c.CLE_MAITRESSE_LOCALE && !c.VAULT_ADDR) {
     throw new Error('Configuration invalide : CLE_MAITRESSE_LOCALE ou VAULT_ADDR requis.');
