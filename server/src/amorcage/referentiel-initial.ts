@@ -471,6 +471,11 @@ export const MODELES_DOCUMENTS: { code: string; libelle: string; contenu: string
       '{{#lignes}}| {{libelle}} | {{montant}} |', '{{/lignes}}', 'Mode de paiement : {{mode_paiement}}.', '---', 'Fait à Conakry, le {{date_document}}.'].join('\n'),
   },
   {
+    code: 'AVENANT_BENEFICIAIRES', libelle: 'Avenant de désignation des bénéficiaires',
+    contenu: ['# Avenant n° {{numero}} – Bénéficiaires du capital décès', 'Police n° {{police}}', '| Bénéficiaire | Quotité | Rang |', '{{#beneficiaires}}| {{nom}} | {{quotite}} | {{rang}} |', '{{/beneficiaires}}', '',
+      'En saisissant le code reçu par SMS, le souscripteur confirme cette désignation, qui remplace la précédente sans incidence sur la prime.', '---', 'Conakry, le {{date_document}}'].join('\n'),
+  },
+  {
     code: 'RECU_VERSEMENT', libelle: 'Reçu de versement programmé',
     contenu: ['# Reçu de versement programmé n° {{numero}}', 'Police n° {{police}}', '| Versement | Cumul | Prime de renouvellement | Reste à payer |', '| {{montant}} | {{cumul}} | {{prime}} | {{reste}} |', '',
       'Ce versement est reçu d\'avance : il ne constitue pas une prime et n\'ouvre aucune garantie. Il sera affecté au renouvellement dès que le cumul atteindra la prime.', '---', 'Conakry, le {{date_document}}'].join('\n'),

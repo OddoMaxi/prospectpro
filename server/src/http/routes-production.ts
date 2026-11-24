@@ -10,6 +10,7 @@ import {
 import { emettre, lirePolice, proposerAnnulationErreur, rechercherPolices } from '../modules/production/emission.js';
 import { demanderNonRenouvellement, disponibleVersements, lirePoliceVie, policesARenouveler, primeRenouvellement, recevoirVersement, rembourserVersements, renouveler } from '../modules/production/renouvellement.js';
 import { ajouterJours, aujourdhui } from '../noyau/dates.js';
+import { ajouterAyantDroit, confirmerChangementBeneficiaires, enregistrerAcceptationBeneficiaire, preparerChangementBeneficiaires } from '../modules/production/avenants.js';
 import { droit, ecrire } from './socle.js';
 
 const uuid = z.string().uuid();
@@ -135,6 +136,30 @@ export function routesProduction(): Router {
   r.post('/polices/:id/versements/remboursement', droit('PAIEMENT', 'CREER'), async (req, res) => {
     const d = z.object({ banque: z.string(), pieceDocumentId: uuid }).parse(req.body);
     res.json(await ecrire(req, q => rembourserVersements(q, req.acteur, uuid.parse(req.params.id), d)));
+  });
+  // ---------------------------------------------------------------- Avenants (PR-04, PR-07)
+  r.post('/polices/:id/avenants/ayant-droit', droit('AVENANT', 'CREER'), async (req, res) => {
+    const d = z.object({
+      tiersId: uuid, qualite: z.enum(['CONJOINT', 'ENFANT']), parentTiersId: uuid.optional(), categorieEnfant: z.enum(['A_CHARGE', 'ETUDIANT', 'HANDICAPE']).optional(),
+      paiement: z.discriminatedUnion('type', [z.object({ type: z.literal('COMPTE_PRODUCTION') }),
+        z.object({ type: z.literal('PAIEMENT_DIRECT'), moyen: z.enum(['ESPECES_SIEGE', 'BANQUE', 'MONNAIE_ELECTRONIQUE']), banque: z.string().optional() })]),
+    }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => ajouterAyantDroit(q, req.acteur, uuid.parse(req.params.id), d)));
+  });
+  r.post('/polices/:id/avenants/beneficiaires', droit('BENEFICIAIRES', 'CREER'), async (req, res) => {
+    const { liste } = z.object({ liste: z.array(z.object({ tiersId: uuid, quotite: z.number().positive().max(100), rang: z.number().int().positive() })).min(1) }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => preparerChangementBeneficiaires(q, req.acteur, uuid.parse(req.params.id), liste)));
+  });
+  r.post('/avenants/:id/confirmation', droit('BENEFICIAIRES', 'CREER'), async (req, res) => {
+    const { code } = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
+    const x = await ecrire(req, q => confirmerChangementBeneficiaires(q, req.acteur, uuid.parse(req.params.id), code));
+    if (x instanceof Refus) throw x.erreur;
+    res.json(x);
+  });
+  r.post('/polices/:id/beneficiaires/acceptation', droit('BENEFICIAIRES', 'CREER'), async (req, res) => {
+    const d = z.object({ tiersId: uuid, preuveBeneficiaireId: uuid, preuveSouscripteurId: uuid, preuveAssureId: uuid.optional() }).parse(req.body);
+    await ecrire(req, q => enregistrerAcceptationBeneficiaire(q, req.acteur, { ...d, policeId: uuid.parse(req.params.id) }));
+    res.status(204).end();
   });
   return r;
 }
