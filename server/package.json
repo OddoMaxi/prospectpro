@@ -1,0 +1,44 @@
+{
+  "name": "prospectpro-server",
+  "version": "3.0.0-lot1",
+  "private": true,
+  "description": "Prospect Pro – serveur cible (CDC V1.4, DD 1.1)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dd:parse": "tsx tools/dd-parse.ts",
+    "dd:sql": "tsx tools/dd-sql.ts",
+    "migrate": "node-pg-migrate -m migrations --migration-file-language sql",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "installer": "tsx src/amorcage/cli.ts",
+    "demo": "tsx tools/demo.ts"
+  },
+  "dependencies": {
+    "argon2": "^0.45.2",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "node-pg-migrate": "^9.0.0",
+    "pg": "^8.23.1",
+    "pg-boss": "^12.39.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  }
+}

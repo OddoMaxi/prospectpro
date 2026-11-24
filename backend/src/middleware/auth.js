@@ -4,7 +4,13 @@ const { restituer } = require('../utils/affectations');
 const { audit } = require('../utils/audit');
 const { personName } = require('../utils/names');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'prospection_jwt_secret_change_in_production_2024';
+// Le serveur refuse de démarrer sans secret JWT solide (sous-lot 1.0, dette 6).
+const JWT_SECRET = process.env.JWT_SECRET;
+const SECRETS_INTERDITS = ['prospection_jwt_secret_change_in_production_2024', 'remplacer_par_une_chaine_aleatoire_longue', 'change_this_to_a_long_random_string_in_production'];
+if (!JWT_SECRET || JWT_SECRET.length < 32 || SECRETS_INTERDITS.includes(JWT_SECRET)) {
+  console.error('JWT_SECRET absent, trop court (32 caractères minimum) ou égal à une valeur d\'exemple : démarrage refusé.');
+  process.exit(1);
+}
 const BLOCKED = ['suspendu', 'supprime'];
 
 // Un agent inactif qui revient : il redevient actif et récupère son portefeuille temporairement transféré

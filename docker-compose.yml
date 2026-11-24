@@ -28,7 +28,7 @@ services:
       PORT: 3001
       DATABASE_URL: postgresql://koby_user:${DB_PASSWORD}@db:5432/koby
       DATABASE_SSL: "false"
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
     depends_on:
       db:
