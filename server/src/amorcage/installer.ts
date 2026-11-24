@@ -13,8 +13,9 @@ import { creerTiers } from '../modules/referentiels/tiers.js';
 import { creerCompteGeneral, creerNature } from '../modules/comptabilite/plan.js';
 import { creerExercice } from '../modules/comptabilite/exercices.js';
 import { enregistrerSchema } from '../modules/comptabilite/schemas.js';
+import { creerModeleDocument } from '../modules/referentiels/modeles.js';
 import {
-  BRANCHES, COMPTES_PROPOSES, DELEGATIONS, DEPARTEMENTS, JOURNAUX, MOTIFS_BLOCAGE, NATURES_COMPTE, SCHEMAS, FONCTION_ADMIN, FONCTIONS_SYSTEME, INCOMPATIBILITES, MATRICE, MODELES_NOTIFICATION,
+  BRANCHES, COMPTES_PROPOSES, DELEGATIONS, DEPARTEMENTS, JOURNAUX, MODELES_DOCUMENTS, MOTIFS_BLOCAGE, NATURES_COMPTE, SCHEMAS, FONCTION_ADMIN, FONCTIONS_SYSTEME, INCOMPATIBILITES, MATRICE, MODELES_NOTIFICATION,
   PARAMETRES, PROFILS, REGLES_LEGALES,
 } from './referentiel-initial.js';
 
@@ -125,6 +126,8 @@ export async function installer(q: Executant, admin: CompteInitial, direction: C
   const annee = dateEffet.slice(0, 4);
   await creerExercice(q, systeme, { code: annee, dateDebut: `${annee}-01-01`, dateFin: `${annee}-12-31` });
   for (const sc of SCHEMAS) await enregistrerSchema(q, systeme, { ...sc, dateEffet: `${annee}-01-01` });
+
+  for (const m of MODELES_DOCUMENTS) await creerModeleDocument(q, systeme, { ...m, niveauSignature: 'CODE_USAGE_UNIQUE', dateEffet: `${annee}-01-01` });
 
   // Organisation (§ 3.2)
   const services = new Map<string, string>();

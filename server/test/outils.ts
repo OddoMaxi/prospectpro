@@ -66,3 +66,20 @@ export async function utilisateur(admin: Acteur, identifiant: string, profils: {
 }
 
 export const jeton = () => randomBytes(32).toString('hex');
+
+/** Fiche de la Compagnie complète (REF-RG-010), validée par la Direction générale : prérequis des documents et des écritures. */
+export async function ficheSocieteComplete(admin: Acteur, dg: Acteur): Promise<void> {
+  const { proposerModificationSociete } = await import('../src/modules/referentiels/societe.js');
+  const d = await transaction(admin.utilisateurId, q => proposerModificationSociete(q, admin, { dateEffet: '2020-01-01', motif: 'Fiche initiale', valeurs: {
+    raison_sociale: 'CGS Assurances', activite: 'Assurance maladie et accidents', forme_juridique: 'SA', capital_social: 5_000_000_000, numero_agrement: 'AGR-2019-014',
+    pays: 'Guinée', region: 'Conakry', commune: 'Kaloum', quartier: 'Almamya', telephone: '+224620000000', courriel: 'contact@cgs.example', rccm: 'GN.KAL.2019.B.1234', nif: 'NIF123456',
+  } }));
+  await transaction(dg.utilisateurId, q => decider(q, dg, d.id, 'VALIDE'));
+}
+
+/** Pièce déposée fictive (traité, justificatif) pour les tests. */
+export async function pieceFictive(objetType = 'test'): Promise<string> {
+  return (await getPool().query(
+    `INSERT INTO document (type_document, objet_type, objet_id, fichier_ref, empreinte, horodatage_scellement, origine, imprime, conservation_jusqu_au)
+     VALUES ('PIECE', $1, gen_random_uuid(), 'test/piece.pdf', repeat('c', 64), now(), 'DEPOSE', 0, '2040-01-01') RETURNING id`, [objetType])).rows[0].id;
+}

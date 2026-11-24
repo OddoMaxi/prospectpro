@@ -74,14 +74,16 @@ export async function creerCompteGeneral(q: Executant, acteur: Acteur, d: Donnee
  * Ouvre le compte auxiliaire d'un tiers sous un collectif ; renvoie le compte existant s'il y en a déjà un.
  * Code : préfixe du collectif + séquence propre au collectif, sur la longueur paramétrée.
  */
-export async function ouvrirCompteAuxiliaire(q: Executant, acteur: Acteur, tiersId: string, numeroCollectif: string) {
+export async function ouvrirCompteAuxiliaire(q: Executant, acteur: Acteur, tiersId: string, numeroCollectif: string, options: { nouveau?: boolean } = {}) {
   const c = await q.query<{ id: string; numero: string; collectif: boolean; imputable: boolean; en_sommeil: boolean }>(
     'SELECT id, numero, collectif, imputable, en_sommeil FROM compte WHERE numero = $1 AND supprime_le IS NULL', [normaliserNumero(numeroCollectif)]);
   const coll = c.rows[0];
   if (!coll) throw new ErreurMetier('COLLECTIF_ABSENT', `Le compte collectif ${numeroCollectif} n'existe pas dans le plan de comptes`, 422);
   exiger(coll.collectif && coll.imputable && !coll.en_sommeil, 'COLLECTIF_INVALIDE', `Le compte ${coll.numero} n'est pas un collectif actif`);
-  const existant = await q.query<{ id: string; code: string }>('SELECT id, code FROM compte_auxiliaire WHERE tiers_id = $1 AND collectif_id = $2', [tiersId, coll.id]);
-  if (existant.rows[0]) return { ...existant.rows[0], cree: false, alerte: null as string | null };
+  // Un auxiliaire par tiers et par collectif (FIN-RG-012), sauf demande expresse : compte de production de chaque bureau (COM-RG-003, X24)
+  await q.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`auxiliaire:${tiersId}:${coll.id}`]);
+  const existant = await q.query<{ id: string; code: string }>('SELECT id, code FROM compte_auxiliaire WHERE tiers_id = $1 AND collectif_id = $2 ORDER BY cree_le LIMIT 1', [tiersId, coll.id]);
+  if (existant.rows[0] && !options.nouveau) return { ...existant.rows[0], cree: false, alerte: null as string | null };
 
   const longueur = await entier(q, 'FIN_LONGUEUR_AUXILIAIRES');
   const prefixe = prefixeCollectif(coll.numero);

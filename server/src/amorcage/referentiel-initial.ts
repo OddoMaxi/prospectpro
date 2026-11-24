@@ -154,6 +154,8 @@ export const DELEGATIONS: { type: string; niveaux: { niveau: number; profils: st
   { type: 'CATALOGUE', niveaux: [{ niveau: 1, profils: ['COMITE_PARAMETRAGE'] }] },
   { type: 'SCHEMA_COMPTABLE', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
   { type: 'EXTOURNE_ECRITURE', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
+  { type: 'AGREMENT_INTERVENANT', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }, { niveau: 2, profils: ['CONFORMITE'] }] },
+  { type: 'RESTITUTION_COMPTE_PRODUCTION', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }, { niveau: 2, profils: ['DAF'] }] },
 ];
 
 // ---------------------------------------------------------------- Règles légales (ARC-RG-003, annexe C)
@@ -242,6 +244,7 @@ export const PARAMETRES: P[] = [
   ['SIN_SEUIL_REEVALUATION_PROVISION', 'Seuil de réévaluation d\'une provision soumise à validation (GNF)', 'SIN', 'MONTANT', '5000000'],
   // Finances (chapitre 11)
   // Collectifs des rôles à incidence comptable (REF-RG-004, FIN-RG-003 ; comptes proposés au § 11.10)
+  ['COLLECTIF_COMPTE_PRODUCTION', 'Collectif des comptes de production des agents', 'FIN', 'TEXTE', '4111'],
   ['COLLECTIF_SOUSCRIPTEUR', 'Collectif des souscripteurs (assurés)', 'FIN', 'TEXTE', '412'],
   ['COLLECTIF_AGENT_GENERAL', 'Collectif des commissions à payer aux agents généraux', 'FIN', 'TEXTE', '4112'],
   ['COLLECTIF_APPORTEUR', 'Collectif des commissions à payer aux juniors et prescripteurs', 'FIN', 'TEXTE', '4113'],
@@ -265,6 +268,8 @@ export const MODELES_NOTIFICATION: { code: string; canal: string; contenu: strin
   { code: 'ENFANT_AGE_LIMITE', canal: 'SMS', contenu: 'Prospect Pro : {{enfant}} atteint le {{date}} l\'âge limite de sa couverture. Sans justificatif (scolarité, handicap) transmis avant cette date, il sortira de la couverture à l\'échéance suivante.' },
   { code: 'RECLAMATION_RECUE', canal: 'SMS', contenu: 'Prospect Pro : votre réclamation n° {{numero}} est enregistrée. Une réponse vous sera apportée au plus tard le {{echeance}}.' },
   { code: 'RECLAMATION_REPONDUE', canal: 'SMS', contenu: 'Prospect Pro : une réponse à votre réclamation n° {{numero}} est disponible dans votre espace assuré ou auprès de votre bureau.' },
+  { code: 'APPROVISIONNEMENT_CONFIRME', canal: 'SMS', contenu: 'Prospect Pro : approvisionnement {{numero}} de {{montant}} confirmé sur le compte de production du bureau {{bureau}}. Nouveau solde : {{solde}}.' },
+  { code: 'COMPTE_PRODUCTION_SEUIL', canal: 'SMS', contenu: 'Prospect Pro : le solde du compte de production du bureau {{bureau}} est passé sous votre seuil d\'alerte : {{solde}}. Pensez à l\'approvisionner.' },
   { code: 'ACCEPTATION_DOCUMENT', canal: 'SMS', contenu: 'Prospect Pro : code {{code}} pour accepter « {{document}} » (réf. {{empreinte}}). Valable 5 minutes. Ne le communiquez qu\'à la personne qui vous assiste, après avoir lu le document.' },
 ];
 
@@ -325,6 +330,7 @@ export const COMPTES_PROPOSES: { numero: string; libelle: string; parent?: strin
   { numero: '4371', libelle: 'État – retenue sur commissions', parent: '437', sens: 'C' },
   { numero: '47', libelle: 'Comptes transitoires ou d\'attente', imputable: false },
   { numero: '471', libelle: 'Encaissements en attente d\'affectation', parent: '47', sens: 'C' },
+  { numero: '56', libelle: 'Banques et établissements financiers', imputable: false },
   { numero: '57', libelle: 'Caisse', imputable: false },
   { numero: '571', libelle: 'Caisse du siège', parent: '57', sens: 'D' },
   { numero: '32', libelle: 'Provisions techniques', imputable: false },
@@ -410,4 +416,22 @@ export const SCHEMAS: { codeEvt: string; typeEvenement: string; journal: string;
   { codeEvt: 'EVT-26', typeEvenement: 'FRAIS_HORS_PRIME_FACTURES', journal: 'ENC', libelle: 'Frais hors prime {{reference}}', lignes: [d('TRESORERIE', 'TOTAL'), c('7511', 'ACCESSOIRES'), c('TAXES', '*')] },
   { codeEvt: 'EVT-27', typeEvenement: 'FACTURE_COMMISSION_AFFECTEE', journal: 'AUT', libelle: 'Affectation facture de commissions {{reference}} au compte de production',
     lignes: [d('COMMISSIONS_A_PAYER', 'BRUT'), c('4371', 'RETENUE'), c('COMPTE_PRODUCTION', 'NET')] },
+];
+
+/** Modèles de documents nécessaires au lot 2 (annexe F), modifiables ensuite par le comité. */
+export const MODELES_DOCUMENTS: { code: string; libelle: string; contenu: string }[] = [
+  {
+    code: 'RECU_APPROVISIONNEMENT', libelle: 'Reçu d\'approvisionnement du compte de production',
+    contenu: [
+      '# Reçu d\'approvisionnement n° {{numero}}',
+      'Compte de production du bureau {{bureau}}',
+      '| Moyen | Montant |',
+      '| {{moyen}} | {{montant}} |',
+      '',
+      'Solde du compte de production après l\'opération : {{solde}}.',
+      'Le compte de production est un compte de garantie affecté au paiement des primes émises par le bureau ; il n\'est pas rémunéré.',
+      '---',
+      'Conakry, le {{date_document}} – {{societe_raison_sociale}}',
+    ].join('\n'),
+  },
 ];
