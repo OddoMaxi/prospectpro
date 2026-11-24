@@ -181,6 +181,7 @@ export const PARAMETRES: P[] = [
   ['AGE_LIMITE_ENFANT_CHARGE', 'Âge limite d\'un enfant à charge', 'REF', 'ENTIER', '21'],
   ['AGE_LIMITE_ETUDIANT', 'Âge limite d\'un enfant étudiant', 'REF', 'ENTIER', '25'],
   ['AGE_MIN_GARANTIE_DECES', 'Âge minimal pour une garantie décès', 'REF', 'ENTIER', '12', 'ART193_194', 'HAUSSE'],
+  ['FOYER_PREAVIS_AGE_LIMITE_JOURS', 'Préavis de la notification d\'un enfant atteignant l\'âge limite (jours)', 'REF', 'DUREE', '30'],
   ['COORDONNEE_CARENCE_HEURES', 'Carence avant le premier paiement sur des coordonnées modifiées (heures)', 'REF', 'DUREE', '72'],
   ['BUREAU_ALERTE_CODES', 'Nombre de codes bureau utilisés déclenchant l\'alerte', 'REF', 'ENTIER', '90'],
   // Commercial (chapitre 7)
@@ -238,6 +239,13 @@ export const PARAMETRES: P[] = [
   ['SIN_FENETRE_DOUBLON_JOURS', 'Fenêtre de doublon d\'un accident (± jours)', 'SIN', 'DUREE', '1'],
   ['SIN_SEUIL_REEVALUATION_PROVISION', 'Seuil de réévaluation d\'une provision soumise à validation (GNF)', 'SIN', 'MONTANT', '5000000'],
   // Finances (chapitre 11)
+  // Collectifs des rôles à incidence comptable (REF-RG-004, FIN-RG-003 ; comptes proposés au § 11.10)
+  ['COLLECTIF_SOUSCRIPTEUR', 'Collectif des souscripteurs (assurés)', 'FIN', 'TEXTE', '412'],
+  ['COLLECTIF_AGENT_GENERAL', 'Collectif des commissions à payer aux agents généraux', 'FIN', 'TEXTE', '4112'],
+  ['COLLECTIF_APPORTEUR', 'Collectif des commissions à payer aux juniors et prescripteurs', 'FIN', 'TEXTE', '4113'],
+  ['COLLECTIF_PRESTATAIRE', 'Collectif des prestataires de santé et pharmacies', 'FIN', 'TEXTE', '4681'],
+  ['COLLECTIF_FOURNISSEUR', 'Collectif des fournisseurs', 'FIN', 'TEXTE', '461'],
+  ['COLLECTIF_BENEFICIAIRE', 'Collectif des bénéficiaires d\'indemnités', 'FIN', 'TEXTE', '4161'],
   ['FIN_LONGUEUR_AUXILIAIRES', 'Longueur des comptes auxiliaires', 'FIN', 'ENTIER', '10'],
   ['FIN_EXERCICES_OUVERTS_MAX', 'Exercices ouverts simultanément', 'FIN', 'ENTIER', '2'],
   ['FIN_SEUIL_FAIBLE_VALEUR', 'Seuil des biens de faible valeur (GNF HT)', 'FIN', 'MONTANT', '5000000'],
@@ -251,4 +259,50 @@ export const PARAMETRES: P[] = [
 export const MODELES_NOTIFICATION: { code: string; canal: string; contenu: string }[] = [
   { code: 'OTP_CONNEXION', canal: 'SMS', contenu: 'Prospect Pro : votre code de connexion est {{code}}. Il expire dans 5 minutes. Ne le communiquez à personne.' },
   { code: 'OTP_VERIFICATION_TELEPHONE', canal: 'SMS', contenu: 'Prospect Pro : code de vérification de votre numéro : {{code}}.' },
+  { code: 'COORDONNEE_MODIFIEE', canal: 'SMS', contenu: 'Prospect Pro : vos coordonnées de paiement ont été modifiées ({{etablissement}}, se terminant par {{fin}}). Aucun paiement n\'y sera fait avant {{heures}} heures. Si vous n\'êtes pas à l\'origine de ce changement, contactez-nous immédiatement.' },
+  { code: 'ENFANT_AGE_LIMITE', canal: 'SMS', contenu: 'Prospect Pro : {{enfant}} atteint le {{date}} l\'âge limite de sa couverture. Sans justificatif (scolarité, handicap) transmis avant cette date, il sortira de la couverture à l\'échéance suivante.' },
+];
+
+/** Natures de comptes (FIN-RG-078) : tranche par défaut et contrôles associés. Paramétrables ensuite. */
+export const NATURES_COMPTE: { code: string; libelle: string; tranche: string; controles: object }[] = [
+  { code: 'CAPITAUX', libelle: 'Capitaux', tranche: '1', controles: {} },
+  { code: 'PROVISION_TECHNIQUE', libelle: 'Provisions techniques', tranche: '3', controles: {} },
+  { code: 'IMMOBILISATION', libelle: 'Immobilisations', tranche: '2', controles: {} },
+  { code: 'AMORTISSEMENT', libelle: 'Amortissements', tranche: '28', controles: {} },
+  { code: 'INTERMEDIAIRE', libelle: 'Intermédiaires', tranche: '411', controles: { lettrage: true, echeance: true } },
+  { code: 'ASSURE', libelle: 'Assurés et bénéficiaires', tranche: '41', controles: { lettrage: true, echeance: true } },
+  { code: 'FOURNISSEUR', libelle: 'Fournisseurs', tranche: '461', controles: { lettrage: true, echeance: true } },
+  { code: 'PRESTATAIRE', libelle: 'Prestataires de santé', tranche: '468', controles: { lettrage: true, echeance: true } },
+  { code: 'ETAT', libelle: 'État', tranche: '43', controles: {} },
+  { code: 'TIERS_DIVERS', libelle: 'Tiers divers et comptes d\'attente', tranche: '4', controles: {} },
+  { code: 'BANQUE', libelle: 'Banques et monnaie électronique', tranche: '56', controles: { journalTresorerie: true } },
+  { code: 'CAISSE', libelle: 'Caisse', tranche: '57', controles: { journalTresorerie: true } },
+  { code: 'CHARGE', libelle: 'Charges', tranche: '6', controles: { analytique: 'SELON_PARAMETRAGE' } },
+  { code: 'PRODUIT', libelle: 'Produits', tranche: '7', controles: { analytique: 'SELON_PARAMETRAGE' } },
+];
+
+/**
+ * Comptes proposés pour le schéma comptable (§ 11.10) : regroupements et collectifs nécessaires aux rôles des tiers.
+ * Le chef comptable les rattache aux lignes des états BCRG et complète le plan par import (FIN-RG-001, 007).
+ */
+export const COMPTES_PROPOSES: { numero: string; libelle: string; parent?: string; collectif?: boolean; imputable?: boolean; sens?: 'D' | 'C' }[] = [
+  { numero: '41', libelle: 'Assurés, intermédiaires et comptes rattachés', imputable: false },
+  { numero: '411', libelle: 'Intermédiaires', parent: '41', imputable: false },
+  { numero: '4111', libelle: 'Intermédiaires – comptes de production', parent: '411', collectif: true, sens: 'C' },
+  { numero: '4112', libelle: 'Intermédiaires – commissions à payer', parent: '411', collectif: true, sens: 'C' },
+  { numero: '4113', libelle: 'Apporteurs d\'affaires (juniors, prescripteurs) – commissions à payer', parent: '411', collectif: true, sens: 'C' },
+  { numero: '412', libelle: 'Créances sur les assurés', parent: '41', collectif: true, sens: 'D' },
+  { numero: '416', libelle: 'Assurés et bénéficiaires', parent: '41', imputable: false },
+  { numero: '4161', libelle: 'Assurés et bénéficiaires – indemnités à payer', parent: '416', collectif: true, sens: 'C' },
+  { numero: '419', libelle: 'Assurés créditeurs', parent: '41', imputable: false },
+  { numero: '4191', libelle: 'Assurés – versements programmés reçus d\'avance', parent: '419', collectif: true, sens: 'C' },
+  { numero: '46', libelle: 'Débiteurs et créditeurs divers', imputable: false },
+  { numero: '461', libelle: 'Fournisseurs, dettes en compte', parent: '46', collectif: true, sens: 'C' },
+  { numero: '468', libelle: 'Autres créditeurs', parent: '46', imputable: false },
+  { numero: '4681', libelle: 'Prestataires de santé et pharmacies', parent: '468', collectif: true, sens: 'C' },
+  { numero: '43', libelle: 'État', imputable: false },
+  { numero: '436', libelle: 'État – taxes sur primes', parent: '43', imputable: false },
+  { numero: '4361', libelle: 'État – taxes sur primes d\'assurance', parent: '436', sens: 'C' },
+  { numero: '437', libelle: 'État – retenues', parent: '43', imputable: false },
+  { numero: '4371', libelle: 'État – retenue sur commissions', parent: '437', sens: 'C' },
 ];

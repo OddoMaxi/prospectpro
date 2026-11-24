@@ -10,8 +10,9 @@ import { controlerValeur } from '../moteurs/parametres.js';
 import { creer } from '../modules/organisation/service.js';
 import { attribuerProfil, creerUtilisateur } from '../modules/habilitations/service.js';
 import { creerTiers } from '../modules/referentiels/tiers.js';
+import { creerCompteGeneral, creerNature } from '../modules/comptabilite/plan.js';
 import {
-  DELEGATIONS, DEPARTEMENTS, FONCTION_ADMIN, FONCTIONS_SYSTEME, INCOMPATIBILITES, MATRICE, MODELES_NOTIFICATION,
+  COMPTES_PROPOSES, DELEGATIONS, DEPARTEMENTS, NATURES_COMPTE, FONCTION_ADMIN, FONCTIONS_SYSTEME, INCOMPATIBILITES, MATRICE, MODELES_NOTIFICATION,
   PARAMETRES, PROFILS, REGLES_LEGALES,
 } from './referentiel-initial.js';
 
@@ -95,6 +96,12 @@ export async function installer(q: Executant, admin: CompteInitial, direction: C
   }
   for (const m of MODELES_NOTIFICATION) {
     await q.query(`INSERT INTO modele_notification (code, canal, langue, contenu, actif) VALUES ($1,$2,'fr',$3,true)`, [m.code, m.canal, m.contenu]);
+  }
+
+  // Natures et comptes proposés (FIN-RG-078, § 11.10)
+  for (const n of NATURES_COMPTE) await creerNature(q, systeme, { code: n.code, libelle: n.libelle, trancheDefaut: n.tranche, controles: n.controles });
+  for (const c of COMPTES_PROPOSES) {
+    await creerCompteGeneral(q, systeme, { numero: c.numero, libelle: c.libelle, parentNumero: c.parent, collectif: c.collectif, imputable: c.imputable, sensHabituel: c.sens, dateEffet });
   }
 
   // Organisation (§ 3.2)

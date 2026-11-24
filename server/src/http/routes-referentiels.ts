@@ -1,4 +1,4 @@
-/** Référentiels (CDC chapitre 5) : tiers et bureaux. */
+/** Référentiels (CDC chapitre 5) : tiers, rôles, foyers, coordonnées de paiement, fiche de la Compagnie, bureaux. */
 import { Router } from 'express';
 import { z } from 'zod';
 import { getPool } from '../db/pool.js';
@@ -6,11 +6,17 @@ import { journaliser } from '../moteurs/audit.js';
 import { controlerDroit } from '../modules/habilitations/droits.js';
 import { creerBureau, lireBureau, listerBureaux } from '../modules/referentiels/bureaux.js';
 import { creerTiers, lireTiers, modifierTiers, rechercherDoublons, schemaTiers } from '../modules/referentiels/tiers.js';
+import type { ContexteAuth } from '../modules/auth/service.js';
+import { attribuerRole, ROLES, rolesDuTiers, terminerRole } from '../modules/referentiels/roles.js';
+import { changerCategorie, declarerMembre, foyer, retirerMembre } from '../modules/referentiels/foyer.js';
+import { listerCoordonnees, lireNumero, proposerCoordonnee } from '../modules/referentiels/coordonnees.js';
+import { champsManquants, CHAMPS_SOCIETE, ficheSociete, historiqueSociete, proposerModificationSociete } from '../modules/referentiels/societe.js';
 import { droit, ecrire } from './socle.js';
 
 const uuid = z.string().uuid();
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-export function routesReferentiels(): Router {
+export function routesReferentiels(ctx: ContexteAuth): Router {
   const r = Router();
 
   // ---------------------------------------------------------------- Tiers
@@ -41,6 +47,76 @@ export function routesReferentiels(): Router {
   r.patch('/tiers/:id', droit('TIERS', 'MODIFIER'), async (req, res) => {
     const { version, ...maj } = z.object({ version: z.number().int().positive() }).passthrough().parse(req.body);
     res.json(await ecrire(req, q => modifierTiers(q, req.acteur, uuid.parse(req.params.id), version, maj as never)));
+  });
+
+  // ---------------------------------------------------------------- Rôles (REF-RG-003, 004, 014)
+  r.get('/tiers/:id/roles', droit('TIERS', 'CONSULTER'), async (req, res) => {
+    res.json(await rolesDuTiers(getPool(), uuid.parse(req.params.id)));
+  });
+  r.post('/tiers/:id/roles', droit('TIERS', 'MODIFIER'), async (req, res) => {
+    const d = z.object({ role: z.enum(ROLES), dateDebut: date.optional() }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => attribuerRole(q, req.acteur, { ...d, tiersId: uuid.parse(req.params.id) })));
+  });
+  r.post('/roles/:id/fin', droit('TIERS', 'MODIFIER'), async (req, res) => {
+    const d = z.object({ dateFin: date, motif: z.string().min(1) }).parse(req.body);
+    await ecrire(req, q => terminerRole(q, req.acteur, uuid.parse(req.params.id), d.dateFin, d.motif));
+    res.status(204).end();
+  });
+
+  // ---------------------------------------------------------------- Foyer (REF-RG-007 à 009)
+  r.get('/tiers/:id/foyer', droit('TIERS', 'CONSULTER'), async (req, res) => {
+    const { date: d } = z.object({ date: date.optional() }).parse(req.query);
+    res.json(await foyer(getPool(), uuid.parse(req.params.id), d));
+  });
+  r.post('/tiers/:id/foyer', droit('TIERS', 'MODIFIER'), async (req, res) => {
+    const d = z.object({
+      membreId: uuid, lien: z.enum(['CONJOINT', 'ENFANT']), parentConjointId: uuid.optional(),
+      categorieEnfant: z.enum(['A_CHARGE', 'ETUDIANT', 'HANDICAPE']).optional(), justificatifDocumentId: uuid.optional(),
+      justificatifValideJusquAu: date.optional(), dateDebut: date.optional(),
+    }).parse(req.body);
+    res.status(201).json({ id: await ecrire(req, q => declarerMembre(q, req.acteur, { ...d, assurePrincipalId: uuid.parse(req.params.id) })) });
+  });
+  r.post('/foyer/:id/categorie', droit('TIERS', 'MODIFIER'), async (req, res) => {
+    const d = z.object({ categorie: z.enum(['A_CHARGE', 'ETUDIANT', 'HANDICAPE']), justificatifDocumentId: uuid, justificatifValideJusquAu: date.optional() }).parse(req.body);
+    await ecrire(req, q => changerCategorie(q, req.acteur, uuid.parse(req.params.id), d));
+    res.status(204).end();
+  });
+  r.post('/foyer/:id/fin', droit('TIERS', 'MODIFIER'), async (req, res) => {
+    const d = z.object({ dateFin: date, motif: z.string().min(1) }).parse(req.body);
+    await ecrire(req, q => retirerMembre(q, req.acteur, uuid.parse(req.params.id), d.dateFin, d.motif));
+    res.status(204).end();
+  });
+
+  // ---------------------------------------------------------------- Coordonnées de paiement (REF-RG-005)
+  r.get('/tiers/:id/coordonnees', droit('TIERS', 'CONSULTER'), async (req, res) => {
+    res.json(await listerCoordonnees(getPool(), ctx.chiffrement, uuid.parse(req.params.id)));
+  });
+  r.post('/tiers/:id/coordonnees', droit('TIERS', 'MODIFIER'), async (req, res) => {
+    const d = z.object({
+      type: z.enum(['BANQUE', 'MONNAIE_ELECTRONIQUE']), etablissement: z.string().min(1).max(120), numero: z.string().min(8).max(40),
+      intitule: z.string().min(1).max(200), principale: z.boolean().optional(), remplaceId: uuid.optional(),
+    }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => proposerCoordonnee(q, req.acteur, ctx.chiffrement, { ...d, tiersId: uuid.parse(req.params.id) })));
+  });
+  /** Numéro complet : réservé à la comptabilité, consultation tracée. */
+  r.get('/coordonnees/:id/numero', droit('JOURNAUX_TIERS', 'CREER'), async (req, res) => {
+    res.json({ numero: await ecrire(req, q => lireNumero(q, req.acteur, ctx.chiffrement, uuid.parse(req.params.id))) });
+  });
+
+  // ---------------------------------------------------------------- Fiche de la Compagnie (REF-RG-010 à 013)
+  r.get('/societe', droit('SOCIETE', 'CONSULTER'), async (req, res) => {
+    const { date: d } = z.object({ date: date.optional() }).parse(req.query);
+    res.json({
+      fiche: await ficheSociete(getPool(), d), manquants: await champsManquants(getPool(), d),
+      champs: Object.entries(CHAMPS_SOCIETE).map(([code, c]) => ({ code, libelle: c.libelle, obligatoire: c.obligatoire })),
+    });
+  });
+  r.get('/societe/historique', droit('SOCIETE', 'CONSULTER'), async (_req, res) => {
+    res.json(await historiqueSociete(getPool()));
+  });
+  r.post('/societe/modifications', droit('SOCIETE', 'CREER'), async (req, res) => {
+    const d = z.object({ valeurs: z.record(z.string(), z.unknown()), dateEffet: date.optional(), motif: z.string().min(1) }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => proposerModificationSociete(q, req.acteur, d)));
   });
 
   // ---------------------------------------------------------------- Bureaux

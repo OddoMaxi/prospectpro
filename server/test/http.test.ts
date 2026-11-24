@@ -97,4 +97,20 @@ describe('API', () => {
     const p = await request(app).get('/api/admin/parametres').set('Authorization', `Bearer ${j}`).expect(200);
     expect(p.body.find((x: { code: string }) => x.code === 'SECURITE_ECHECS_MAX').valeur).toBe('4');
   });
+
+  it('fiche de la Compagnie par l\'API : proposée par l\'administrateur, validée par la Direction générale', async () => {
+    const j = await seConnecter('admin');
+    const avant = await request(app).get('/api/societe').set('Authorization', `Bearer ${j}`).expect(200);
+    expect(avant.body.manquants).toContain('RCCM');
+    const d = await request(app).post('/api/societe/modifications').set('Authorization', `Bearer ${j}`)
+      .send({ valeurs: { raison_sociale: 'CGS Assurances', rccm: 'GN.KAL.2019.B.1234' }, dateEffet: '2020-01-01', motif: 'Fiche initiale' }).expect(201);
+    const jDg = await seConnecter('direction');
+    await request(app).post(`/api/admin/validations/${d.body.id}/decision`).set('Authorization', `Bearer ${jDg}`).send({ decision: 'VALIDE' }).expect(200);
+    const apres = await request(app).get('/api/societe').set('Authorization', `Bearer ${jDg}`).expect(200);
+    expect(apres.body.fiche.rccm).toBe('GN.KAL.2019.B.1234');
+    expect(apres.body.manquants).not.toContain('RCCM');
+    // Le gestionnaire de production n'a aucun droit sur la fiche
+    const jg = await seConnecter('gest.kaloum');
+    await request(app).get('/api/societe').set('Authorization', `Bearer ${jg}`).expect(403);
+  });
 });

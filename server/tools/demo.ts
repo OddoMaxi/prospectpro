@@ -184,6 +184,58 @@ try {
   const p = (await api('GET', '/admin/parametres', jAdmin)).corps.find((x: any) => x.code === 'SECURITE_ECHECS_MAX');
   constat(p.valeur === '3', `Validée par le comité : la valeur en vigueur est ${p.valeur}`);
 
+  titre('Fiche de la Compagnie (REF-RG-010 à 013, CA-REF-05 et 06)');
+  const vide = await api('GET', '/societe', jAdmin);
+  constat(vide.corps.manquants.length === 13, `Fiche vide : ${vide.corps.manquants.length} informations manquantes ; émissions et écritures bloquées`);
+  const fiche = {
+    raison_sociale: 'CGS Assurances', activite: 'Assurance maladie et accidents', forme_juridique: 'SA', capital_social: 5_000_000_000,
+    numero_agrement: 'AGR-2019-014', pays: 'Guinée', region: 'Conakry', commune: 'Kaloum', quartier: 'Almamya',
+    telephone: '+224620000000', courriel: 'contact@cgs.example', rccm: 'GN.KAL.2019.B.1234', nif: 'NIF123456',
+  };
+  const fs = attendu(await api('POST', '/societe/modifications', jAdmin, { valeurs: fiche, dateEffet: '2020-01-01', motif: 'Fiche initiale' }), 201, 'fiche');
+  info('L\'administrateur saisit la fiche ; elle attend la validation de la DAF ou de la Direction générale');
+  attendu(await api('POST', `/admin/validations/${fs.corps.id}/decision`, jDg, { decision: 'VALIDE' }), 200, 'validation fiche');
+  constat((await api('GET', '/societe', jAdmin)).corps.manquants.length === 0, 'Validée par la Direction générale : fiche complète');
+  const cap = attendu(await api('POST', '/societe/modifications', jAdmin, { valeurs: { capital_social: 8_000_000_000 }, motif: 'Augmentation de capital' }), 201, 'capital');
+  attendu(await api('POST', `/admin/validations/${cap.corps.id}/decision`, jDg, { decision: 'VALIDE' }), 200, 'validation capital');
+  const ancienne = (await api('GET', '/societe?date=2020-03-15', jAdmin)).corps.fiche.capital_social;
+  const actuelle = (await api('GET', '/societe', jAdmin)).corps.fiche.capital_social;
+  constat(ancienne === '5000000000' && actuelle === '8000000000', 'Augmentation de capital : un document de mars 2020 réimprimé garde l\'ancien capital, les nouveaux portent le nouveau');
+
+  titre('Rôles des tiers et comptes auxiliaires (CA-REF-02)');
+  const clinique = attendu(await api('POST', '/tiers', jAdmin, { nature: 'MORALE', nom: 'Clinique Ambroise Paré', rccm: 'GN.2010.B.1', telephone: '+224621777001' }), 201, 'clinique');
+  const role = attendu(await api('POST', `/tiers/${clinique.corps.id}/roles`, jAdmin, { role: 'PRESTATAIRE' }), 201, 'rôle');
+  constat(role.corps.compteAuxiliaire?.code === '4681000001', `Rôle prestataire attribué : compte auxiliaire ${role.corps.compteAuxiliaire?.code} ouvert automatiquement sous le collectif 4681`);
+
+  titre('Foyer : conjoints et enfants (CA-REF-07)');
+  const pers = async (nom: string, naissance: string, i: number) =>
+    attendu(await api('POST', '/tiers', jAdmin, { nature: 'PHYSIQUE', nom, prenoms: 'Démo', date_naissance: naissance, telephone: `+22462188${String(i).padStart(4, '0')}` }), 201, 'personne').corps.id as string;
+  const principal = await pers('SOW', '1970-01-01', 1);
+  for (let i = 0; i < 4; i++) attendu(await api('POST', `/tiers/${principal}/foyer`, jAdmin, { membreId: await pers(`EPOUSE${i}`, `198${i}-02-02`, 10 + i), lien: 'CONJOINT' }), 201, 'conjoint');
+  const cinq = await api('POST', `/tiers/${principal}/foyer`, jAdmin, { membreId: await pers('EPOUSE4', '1985-03-03', 20), lien: 'CONJOINT' });
+  constat(cinq.statut === 422 && cinq.corps.code === 'CONJOINTS_MAX', `Quatre conjoints déclarés ; le cinquième est refusé (« ${cinq.corps.message} »)`);
+
+  titre('Catalogue et tarification (CA-REF-03, CA-REF-08, REF-RG-030)');
+  const modele = async (code: string) => attendu(await api('POST', '/modeles', jAdmin, { code, libelle: code, contenu: '…', niveauSignature: 'CODE_USAGE_UNIQUE' }), 201, 'modèle').corps.id as string;
+  const [cg, cp] = [await modele('CG_SANTE'), await modele('CP_SANTE')];
+  const garantieDeces = (ageMinDeces: number) => ({ code: 'DECES', libelle: 'Capital décès', type: 'DECES', tauxPriseEnCharge: 1, carenceJours: 0, beneficiaires: 'AYANTS_DROIT', modeCalcul: 'FORFAIT', capital: 2_000_000, ageMinDeces });
+  const produit = (ageMinDeces: number) => ({ type: 'CREER_PRODUIT', dateEffet: AUJOURDHUI, produit: {
+    code: '10', libelle: 'Santé famille', brancheBcrg: 'Assurance maladie', typeCouverture: 'FAMILLE', typeContrat: 'INDIVIDUEL', ageMin: 18, ageMax: 65,
+    modeleCgId: cg, modeleCpId: cp, formules: [{
+      code: 'ESSENTIEL', libelle: 'Essentiel famille', composition: { conjointsMax: 1, enfantsMax: 4, personnesMax: 6 }, accessoires: 10_000,
+      ticketModerateur: 0.2, plafondAnnuelPersonne: 5_000_000,
+      garanties: [{ code: 'SOINS', libelle: 'Frais de soins', type: 'FRAIS_SOINS', tauxPriseEnCharge: 0.8, carenceJours: 30, beneficiaires: 'VICTIME', modeCalcul: 'COUT_REEL' }, garantieDeces(ageMinDeces)],
+      tarifs: [{ qualite: 'ASSURE_PRINCIPAL', ageMin: 18, ageMax: 65, primeNette: 300_000 }, { qualite: 'ENFANT', ageMin: 0, ageMax: 25, primeNette: 100_000 }],
+    }] } });
+  const interdit = await api('POST', '/catalogue/propositions', jGest, { motif: 'Lancement', operation: produit(9) });
+  constat(interdit.statut === 422, `Garantie décès possible dès 9 ans : refusée dès la proposition (« ${interdit.corps.message} »)`);
+  const prop = attendu(await api('POST', '/catalogue/propositions', jGest, { motif: 'Lancement', operation: produit(12) }), 201, 'produit');
+  attendu(await api('POST', `/admin/validations/${prop.corps.id}/decision`, jComite, { decision: 'VALIDE' }), 200, 'validation produit');
+  const formuleId = (await api('GET', '/catalogue', jGest)).corps[0].formules[0].id;
+  const naissance = (ans: number) => `${Number(AUJOURDHUI.slice(0, 4)) - ans}${AUJOURDHUI.slice(4)}`;
+  const tarif = await api('POST', '/catalogue/tarification', jGest, { formuleId, membres: [{ qualite: 'ASSURE_PRINCIPAL', dateNaissance: naissance(35) }, { qualite: 'ENFANT', dateNaissance: naissance(5) }] });
+  constat(tarif.corps.primeTotale === 410_000, `Produit validé par le comité ; prime calculée : ${tarif.corps.primeNette} (nette) + ${tarif.corps.accessoires} (accessoires) = ${tarif.corps.primeTotale} GNF`);
+
   titre('Verrouillage après échecs de connexion');
   let tentative = 0, rep: Rep;
   do rep = await api('POST', '/auth/connexion', undefined, { identifiant: 'gest.kaloum', motDePasse: 'erreur' });
