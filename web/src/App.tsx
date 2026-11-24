@@ -19,6 +19,14 @@ import { PageFicheTiers } from './pages/referentiels/FicheTiers';
 import { PageBureaux, PageModeles, PageNomenclatures, PagePlanComptes } from './pages/referentiels/Divers';
 import { PageCatalogue } from './pages/production/Catalogue';
 import { PageReclamations } from './pages/production/Reclamations';
+import { PageFichePolice, PagePolices, PageRenouvellements } from './pages/production/Polices';
+import { PageIntervenants } from './pages/commercial/Intervenants';
+import { PageComptesProduction } from './pages/commercial/ComptesProduction';
+import { PageFacturesCommissions } from './pages/commercial/FacturesCommissions';
+import { PageApprovisionnements, PageJourneeComptable, PagePaiements } from './pages/finances/Tresorerie';
+import { PageFichesImputation } from './pages/comptabilite/Saisie';
+import { PageEditions, PageInterrogation, PageSchemas } from './pages/comptabilite/Etats';
+import { PageClotures, PageDeclarations } from './pages/comptabilite/Cloture';
 
 function Protege({ droit, children }: { droit?: string; children: JSX.Element }) {
   const { peut } = useSession();
@@ -52,7 +60,22 @@ export function App() {
         <Route path="commercial/bureaux" element={<Protege droit="BUREAUX:CONSULTER"><PageBureaux /></Protege>} />
         <Route path="production/catalogue" element={<Protege droit="CATALOGUE:CONSULTER"><PageCatalogue /></Protege>} />
         <Route path="production/reclamations" element={<Protege droit="RECLAMATIONS:CONSULTER"><PageReclamations /></Protege>} />
-        <Route path="comptabilite/plan" element={<Protege droit="PLAN_COMPTES:PARAMETRER"><PagePlanComptes /></Protege>} />
+        <Route path="comptabilite/plan" element={<Protege droit="PLAN_COMPTES:CONSULTER"><PagePlanComptes /></Protege>} />
+        <Route path="commercial/intervenants" element={<Protege droit="AGREMENT:CONSULTER"><PageIntervenants /></Protege>} />
+        <Route path="commercial/factures" element={<Protege droit="FACTURE_COMMISSION:CONSULTER"><PageFacturesCommissions /></Protege>} />
+        <Route path="commercial/comptes-production" element={<Protege droit="COMPTE_PRODUCTION:CONSULTER"><PageComptesProduction /></Protege>} />
+        <Route path="production/polices" element={<Protege droit="SOUSCRIPTION:CONSULTER"><PagePolices /></Protege>} />
+        <Route path="production/polices/:id" element={<Protege droit="SOUSCRIPTION:CONSULTER"><PageFichePolice /></Protege>} />
+        <Route path="production/renouvellements" element={<Protege droit="SOUSCRIPTION:CONSULTER"><PageRenouvellements /></Protege>} />
+        <Route path="finances/approvisionnements" element={<Protege droit="COMPTE_PRODUCTION:CREER"><PageApprovisionnements /></Protege>} />
+        <Route path="finances/journee" element={<Protege droit="PAIEMENT:CONSULTER"><PageJourneeComptable /></Protege>} />
+        <Route path="finances/paiements" element={<Protege droit="PAIEMENT:CONSULTER"><PagePaiements /></Protege>} />
+        <Route path="comptabilite/schemas" element={<Protege droit="JOURNAUX_TIERS:CONSULTER"><PageSchemas /></Protege>} />
+        <Route path="comptabilite/fiches" element={<Protege droit="ECRITURE_MANUELLE:CONSULTER"><PageFichesImputation /></Protege>} />
+        <Route path="comptabilite/interrogation" element={<Protege droit="JOURNAUX_TIERS:CONSULTER"><PageInterrogation /></Protege>} />
+        <Route path="comptabilite/declarations" element={<Protege droit="DECLARATION_TAXE:CONSULTER"><PageDeclarations /></Protege>} />
+        <Route path="comptabilite/clotures" element={<Protege droit="ECRITURE_MANUELLE:CONSULTER"><PageClotures /></Protege>} />
+        <Route path="comptabilite/editions" element={<Protege droit="JOURNAUX_TIERS:CONSULTER"><PageEditions /></Protege>} />
         <Route path="*" element={<Page titre="Page introuvable"><Message>Cette adresse ne correspond à aucun écran.</Message></Page>} />
       </Route>
     </Routes>

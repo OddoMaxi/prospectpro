@@ -307,7 +307,12 @@ export async function lirePolice(q: Executant, id: string) {
   ]);
   const preuve = (await q.query(
     `SELECT p.id, p.niveau, p.horodatage, p.empreinte_document FROM dossier_souscription d JOIN dossier_preuve p ON p.id = d.acceptation_preuve_id WHERE d.police_id = $1`, [id])).rows[0] ?? null;
-  return { ...p, assures: assures.rows, periodes: periodes.rows, quittances: quittances.rows, intervenants: intervenants.rows, documents: documents.rows, beneficiaires: beneficiaires.rows, preuveAcceptation: preuve };
+  // PR-01 : historique daté de la police (journal d'audit)
+  const historique = (await q.query(
+    `SELECT a.horodatage, a.action, a.valeur_apres, COALESCE(trim(t.nom || ' ' || COALESCE(t.prenoms, '')), 'Système') AS auteur
+       FROM journal_audit a LEFT JOIN utilisateur u ON u.id = a.utilisateur_id LEFT JOIN tiers t ON t.id = u.tiers_id
+      WHERE a.objet_type = 'police' AND a.objet_id = $1 ORDER BY a.rang DESC LIMIT 100`, [id])).rows;
+  return { ...p, assures: assures.rows, periodes: periodes.rows, quittances: quittances.rows, intervenants: intervenants.rows, documents: documents.rows, beneficiaires: beneficiaires.rows, preuveAcceptation: preuve, historique };
 }
 
 export async function rechercherPolices(q: Executant, f: { recherche?: string; bureaux: string[] | null; statut?: string }) {

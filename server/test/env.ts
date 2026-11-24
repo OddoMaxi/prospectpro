@@ -4,9 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chargerConfig } from '../src/config.js';
 
-export const URL_TEST = (process.env.TEST_ADMIN_URL ?? 'postgres://localhost:5432/postgres').replace(/\/[^/]*$/, '/prospectpro_test');
+// Le jeu d'essai (tools/jeu-essai.ts) réutilise ces outils sur la base de développement
+export const URL_TEST = process.env.BASE_JEU_ESSAI ?? (process.env.TEST_ADMIN_URL ?? 'postgres://localhost:5432/postgres').replace(/\/[^/]*$/, '/prospectpro_test');
 
-export const STOCKAGE_TEST = join(tmpdir(), `prospectpro-test-${process.pid}`);
+export const STOCKAGE_TEST = process.env.STOCKAGE_JEU_ESSAI ?? join(tmpdir(), `prospectpro-test-${process.pid}`);
 
 export function configTest() {
   return chargerConfig({

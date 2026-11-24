@@ -126,6 +126,11 @@ export async function fermerJournal(q: Executant, acteur: Acteur, code: string) 
 export async function supprimerJournal(q: Executant, acteur: Acteur, code: string) {
   const j = (await q.query<{ id: string }>('SELECT id FROM journal WHERE code = $1', [code])).rows[0];
   if (!j) throw nonTrouve('Journal');
+  // Journal alimenté par un schéma, rattaché à une banque ou réservé (caisse, trésorerie générique, à-nouveaux) : jamais supprimé
+  const systeme = await q.query(
+    `SELECT 1 WHERE EXISTS (SELECT 1 FROM schema_comptable WHERE journal_id = $1 AND actif AND supprime_le IS NULL)
+        OR EXISTS (SELECT 1 FROM banque_operateur WHERE journal_id = $1 AND supprime_le IS NULL) OR $2 IN ('CAI', 'TRE', 'AN')`, [j.id, code]);
+  exiger(!systeme.rowCount, 'JOURNAL_UTILISE', 'Journal utilisé par les écritures automatiques : il ne peut être ni supprimé ni fermé');
   const mvt = await q.query('SELECT 1 FROM ecriture WHERE journal_id = $1 LIMIT 1', [j.id]);
   if (mvt.rowCount) throw new ErreurMetier('JOURNAL_MOUVEMENTE', 'Journal mouvementé : il ne peut être supprimé ; fermez-le pour l\'avenir', 422, { proposition: 'FERMER' });
   await q.query('UPDATE journal SET supprime_le = now() WHERE id = $1', [j.id]);

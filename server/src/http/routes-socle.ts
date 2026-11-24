@@ -26,7 +26,13 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const leverRefus = <T>(x: T | Refus): T => { if (x instanceof Refus) throw x.erreur; return x; };
 
 /** Fonction du système qui protège les documents d'un objet ; les autres objets arrivent avec leurs modules. */
-const FONCTION_DE_L_OBJET: Record<string, string> = { tiers: 'TIERS', reclamation: 'RECLAMATIONS', societe: 'SOCIETE' };
+const FONCTION_DE_L_OBJET: Record<string, string> = {
+  tiers: 'TIERS', reclamation: 'RECLAMATIONS', societe: 'SOCIETE',
+  // Lot 2
+  intervenant: 'AGREMENT', police: 'SOUSCRIPTION', dossier_souscription: 'SOUSCRIPTION', compte_production: 'COMPTE_PRODUCTION', approvisionnement: 'COMPTE_PRODUCTION',
+  mandat_affectation: 'COMPTE_PRODUCTION', facture_commission: 'FACTURE_COMMISSION', ordre_paiement: 'PAIEMENT', piece_comptable: 'ECRITURE_MANUELLE',
+  fiche_imputation: 'ECRITURE_MANUELLE', periode: 'ECRITURE_MANUELLE', declaration_taxe: 'DECLARATION_TAXE', demande_restitution: 'RESTITUTION',
+};
 async function droitSurObjet(req: Request, objetType: string, action: Action) {
   const f = FONCTION_DE_L_OBJET[objetType];
   if (!f) throw new ErreurMetier('INTERDIT', `Documents de type d'objet ${objetType} : non disponibles dans ce lot`, 403);

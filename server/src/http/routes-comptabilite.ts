@@ -26,7 +26,9 @@ export function routesComptabilite(): Router {
   r.get('/comptabilite/journaux', consulter, async (_req, res) => {
     res.json((await getPool().query(
       `SELECT j.code, j.libelle, j.type, j.mode, j.ferme, c.numero AS compte_tresorerie,
-              (SELECT count(*)::int FROM ecriture e WHERE e.journal_id = j.id) AS pieces
+              (SELECT count(*)::int FROM ecriture e WHERE e.journal_id = j.id) AS pieces,
+              (EXISTS (SELECT 1 FROM schema_comptable s WHERE s.journal_id = j.id AND s.actif AND s.supprime_le IS NULL)
+                OR EXISTS (SELECT 1 FROM banque_operateur b WHERE b.journal_id = j.id AND b.supprime_le IS NULL) OR j.code IN ('CAI', 'TRE', 'AN')) AS systeme
          FROM journal j LEFT JOIN compte c ON c.id = j.compte_tresorerie_id WHERE j.supprime_le IS NULL ORDER BY j.code`)).rows);
   });
   r.get('/comptabilite/branches', consulter, async (_req, res) => {

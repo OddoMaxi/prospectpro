@@ -96,6 +96,18 @@ export function routesCommercial(): Router {
     const d = z.object({ moyen: z.enum(['ESPECES_SIEGE', 'BANQUE', 'MONNAIE_ELECTRONIQUE']), montant: z.number().int().positive(), banque: z.string().optional(), referenceExterne: z.string().max(60).optional() }).parse(req.body);
     res.status(201).json(await ecrire(req, q => declarerApprovisionnement(q, req.acteur, { ...d, compteId: id })));
   });
+  /** CM-03 : approvisionnements déclarés, en attente de confirmation par la caisse ou la Trésorerie. */
+  r.get('/approvisionnements', droit('COMPTE_PRODUCTION', 'CONSULTER'), async (req, res) => {
+    const { statut } = z.object({ statut: z.string().optional() }).parse(req.query);
+    const visibles = await bureauxVisibles(req);
+    res.json((await getPool().query(
+      `SELECT x.id, x.numero_recu, x.moyen, x.montant, x.reference_externe, x.statut, x.motif_rejet, x.cree_le, x.confirme_le, b.code AS bureau, b.nom AS bureau_nom,
+              trim(t.nom || ' ' || COALESCE(t.prenoms, '')) AS agent
+         FROM approvisionnement_compte x JOIN compte_production_agent cp ON cp.id = x.compte_production_id JOIN bureau b ON b.id = cp.bureau_id
+         JOIN intervenant i ON i.id = cp.intervenant_id JOIN tiers t ON t.id = i.tiers_id
+        WHERE ($1::text IS NULL OR x.statut = $1) AND ($2::text[] IS NULL OR b.code = ANY($2)) ORDER BY x.cree_le DESC LIMIT 300`,
+      [statut ?? null, visibles])).rows);
+  });
   /** Confirmation par la Trésorerie au vu du relevé (banque), ou par la notification de l'opérateur. */
   r.post('/approvisionnements/:id/confirmation', droit('COMPTE_PRODUCTION', 'CREER'), async (req, res) => {
     res.json(await ecrire(req, q => confirmerApprovisionnement(q, req.acteur, uuid.parse(req.params.id))));

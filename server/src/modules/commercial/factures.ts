@@ -282,7 +282,7 @@ export async function revoquerMandat(q: Executant, acteur: Acteur, mandatId: str
 export async function listerFactures(q: Executant, f: { intervenantId?: string; statut?: string; mois?: string }) {
   return (await q.query(
     `SELECT f.id, f.numero, f.mois, f.mode, f.statut, f.montant_brut, f.avoir, f.retenue, f.net, f.montant_paye, f.date_limite_paiement, f.valide_d_office,
-            i.role, trim(t.nom || ' ' || COALESCE(t.prenoms, '')) AS intervenant,
+            i.role, i.id AS intervenant_id, t.id AS tiers_id, trim(t.nom || ' ' || COALESCE(t.prenoms, '')) AS intervenant,
             (SELECT json_agg(json_build_object('rang', p.rang, 'montant', p.montant, 'retenue', p.retenue, 'net', p.net, 'destination', p.destination, 'paye_le', p.paye_le) ORDER BY p.rang)
                FROM paiement_facture_commission p WHERE p.facture_id = f.id) AS paiements
        FROM facture_commission f JOIN intervenant i ON i.id = f.intervenant_id JOIN tiers t ON t.id = i.tiers_id

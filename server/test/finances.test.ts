@@ -144,3 +144,11 @@ describe('Journée comptable et clôture (FIN-RG-041, 060, 063, 072)', () => {
     expect(n).toBe(1);
   });
 });
+
+describe('Journaux réservés', () => {
+  it('un journal alimenté par un schéma ou rattaché à une banque ne se supprime pas, même vide', async () => {
+    await expect(transaction(comptable.utilisateurId, q => supprimerJournal(q, comptable, 'INV'))).rejects.toMatchObject({ code: 'JOURNAL_UTILISE' });
+    await expect(transaction(comptable.utilisateurId, q => supprimerJournal(q, comptable, 'OM'))).rejects.toMatchObject({ code: 'JOURNAL_UTILISE' });
+    await expect(transaction(comptable.utilisateurId, q => supprimerJournal(q, comptable, 'CAI'))).rejects.toMatchObject({ code: 'JOURNAL_UTILISE' });
+  });
+});

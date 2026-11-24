@@ -47,7 +47,7 @@ export function routesCatalogue(): Router {
   });
 
   // ---------------------------------------------------------------- Plan de comptes (socle)
-  r.get('/comptabilite/comptes', droit('PLAN_COMPTES', 'PARAMETRER'), async (_req, res) => { res.json(await listerComptes(getPool())); });
+  r.get('/comptabilite/comptes', droit('PLAN_COMPTES', 'CONSULTER'), async (_req, res) => { res.json(await listerComptes(getPool())); });
   r.post('/comptabilite/comptes', droit('PLAN_COMPTES', 'PARAMETRER'), async (req, res) => {
     const d = z.object({
       numero: z.string(), libelle: z.string().min(1).max(200), natureId: uuid.optional(), parentNumero: z.string().optional(),

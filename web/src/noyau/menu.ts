@@ -26,12 +26,38 @@ export const MENU: Rubrique[] = [
       { libelle: 'Modèles de documents', chemin: '/referentiels/modeles', droit: 'MODELES:CONSULTER' },
     ],
   },
-  { rubrique: 'Commercial', entrees: [{ libelle: 'Bureaux', chemin: '/commercial/bureaux', droit: 'BUREAUX:CONSULTER' }] },
+  {
+    rubrique: 'Commercial', entrees: [
+      { libelle: 'Bureaux directs', chemin: '/commercial/bureaux', droit: 'BUREAUX:CONSULTER' },
+      { libelle: 'Intervenants', chemin: '/commercial/intervenants', droit: 'AGREMENT:CONSULTER' },
+      { libelle: 'Factures de commissions', chemin: '/commercial/factures', droit: 'FACTURE_COMMISSION:CONSULTER' },
+      { libelle: 'Comptes de production', chemin: '/commercial/comptes-production', droit: 'COMPTE_PRODUCTION:CONSULTER' },
+    ],
+  },
   {
     rubrique: 'Production', entrees: [
       { libelle: 'Catalogue des produits', chemin: '/production/catalogue', droit: 'CATALOGUE:CONSULTER' },
+      { libelle: 'Polices', chemin: '/production/polices', droit: 'SOUSCRIPTION:CONSULTER' },
+      { libelle: 'Polices à renouveler', chemin: '/production/renouvellements', droit: 'SOUSCRIPTION:CONSULTER' },
       { libelle: 'Réclamations', chemin: '/production/reclamations', droit: 'RECLAMATIONS:CONSULTER' },
     ],
   },
-  { rubrique: 'Comptabilité', entrees: [{ libelle: 'Plan de comptes', chemin: '/comptabilite/plan', droit: 'PLAN_COMPTES:PARAMETRER' }] },
+  {
+    rubrique: 'Finances', entrees: [
+      { libelle: 'Approvisionnements à confirmer', chemin: '/finances/approvisionnements', droit: 'COMPTE_PRODUCTION:CREER' },
+      { libelle: 'Journée comptable', chemin: '/finances/journee', droit: 'PAIEMENT:CONSULTER' },
+      { libelle: 'Ordres de paiement', chemin: '/finances/paiements', droit: 'PAIEMENT:CONSULTER' },
+    ],
+  },
+  {
+    rubrique: 'Comptabilité', entrees: [
+      { libelle: 'Plan de comptes', chemin: '/comptabilite/plan', droit: 'PLAN_COMPTES:CONSULTER' },
+      { libelle: 'Schémas comptables', chemin: '/comptabilite/schemas', droit: 'JOURNAUX_TIERS:CONSULTER' },
+      { libelle: 'Fiches d\'imputation', chemin: '/comptabilite/fiches', droit: 'ECRITURE_MANUELLE:CONSULTER' },
+      { libelle: 'Interrogation', chemin: '/comptabilite/interrogation', droit: 'JOURNAUX_TIERS:CONSULTER' },
+      { libelle: 'Déclarations', chemin: '/comptabilite/declarations', droit: 'DECLARATION_TAXE:CONSULTER' },
+      { libelle: 'Clôtures', chemin: '/comptabilite/clotures', droit: 'ECRITURE_MANUELLE:CONSULTER' },
+      { libelle: 'Journaux et éditions', chemin: '/comptabilite/editions', droit: 'JOURNAUX_TIERS:CONSULTER' },
+    ],
+  },
 ];

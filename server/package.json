@@ -18,7 +18,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "installer": "tsx src/amorcage/cli.ts",
-    "demo": "tsx tools/demo.ts"
+    "demo": "tsx tools/demo.ts",
+    "jeu-essai": "tsx tools/jeu-essai.ts"
   },
   "dependencies": {
     "argon2": "^0.45.2",

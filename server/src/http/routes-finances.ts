@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { getPool } from '../db/pool.js';
 import { creerFicheImputation, creerJournal, fermerJournal, listerFiches, supprimerJournal } from '../modules/finances/saisie.js';
 import { anomalies, cloturerPeriode, listerDeclarations, listerPeriodes, preparerDeclaration } from '../modules/finances/cloture.js';
+import { soldesTresorerie } from '../modules/finances/tresorerie.js';
+import { controlerCollectif } from '../modules/commercial/comptesProduction.js';
 import { droit, ecrire } from './socle.js';
 
 const uuid = z.string().uuid();
@@ -31,6 +33,10 @@ export function routesFinances(): Router {
     await ecrire(req, q => supprimerJournal(q, req.acteur, String(req.params.code)));
     res.status(204).end();
   });
+  // FI-06 : soldes, contrôles quotidiens (anomalies du jour, collectif des comptes de production)
+  r.get('/tresorerie', droit('PAIEMENT', 'CONSULTER'), async (_req, res) => {
+    res.json({ ...await soldesTresorerie(getPool()), anomalies: await anomalies(getPool()), collectif: await controlerCollectif(getPool()) });
+  });
   r.get('/periodes', droit('ECRITURE_MANUELLE', 'CONSULTER'), async (_req, res) => { res.json(await listerPeriodes(getPool())); });
   r.get('/anomalies', droit('ECRITURE_MANUELLE', 'CONSULTER'), async (req, res) => {
     const { date } = z.object({ date: z.string().optional() }).parse(req.query);
@@ -38,6 +44,11 @@ export function routesFinances(): Router {
   });
   r.post('/periodes/:mois/cloture', droit('ECRITURE_MANUELLE', 'VALIDER'), async (req, res) => {
     res.json(await ecrire(req, q => cloturerPeriode(q, req.acteur, mois.parse(req.params.mois))));
+  });
+  r.get('/comptabilite/codes-taxes', droit('DECLARATION_TAXE', 'CONSULTER'), async (_req, res) => {
+    res.json((await getPool().query(
+      `SELECT DISTINCT ON (ct.code) ct.code, ct.libelle, ct.type, ct.taux, c.numero AS compte FROM code_taxe ct JOIN compte c ON c.id = ct.compte_id
+        WHERE ct.supprime_le IS NULL ORDER BY ct.code, ct.date_effet DESC`)).rows);
   });
   r.get('/declarations-taxes', droit('DECLARATION_TAXE', 'CONSULTER'), async (_req, res) => { res.json(await listerDeclarations(getPool())); });
   r.post('/declarations-taxes', droit('DECLARATION_TAXE', 'CREER'), async (req, res) => {

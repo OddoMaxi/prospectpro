@@ -50,3 +50,18 @@ export async function listerBanquesOperateurs(q: Executant) {
     `SELECT b.id, b.code, b.nom, c.numero AS compte, u.identifiant AS responsable FROM banque_operateur b
        JOIN compte c ON c.id = b.compte_id JOIN utilisateur u ON u.id = b.responsable_id WHERE b.supprime_le IS NULL ORDER BY b.code`)).rows;
 }
+
+/** FI-06 : solde de chaque compte de trésorerie (banques, opérateurs, caisse du siège) et encaissements en attente d'affectation. */
+export async function soldesTresorerie(q: Executant) {
+  const comptes = (await q.query<{ code: string; nom: string; numero: string; libelle: string; type: string; solde: number }>(
+    `SELECT j.code, COALESCE(bo.nom, j.libelle) AS nom, c.numero, c.libelle, j.type,
+            (SELECT COALESCE(sum(l.debit - l.credit), 0) FROM ligne_ecriture l JOIN ecriture e ON e.id = l.ecriture_id
+              WHERE l.compte_id = c.id AND e.statut = 'VALIDEE' AND e.supprime_le IS NULL)::bigint AS solde
+       FROM journal j JOIN compte c ON c.id = j.compte_tresorerie_id LEFT JOIN banque_operateur bo ON bo.journal_id = j.id
+      WHERE j.supprime_le IS NULL AND j.type LIKE 'TRESORERIE%' ORDER BY j.code`)).rows
+    .map(x => ({ ...x, solde: Number(x.solde), nature: x.type === 'TRESORERIE_CAISSE' ? 'CAISSE' : x.libelle.startsWith('Monnaie') ? 'MONNAIE_ELECTRONIQUE' : 'BANQUE' }));
+  const attente = (await q.query<{ solde: number; n: number }>(
+    `SELECT COALESCE(sum(l.credit - l.debit), 0)::bigint AS solde, count(DISTINCT e.id)::int AS n FROM ligne_ecriture l JOIN ecriture e ON e.id = l.ecriture_id JOIN compte c ON c.id = l.compte_id
+      WHERE c.numero = $1 AND e.statut = 'VALIDEE' AND e.supprime_le IS NULL AND l.lettrage_id IS NULL`, [normaliserNumero('471')])).rows[0]!;
+  return { comptes, attente: { montant: Number(attente.solde), pieces: attente.n } };
+}

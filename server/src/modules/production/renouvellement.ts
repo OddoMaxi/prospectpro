@@ -344,7 +344,11 @@ export async function policesARenouveler(q: Executant, bureaux: string[] | null,
   return (await q.query(
     `SELECT p.id, p.numero, p.statut, p.ne_pas_renouveler, b.code AS bureau, trim(t.nom || ' ' || COALESCE(t.prenoms, '')) AS souscripteur, t.telephone,
             (SELECT max(date_fin) FROM police_periode pp WHERE pp.police_id = p.id) AS echeance,
-            (SELECT COALESCE(sum(montant), 0) FROM versement_programme v WHERE v.police_id = p.id AND v.statut = 'RECU')::bigint AS versements
+            (SELECT COALESCE(sum(montant), 0) FROM versement_programme v WHERE v.police_id = p.id AND v.statut = 'RECU')::bigint AS versements,
+            (SELECT prime_totale FROM police_periode pp WHERE pp.police_id = p.id ORDER BY rang DESC LIMIT 1) AS derniere_prime,
+            (SELECT count(*)::int FROM notification n JOIN modele_notification m ON m.id = n.modele_notification_id
+              WHERE m.code = 'RAPPEL_ECHEANCE' AND n.objet_type = 'police' AND n.objet_id = p.id
+                AND n.cree_le >= (SELECT max(date_fin) FROM police_periode pp WHERE pp.police_id = p.id) - 45) AS rappels
        FROM police p JOIN bureau b ON b.id = p.bureau_gestion_id JOIN tiers t ON t.id = p.souscripteur_id
       WHERE NOT p.contrat_collectif AND ($2::text[] IS NULL OR b.code = ANY($2))
         AND ((p.statut = 'ACTIVE' AND (SELECT max(date_fin) FROM police_periode pp WHERE pp.police_id = p.id) <= current_date + $1::int) OR p.statut = 'ECHUE')
