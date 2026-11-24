@@ -160,6 +160,8 @@ export const DELEGATIONS: { type: string; niveaux: { niveau: number; profils: st
   { type: 'AFFECTATION_COMMISSION', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
   { type: 'ANNULATION_ERREUR', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }, { niveau: 2, profils: ['DAF'] }] },
   { type: 'RESTITUTION_COMPTE_PRODUCTION', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }, { niveau: 2, profils: ['DAF'] }] },
+  { type: 'ECRITURE_MANUELLE', niveaux: [{ niveau: 1, profils: ['COMPTABLE'] }, { niveau: 2, profils: ['DAF'] }] },
+  { type: 'DECLARATION_TAXE', niveaux: [{ niveau: 1, profils: ['COMPTABLE'] }, { niveau: 2, profils: ['DAF'] }] },
 ];
 
 // ---------------------------------------------------------------- Règles légales (ARC-RG-003, annexe C)
@@ -339,6 +341,8 @@ export const COMPTES_PROPOSES: { numero: string; libelle: string; parent?: strin
   { numero: '43', libelle: 'État', imputable: false },
   { numero: '436', libelle: 'État – taxes sur primes', parent: '43', imputable: false },
   { numero: '4361', libelle: 'État – taxes sur primes d\'assurance', parent: '436', sens: 'C' },
+  { numero: '434', libelle: 'État – taxes déclarées', parent: '43', imputable: false },
+  { numero: '4341', libelle: 'État – taxes sur primes déclarées à payer', parent: '434', sens: 'C' },
   { numero: '437', libelle: 'État – retenues', parent: '43', imputable: false },
   { numero: '4371', libelle: 'État – retenue sur commissions', parent: '437', sens: 'C' },
   { numero: '47', libelle: 'Comptes transitoires ou d\'attente', imputable: false },
@@ -422,6 +426,7 @@ export const SCHEMAS: { codeEvt: string; typeEvenement: string; journal: string;
   { codeEvt: 'EVT-06', typeEvenement: 'DEPOT_REMBOURSE', journal: 'TRE', libelle: 'Restitution du compte de production {{reference}}', lignes: [d('COMPTE_PRODUCTION', 'MONTANT'), c('TRESORERIE', 'MONTANT')] },
   { codeEvt: 'EVT-07', typeEvenement: 'PRIME_ANTICIPATION_ACQUISE', journal: 'COM', libelle: 'Prime de renouvellement anticipé {{reference}}', lignes: [d('6431', 'MONTANT'), c('COMMISSIONS_A_PAYER', 'MONTANT')] },
   { codeEvt: 'EVT-13', typeEvenement: 'CLOTURE_PERIODE', journal: 'INV', libelle: 'Provision pour primes non acquises {{reference}}', lignes: [d('6591', 'PPNA'), c('3212', 'PPNA')] },
+  { codeEvt: 'EVT-14', typeEvenement: 'DECLARATION_TAXE_VALIDEE', journal: 'AUT', libelle: 'Liquidation de la déclaration {{reference}}', lignes: [d('COMPTE_TAXE', 'MONTANT'), c('4341', 'MONTANT')] },
   { codeEvt: 'EVT-21', typeEvenement: 'VERSEMENT_PROGRAMME_RECU', journal: 'ENC', libelle: 'Versement programmé {{reference}}', lignes: [d('TRESORERIE', 'MONTANT'), c('VERSEMENTS_AVANCE', 'MONTANT')] },
   { codeEvt: 'EVT-22', typeEvenement: 'VERSEMENT_PROGRAMME_REMBOURSE', journal: 'TRE', libelle: 'Remboursement de versements {{reference}}', lignes: [d('VERSEMENTS_AVANCE', 'MONTANT'), c('TRESORERIE', 'MONTANT')] },
   { codeEvt: 'EVT-23', typeEvenement: 'ENCAISSEMENT_EN_ATTENTE_RECU', journal: 'ENC', libelle: 'Encaissement en attente {{reference}}', lignes: [d('TRESORERIE', 'MONTANT'), c('471', 'MONTANT')] },
@@ -490,6 +495,17 @@ export const MODELES_DOCUMENTS: { code: string; libelle: string; contenu: string
     code: 'AVIS_PAIEMENT', libelle: 'Avis de paiement',
     contenu: ['# Avis de paiement {{numero}}', 'Bénéficiaire : {{beneficiaire}}', 'Objet : {{objet}}', '| Libellé | Montant |', '{{#detail}}| {{libelle}} | {{montant}} |', '{{/detail}}',
       'Montant versé : {{montant}} – destination : {{etablissement}}.', '---', 'Conakry, le {{date_document}}'].join('\n'),
+  },
+  {
+    code: 'ETAT_PPNA', libelle: 'État de la provision pour primes non acquises',
+    contenu: ['# Provision pour primes non acquises – {{mois}}', 'Calcul police par police, au prorata au jour près de la prime nette restant à courir après la fin du mois.',
+      '| Police | Période de garantie | Prime nette | PPNA |', '{{#lignes}}| {{police}} | {{periode}} | {{prime}} | {{ppna}} |', '{{/lignes}}', 'Total de la provision : {{total}}.',
+      'La provision est reprise au premier jour de la période suivante.', '---', 'Conakry, le {{date_document}}'].join('\n'),
+  },
+  {
+    code: 'DECLARATION_TAXE', libelle: 'Déclaration de taxe sur primes',
+    contenu: ['# Déclaration {{numero}}', 'Taxe : {{taxe}} – période {{periode}}', '| Assiette | Taxe collectée | Solde à reverser |', '| {{assiette}} | {{collecte}} | {{solde}} |', '',
+      'Le montant déclaré est égal au solde du compte de taxe de la période.', '---', 'Conakry, le {{date_document}}'].join('\n'),
   },
   {
     code: 'RECU_VERSEMENT', libelle: 'Reçu de versement programmé',

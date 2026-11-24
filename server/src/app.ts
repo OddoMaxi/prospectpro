@@ -15,6 +15,7 @@ import { routesComptabilite } from './http/routes-comptabilite.js';
 import { routesCommercial } from './http/routes-commercial.js';
 import { routesProduction } from './http/routes-production.js';
 import { routesRemuneration } from './http/routes-remuneration.js';
+import { routesFinances } from './http/routes-finances.js';
 import { configurerStockage, StockageLocal } from './moteurs/documents.js';
 // Enregistrement des opérations soumises à validation
 import './modules/parametrage/service.js';
@@ -28,6 +29,8 @@ import './modules/commercial/comptesProduction.js';
 import './modules/production/emission.js';
 import './modules/finances/paiements.js';
 import './modules/commercial/factures.js';
+import './modules/finances/saisie.js';
+import './modules/finances/cloture.js';
 
 export function creerApplication(config: Config) {
   const gardien = config.VAULT_ADDR && config.VAULT_TOKEN
@@ -49,7 +52,7 @@ export function creerApplication(config: Config) {
   app.get('/api/sante', (_req, res) => { res.json({ statut: 'ok', version: '3.0.0-lot1' }); });
   app.use('/api/auth', routesAuth(ctx));
   app.use('/api/admin', authentifier(ctx), routesAdministration());
-  app.use('/api', authentifier(ctx), routesReferentiels(ctx), routesCatalogue(), routesSocle(), routesComptabilite(), routesCommercial(), routesProduction(), routesRemuneration());
+  app.use('/api', authentifier(ctx), routesReferentiels(ctx), routesCatalogue(), routesSocle(), routesComptabilite(), routesCommercial(), routesProduction(), routesRemuneration(), routesFinances());
   app.use('/api', (_req, res) => { res.status(404).json({ code: 'NON_TROUVE', message: 'Route inconnue' }); });
   // Interface (application monopage) : fichiers statiques, puis page d'entrée pour toute autre adresse hors /api
   const web = resolve(config.WEB_DIR);

@@ -25,6 +25,7 @@ export const REGLES = {
   TRESORERIE: 'Caisse, banque ou monnaie électronique de l\'opération',
   VERSEMENTS_AVANCE: 'Auxiliaire de l\'assuré (versements reçus d\'avance)',
   REMBOURSEMENT: 'Compte de production ou compte de paiement remboursé',
+  COMPTE_TAXE: 'Compte de la taxe déclarée',
 } as const;
 
 export const schemaDefinition = z.object({

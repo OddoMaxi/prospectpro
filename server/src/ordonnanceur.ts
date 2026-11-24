@@ -3,10 +3,11 @@
  * par échéance même avec plusieurs serveurs) et distribution continue des événements métier.
  * Fuseau : Africa/Conakry. Chaque traitement s'exécute dans sa transaction, au nom du système, et il est journalisé.
  */
+import { basculerJournee } from './modules/finances/cloture.js';
 import { PgBoss } from 'pg-boss';
 import { transaction } from './db/pool.js';
 import { Acteur } from './noyau/acteur.js';
-import { aujourdhui } from './noyau/dates.js';
+import { ajouterJours, aujourdhui } from './noyau/dates.js';
 import { journaliser } from './moteurs/audit.js';
 import { distribuer } from './moteurs/evenements.js';
 import { rafraichirSociete } from './modules/referentiels/societe.js';
@@ -42,6 +43,8 @@ export const TRAITEMENTS: Traitement[] = [
     const d = new Date(); d.setUTCDate(0);
     return etablirFactures(q, systeme, d.toISOString().slice(0, 7));
   }),
+  // Bascule de la journée écoulée : anomalies enregistrées, jamais bloquantes ce jour-là (CA-FIN-05)
+  quotidien('journee-comptable', 'Bascule de la journée comptable et liste des anomalies (FIN-RG-041)', '0 0 * * *', q => basculerJournee(q, ajouterJours(aujourdhui(), -1))),
   quotidien('rappels-renouvellement', 'Rappels de renouvellement J-30, J-15, J-7, J-1 (PROD-RG-021)', '0 8 * * *', q => envoyerRappels(q)),
   quotidien('reclamations-escalade', 'Escalade des réclamations sans réponse à l\'échéance (§ 8.10)', '0 7 * * *', q => escaladerReclamations(q, systeme)),
 ];
