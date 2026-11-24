@@ -40,8 +40,12 @@ export function chargerConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`Configuration invalide, démarrage refusé :\n${details}`);
   }
   const c = r.data;
-  if ((c.NODE_ENV === 'production' || c.NODE_ENV === 'recette') && !(c.VAULT_ADDR && c.VAULT_TOKEN)) {
-    throw new Error('Configuration invalide : VAULT_ADDR et VAULT_TOKEN sont obligatoires en recette et en production.');
+  if (c.NODE_ENV === 'production' && !(c.VAULT_ADDR && c.VAULT_TOKEN)) {
+    throw new Error('Configuration invalide : VAULT_ADDR et VAULT_TOKEN sont obligatoires en production.');
+  }
+  // Recette : Vault recommandé ; une clé maîtresse locale est admise tant que la recette ne porte que des données fictives
+  if (c.NODE_ENV === 'recette' && !(c.VAULT_ADDR && c.VAULT_TOKEN) && !c.CLE_MAITRESSE_LOCALE) {
+    throw new Error('Configuration invalide : en recette, VAULT_ADDR et VAULT_TOKEN, ou CLE_MAITRESSE_LOCALE, sont requis.');
   }
   if (c.NODE_ENV === 'production' && c.SECOND_FACTEUR_DISPENSE.length) {
     throw new Error('Configuration invalide : SECOND_FACTEUR_DISPENSE est interdit en production (double authentification obligatoire).');

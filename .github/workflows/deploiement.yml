@@ -1,0 +1,77 @@
+# Tests, puis déploiement automatique sur le VPS à chaque push :
+#   master        → production (application actuelle)
+#   refonte/lot1  → recette (refonte : serveur cible et interface), après tests réussis
+# Secrets du dépôt : VPS_HOTE, VPS_UTILISATEUR, VPS_CLE_SSH, VPS_EMPREINTE_HOTE (ligne known_hosts),
+#                    VPS_DOSSIER_PRODUCTION, VPS_DOSSIER_RECETTE.
+name: Tests et déploiement
+
+on:
+  push:
+    branches: [master, refonte/lot1]
+  workflow_dispatch:
+
+concurrency:
+  group: deploiement-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    if: github.ref == 'refs/heads/refonte/lot1'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_ADMIN_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - name: Serveur – dépendances
+        working-directory: server
+        run: npm ci --no-audit --no-fund
+      - name: Serveur – types
+        working-directory: server
+        run: npm run typecheck
+      - name: Serveur – tests
+        working-directory: server
+        run: npm test
+      - name: Interface – construction
+        working-directory: web
+        run: npm ci --no-audit --no-fund && npm run build
+      - name: Image Docker
+        run: docker build -f server/Dockerfile -t prospectpro:verification .
+
+  deploiement:
+    needs: [tests]
+    # La production (master) ne dépend pas des tests de la refonte ; la recette, si.
+    if: always() && (github.ref == 'refs/heads/master' || needs.tests.result == 'success')
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/master' && 'production' || 'recette' }}
+    steps:
+      - name: Mise à jour sur le VPS
+        env:
+          CLE: ${{ secrets.VPS_CLE_SSH }}
+          EMPREINTE: ${{ secrets.VPS_EMPREINTE_HOTE }}
+          CIBLE: ${{ secrets.VPS_UTILISATEUR }}@${{ secrets.VPS_HOTE }}
+          DOSSIER: ${{ github.ref == 'refs/heads/master' && secrets.VPS_DOSSIER_PRODUCTION || secrets.VPS_DOSSIER_RECETTE }}
+          BRANCHE: ${{ github.ref_name }}
+          ENVIRONNEMENT: ${{ github.ref == 'refs/heads/master' && 'production' || 'recette' }}
+        run: |
+          if [ -z "$CLE" ] || [ -z "$DOSSIER" ]; then
+            echo "::notice::Secrets du VPS non renseignés : déploiement ignoré (voir deploiement/README.md)."
+            exit 0
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$CLE" > ~/.ssh/deploiement && chmod 600 ~/.ssh/deploiement
+          printf '%s\n' "$EMPREINTE" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploiement -o BatchMode=yes "$CIBLE" \
+            "set -e; cd '$DOSSIER'; git fetch --prune origin; git checkout -q '$BRANCHE'; git pull --ff-only origin '$BRANCHE'; bash deploiement/deployer.sh '$ENVIRONNEMENT'"

@@ -1,0 +1,52 @@
+# Recette de la refonte (serveur cible + interface), distincte de la production.
+# Variables dans .env.recette (jamais versionné) : voir deploiement/env.recette.exemple.
+name: prospectpro_recette
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: prospectpro
+      POSTGRES_USER: prospectpro
+      POSTGRES_PASSWORD: ${RECETTE_DB_PASSWORD:?RECETTE_DB_PASSWORD manquant dans .env.recette}
+    volumes:
+      - base:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prospectpro -d prospectpro"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: recette
+      DATABASE_URL: postgresql://prospectpro:${RECETTE_DB_PASSWORD}@db:5432/prospectpro
+      JWT_SECRET: ${RECETTE_JWT_SECRET:?RECETTE_JWT_SECRET manquant dans .env.recette}
+      CLE_MAITRESSE_LOCALE: ${RECETTE_CLE_MAITRESSE:?RECETTE_CLE_MAITRESSE manquant dans .env.recette}
+      SECOND_FACTEUR_DISPENSE: ${RECETTE_SECOND_FACTEUR_DISPENSE:-}
+      ADMIN_IDENTIFIANT: ${ADMIN_IDENTIFIANT:-admin}
+      ADMIN_NOM: ${ADMIN_NOM:-ADMINISTRATEUR}
+      ADMIN_PRENOMS: ${ADMIN_PRENOMS:-Recette}
+      ADMIN_TELEPHONE: ${ADMIN_TELEPHONE:-+224620000001}
+      ADMIN_MOT_DE_PASSE: ${ADMIN_MOT_DE_PASSE:?ADMIN_MOT_DE_PASSE manquant dans .env.recette}
+      DG_IDENTIFIANT: ${DG_IDENTIFIANT:-direction}
+      DG_NOM: ${DG_NOM:-DIRECTION}
+      DG_PRENOMS: ${DG_PRENOMS:-Recette}
+      DG_TELEPHONE: ${DG_TELEPHONE:-+224620000002}
+      DG_MOT_DE_PASSE: ${DG_MOT_DE_PASSE:?DG_MOT_DE_PASSE manquant dans .env.recette}
+    volumes:
+      - stockage:/app/stockage
+    ports:
+      - "${RECETTE_PORT:-8080}:4100"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  base:
+  stockage:

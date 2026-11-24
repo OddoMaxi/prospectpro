@@ -4,7 +4,7 @@
  * Les mots de passe ne sont jamais passés en argument de ligne de commande (historique du terminal).
  */
 import 'dotenv/config';
-import { initialiserPool, fermerPool, transaction } from '../db/pool.js';
+import { getPool, initialiserPool, fermerPool, transaction } from '../db/pool.js';
 import { migrer } from '../db/migrer.js';
 import { installer, type CompteInitial } from './installer.js';
 
@@ -21,7 +21,13 @@ const url = process.env.DATABASE_URL;
 if (!url) throw new Error('DATABASE_URL manquant');
 await migrer(url, 'up');
 initialiserPool(url);
-const r = await transaction(null, q => installer(q, lire('ADMIN'), lire('DG')));
-console.log(`Installation terminée. Administrateur général : ${r.utilisateurId} ; Direction générale : ${r.directionId}.`);
-console.log('À la première connexion, chaque compte privilégié enregistre son application d\'authentification (TOTP).');
+// Sans effet sur une base déjà installée : le déploiement peut l'appeler à chaque mise à jour
+const deja = (await getPool().query('SELECT 1 FROM utilisateur LIMIT 1')).rowCount;
+if (deja) {
+  console.log('Base déjà installée : aucune action.');
+} else {
+  const r = await transaction(null, q => installer(q, lire('ADMIN'), lire('DG')));
+  console.log(`Installation terminée. Administrateur général : ${r.utilisateurId} ; Direction générale : ${r.directionId}.`);
+  console.log('À la première connexion, chaque compte privilégié enregistre son application d\'authentification (TOTP).');
+}
 await fermerPool();
