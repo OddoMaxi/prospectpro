@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getPool, transaction } from '../src/db/pool.js';
 import type { Acteur } from '../src/noyau/acteur.js';
-import { creer, desactiver, organigramme, proposer, renommer } from '../src/modules/organisation/service.js';
+import { appliquerReorganisationsDifferees, creer, desactiver, organigramme, proposer, renommer } from '../src/modules/organisation/service.js';
 import { decider } from '../src/moteurs/validation.js';
 import { verifierChaine } from '../src/moteurs/audit.js';
 import { fermer, installee, ouvrir, utilisateur } from './outils.js';
@@ -69,6 +69,22 @@ describe('Organisation', () => {
     const h = await getPool().query(`SELECT operation, valide_par, cree_par FROM historique_organisation WHERE entite_id = $1 AND operation = 'FUSION'`, [a]);
     expect(h.rows[0].valide_par).toBe(dg.utilisateurId);
     expect(h.rows[0].cree_par).toBe(admin.utilisateurId);
+  });
+
+  it('AD-06 : une réorganisation à date future attend sa date d\'effet, puis le traitement quotidien l\'applique', async () => {
+    const prod = await idDe('departement', 'PROD');
+    const x = await transaction(admin.utilisateurId, q => creer(q, admin, 'SERVICE', { code: 'PROD_X', libelle: 'Indemnisation', parentId: prod }));
+    const y = await transaction(admin.utilisateurId, q => creer(q, admin, 'SERVICE', { code: 'PROD_Y', libelle: 'Gestion des contrats', parentId: prod }));
+    const demain = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    const { demande } = await transaction(admin.utilisateurId, q => proposer(q, admin, { operation: 'FUSION', type: 'SERVICE', sources: [x], cibleId: y, dateEffet: demain }));
+    await transaction(dg.utilisateurId, q => decider(q, dg, demande.id, 'VALIDE'));
+    expect((await getPool().query('SELECT statut FROM service WHERE id = $1', [x])).rows[0].statut).toBe('ACTIF');
+    expect(await transaction(null, q => appliquerReorganisationsDifferees(q))).toBe(0);
+    expect(await transaction(null, q => appliquerReorganisationsDifferees(q, demain))).toBe(1);
+    expect((await getPool().query('SELECT statut FROM service WHERE id = $1', [x])).rows[0].statut).toBe('INACTIF');
+    const h = await getPool().query(`SELECT valide_par, date_effet FROM historique_organisation WHERE entite_id = $1 AND operation = 'FUSION'`, [x]);
+    expect(h.rows[0].valide_par).toBe(dg.utilisateurId);
+    expect(await transaction(null, q => appliquerReorganisationsDifferees(q, demain))).toBe(0); // une seule fois
   });
 
   it('refuse une scission dont un élément n\'est pas affecté (ORG-RG-004)', async () => {

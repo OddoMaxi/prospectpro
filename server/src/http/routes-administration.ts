@@ -58,8 +58,21 @@ export function routesAdministration(): Router {
   });
 
   // ---------------------------------------------------------------- Validations (corbeille de travail)
+  /** Corbeille : demandes que l'utilisateur peut trancher, avec l'auteur et l'opération proposée. */
   r.get('/validations', async (req, res) => {
-    res.json(await corbeille(getPool(), req.acteur.utilisateurId!));
+    const demandes = await corbeille(getPool(), req.acteur.utilisateurId!);
+    const auteurs = new Map((await getPool().query<{ id: string; identifiant: string; nom: string; prenoms: string | null }>(
+      'SELECT u.id, u.identifiant, t.nom, t.prenoms FROM utilisateur u JOIN tiers t ON t.id = u.tiers_id WHERE u.id = ANY($1)',
+      [[...new Set(demandes.map(d => d.initiateur_id))]])).rows.map(u => [u.id, u]));
+    res.json(demandes.map(d => ({ ...d, initiateur: auteurs.get(d.initiateur_id) ?? null })));
+  });
+  /** Demandes soumises par l'utilisateur, avec leur suivi. */
+  r.get('/validations/miennes', async (req, res) => {
+    res.json((await getPool().query(
+      `SELECT d.id, d.type_operation, d.objet_type, d.statut, d.niveaux_requis, d.cree_le, d.decide_le, d.donnees,
+              (SELECT count(*)::int FROM validation_etape e WHERE e.demande_validation_id = d.id) AS niveaux_valides,
+              (SELECT e.motif FROM validation_etape e WHERE e.demande_validation_id = d.id AND e.decision = 'REJETE' LIMIT 1) AS motif_rejet
+         FROM demande_validation d WHERE d.initiateur_id = $1 ORDER BY d.cree_le DESC LIMIT 200`, [req.acteur.utilisateurId])).rows);
   });
   r.post('/validations/:id/decision', async (req, res) => {
     const d = z.object({ decision: z.enum(['VALIDE', 'REJETE']), motif: z.string().max(2000).optional() }).parse(req.body);

@@ -82,7 +82,7 @@ export async function changerStatut(q: Executant, acteur: Acteur, utilisateurId:
 // ---------------------------------------------------------------- Profils
 
 async function profil(q: Executant, id: string) {
-  const r = await q.query<{ id: string; code: string; privilegie: boolean; externe: boolean }>('SELECT id, code, privilegie, externe FROM profil WHERE id = $1 AND supprime_le IS NULL', [id]);
+  const r = await q.query<{ id: string; code: string; libelle: string; privilegie: boolean; externe: boolean }>('SELECT id, code, libelle, privilegie, externe FROM profil WHERE id = $1 AND supprime_le IS NULL', [id]);
   if (!r.rows[0]) throw nonTrouve('Profil');
   return r.rows[0];
 }
@@ -121,7 +121,10 @@ export async function attribuerProfil(q: Executant, acteur: Acteur, d: {
   const id = r.rows[0]!.id;
   await journaliser(q, { ...acteur.trace(), action: 'CREATION', objetType: 'utilisateur_profil', objetId: id, apres: { ...d, profil: p.code } });
   if (p.privilegie && acteur.utilisateurId) {
-    const demande = await soumettre(q, acteur, { typeOperation: OPERATION_PROFIL_PRIVILEGIE, objetType: 'utilisateur_profil', objetId: id, donnees: { utilisateurId: d.utilisateurId, profil: p.code } });
+    const demande = await soumettre(q, acteur, { typeOperation: OPERATION_PROFIL_PRIVILEGIE, objetType: 'utilisateur_profil', objetId: id, donnees: {
+      utilisateurId: d.utilisateurId, profil: p.code, profilLibelle: p.libelle, perimetre: d.perimetre ?? null,
+      identifiant: (await q.query<{ identifiant: string }>('SELECT identifiant FROM utilisateur WHERE id = $1', [d.utilisateurId])).rows[0]?.identifiant,
+    } });
     return { id, demandeValidation: demande.id };
   }
   if (p.privilegie) await q.query('UPDATE utilisateur_profil SET valide_par = attribue_par WHERE id = $1', [id]); // installation

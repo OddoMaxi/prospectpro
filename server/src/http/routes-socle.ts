@@ -4,7 +4,9 @@ import { z } from 'zod';
 import { getPool } from '../db/pool.js';
 import { ErreurMetier } from '../noyau/erreurs.js';
 import { aujourdhui } from '../noyau/dates.js';
-import { controlerDroit, profilsActifs, type Action } from '../modules/habilitations/droits.js';
+import { controlerDroit, droitsEffectifs, profilsActifs, type Action } from '../modules/habilitations/droits.js';
+import { champsManquants } from '../modules/referentiels/societe.js';
+import { corbeille } from '../moteurs/validation.js';
 import { Refus } from '../modules/auth/service.js';
 import {
   apercuModele, controlerLisibilite, deposerPiece, documentsDeLObjet, imprimerDocument, lireDocument, TAILLE_MAX_PIECE, verifierDocument,
@@ -38,6 +40,39 @@ async function droitSurDocument(req: Request, id: string, action: Action) {
 
 export function routesSocle(): Router {
   const r = Router();
+
+  // ---------------------------------------------------------------- Accueil (CX-03) : corbeilles et alertes selon les droits
+  r.get('/accueil', async (req, res) => {
+    const uid = req.acteur.utilisateurId!;
+    const droits = new Set((await droitsEffectifs(getPool(), uid)).map(d => `${d.fonction}:${d.action}`));
+    const corbeilles: { code: string; libelle: string; nombre: number; plusAncien: string | null; lien: string }[] = [];
+    const alertes: { type: 'ALERTE' | 'INFO' | 'RAPPEL'; message: string; lien?: string }[] = [];
+    const v = await corbeille(getPool(), uid);
+    corbeilles.push({ code: 'VALIDATIONS', libelle: 'Opérations à valider', nombre: v.length, plusAncien: (v[0] as unknown as { cree_le?: string })?.cree_le ?? null, lien: '/validations' });
+    if (droits.has('RECLAMATIONS:MODIFIER')) {
+      const r = (await getPool().query<{ n: number; ancien: string | null; retard: number }>(
+        `SELECT count(*)::int n, min(echeance)::text ancien, count(*) FILTER (WHERE echeance < current_date)::int retard FROM reclamation
+          WHERE gestionnaire_id = $1 AND statut IN ('AFFECTEE', 'EN_COURS', 'ESCALADEE') AND supprime_le IS NULL`, [uid])).rows[0]!;
+      corbeilles.push({ code: 'RECLAMATIONS', libelle: 'Réclamations qui me sont affectées', nombre: r.n, plusAncien: r.ancien, lien: '/reclamations?mes=1' });
+      if (r.retard) alertes.push({ type: 'ALERTE', message: `${r.retard} réclamation(s) affectée(s) ont dépassé leur échéance`, lien: '/reclamations?mes=1' });
+    }
+    if (droits.has('RECLAMATIONS:CONSULTER')) {
+      const n = (await getPool().query<{ n: number }>(`SELECT count(*)::int n FROM reclamation WHERE statut = 'OUVERTE' AND supprime_le IS NULL`)).rows[0]!.n;
+      if (n) corbeilles.push({ code: 'RECLAMATIONS_OUVERTES', libelle: 'Réclamations à affecter', nombre: n, plusAncien: null, lien: '/reclamations?statut=OUVERTE' });
+    }
+    if (droits.has('SOCIETE:CONSULTER')) {
+      const m = await champsManquants(getPool());
+      if (m.length) alertes.push({ type: 'ALERTE', message: `Fiche de la Compagnie incomplète (${m.join(', ')}) : émissions et écritures bloquées`, lien: '/administration/compagnie' });
+    }
+    if (droits.has('AUDIT:CONSULTER')) {
+      const n = (await distributionsEnAnomalie()).length;
+      if (n) alertes.push({ type: 'ALERTE', message: `${n} distribution(s) d'événements en échec`, lien: '/administration/exploitation' });
+    }
+    const derniere = (await getPool().query<{ horodatage: string; adresse_ip: string | null }>(
+      `SELECT horodatage, adresse_ip FROM journal_audit WHERE objet_type = 'utilisateur' AND objet_id = $1 AND action = 'CONNEXION' ORDER BY rang DESC OFFSET 1 LIMIT 1`, [uid])).rows[0];
+    if (derniere) alertes.push({ type: 'INFO', message: `Connexion précédente : ${new Date(derniere.horodatage).toLocaleString('fr-FR', { timeZone: 'Africa/Conakry' })}${derniere.adresse_ip ? ` depuis ${derniere.adresse_ip.replace(/^::ffff:/, "")}` : ''}` });
+    res.json({ corbeilles, alertes });
+  });
 
   // ---------------------------------------------------------------- Documents (DIG-RG-001 à 007)
   r.get('/documents', async (req, res) => {
@@ -118,6 +153,16 @@ export function routesSocle(): Router {
     const f = z.object({ du: date.optional(), au: date.optional() }).parse(req.query);
     res.json(await indicateursReclamations(getPool(), f.du ?? `${aujourdhui().slice(0, 4)}-01-01`, f.au ?? aujourdhui()));
   });
+  /** Gestionnaires habilités à traiter les réclamations (affectation). */
+  r.get('/reclamations/gestionnaires', droit('RECLAMATIONS', 'MODIFIER'), async (_req, res) => {
+    const candidats = (await getPool().query<{ id: string; identifiant: string; nom: string; prenoms: string | null }>(
+      `SELECT u.id, u.identifiant, t.nom, t.prenoms FROM utilisateur u JOIN tiers t ON t.id = u.tiers_id WHERE u.statut = 'ACTIF' ORDER BY t.nom`)).rows;
+    const habilites = [];
+    for (const c of candidats) {
+      if ((await droitsEffectifs(getPool(), c.id)).some(d => d.fonction === 'RECLAMATIONS' && d.action === 'MODIFIER')) habilites.push(c);
+    }
+    res.json(habilites);
+  });
   r.get('/reclamations/:id', droit('RECLAMATIONS', 'CONSULTER'), async (req, res) => {
     res.json(await lireReclamation(getPool(), uuid.parse(req.params.id)));
   });
@@ -148,7 +193,12 @@ export function routesSocle(): Router {
   });
 
   // ---------------------------------------------------------------- Motifs de blocage (§ 3.7)
-  r.get('/motifs-blocage', droit('MOTIF_BLOCAGE', 'CONSULTER'), async (_req, res) => { res.json(await referentielMotifs(getPool())); });
+  /** Référentiel des motifs : consultable par qui les consulte ou les dépose. */
+  r.get('/motifs-blocage', async (req, res) => {
+    await controlerDroit(getPool(), req.acteur.utilisateurId!, 'MOTIF_BLOCAGE', 'CONSULTER')
+      .catch(() => controlerDroit(getPool(), req.acteur.utilisateurId!, 'MOTIF_BLOCAGE', 'CREER'));
+    res.json(await referentielMotifs(getPool()));
+  });
   r.get('/tiers/:id/blocages', droit('MOTIF_BLOCAGE', 'CREER'), async (req, res) => {
     res.json(await vueMotifs(getPool(), uuid.parse(req.params.id), 'GESTIONNAIRE'));
   });

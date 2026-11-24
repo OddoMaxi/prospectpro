@@ -6,7 +6,7 @@
  * puis soumis à la validation d'un second administrateur ou de la Direction générale (ORG-RG-005, CA-ORG-01).
  */
 import type { Executant } from '../../db/pool.js';
-import type { Acteur } from '../../noyau/acteur.js';
+import { Acteur } from '../../noyau/acteur.js';
 import { ErreurMetier, exiger, nonTrouve } from '../../noyau/erreurs.js';
 import { journaliser } from '../../moteurs/audit.js';
 import { enregistrerOperation, soumettre, type Demande } from '../../moteurs/validation.js';
@@ -150,7 +150,8 @@ export type Restructuration =
 
 /** Simulation (ORG-RG-005) : rien n'est modifié ; liste des utilisateurs, droits et tâches impactés. */
 export async function simuler(q: Executant, op: Restructuration) {
-  controlerDate(op.dateEffet);
+  // Une réorganisation peut être préparée à l'avance (maquette AD-06) : date d'effet future admise
+  exiger(/^\d{4}-\d{2}-\d{2}$/.test(op.dateEffet), 'DATE_INVALIDE', 'Date d\'effet invalide');
   if (op.operation === 'DEPLACEMENT') {
     const e = await entite(q, op.type, op.id);
     exiger(e.parent_id !== op.nouveauParentId, 'MEME_RATTACHEMENT', 'L\'entité est déjà rattachée à cette cible');
@@ -211,6 +212,31 @@ async function reporterPerimetres(q: Executant, type: TypeEntite, ancien: string
 }
 
 async function appliquer(q: Executant, demande: Demande, acteur: Acteur) {
+  const { op } = demande.donnees as { op: Restructuration };
+  // Date d'effet future : la réorganisation validée attend sa date ; le traitement quotidien l'applique alors
+  if (op.dateEffet > aujourdhui()) {
+    await q.query(`UPDATE demande_validation SET donnees = donnees || '{"differee": true}'::jsonb WHERE id = $1`, [demande.id]);
+    return;
+  }
+  await executerRestructuration(q, demande, acteur);
+}
+
+/** Traitement quotidien : applique les réorganisations validées dont la date d'effet est atteinte. */
+export async function appliquerReorganisationsDifferees(q: Executant, date = aujourdhui()): Promise<number> {
+  const r = await q.query<Demande & { valideur_id: string }>(
+    `SELECT d.*, (SELECT e.valideur_id FROM validation_etape e WHERE e.demande_validation_id = d.id ORDER BY e.niveau DESC LIMIT 1) AS valideur_id
+       FROM demande_validation d
+      WHERE d.type_operation = $1 AND d.statut = 'VALIDE' AND (d.donnees ->> 'differee')::boolean
+        AND NOT COALESCE((d.donnees ->> 'appliquee')::boolean, false) AND d.donnees -> 'op' ->> 'dateEffet' <= $2
+      ORDER BY d.donnees -> 'op' ->> 'dateEffet', d.cree_le FOR UPDATE OF d`, [OPERATION_ORGANISATION, date]);
+  for (const d of r.rows) {
+    await executerRestructuration(q, d, new Acteur(d.valideur_id));
+    await q.query(`UPDATE demande_validation SET donnees = donnees || '{"appliquee": true}'::jsonb WHERE id = $1`, [d.id]);
+  }
+  return r.rowCount ?? 0;
+}
+
+async function executerRestructuration(q: Executant, demande: Demande, acteur: Acteur) {
   const { op } = demande.donnees as { op: Restructuration };
   const validePar = acteur.utilisateurId!;
   const auteur = demande.initiateur_id;

@@ -12,6 +12,7 @@ import { distribuer } from './moteurs/evenements.js';
 import { rafraichirSociete } from './modules/referentiels/societe.js';
 import { traiterAgesLimites } from './modules/referentiels/foyer.js';
 import { escaladerReclamations } from './modules/reclamations/service.js';
+import { appliquerReorganisationsDifferees } from './modules/organisation/service.js';
 
 export interface Traitement { nom: string; cron: string; libelle: string; executer: () => Promise<unknown> }
 
@@ -26,6 +27,7 @@ const quotidien = (nom: string, libelle: string, cron: string, fn: (q: Parameter
 });
 
 export const TRAITEMENTS: Traitement[] = [
+  quotidien('organisation-differee', 'Réorganisations validées dont la date d\'effet est atteinte (AD-06)', '1 0 * * *', q => appliquerReorganisationsDifferees(q)),
   quotidien('societe-du-jour', 'Fiche de la Compagnie : prise d\'effet des modifications datées', '5 0 * * *', q => rafraichirSociete(q)),
   quotidien('ages-limites', 'Enfants atteignant l\'âge limite : notification et sortie (REF-RG-009)', '0 6 * * *', q => traiterAgesLimites(q, systeme, aujourdhui())),
   quotidien('reclamations-escalade', 'Escalade des réclamations sans réponse à l\'échéance (§ 8.10)', '0 7 * * *', q => escaladerReclamations(q, systeme)),

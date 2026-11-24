@@ -25,6 +25,8 @@ const schema = z.object({
   STOCKAGE_DIR: z.string().default('./stockage'),
   /** Ordonnanceur (traitements planifiés et distribution des événements) : désactivable pour les tests. */
   ORDONNANCEUR_ACTIF: z.enum(['OUI', 'NON']).default('OUI'),
+  /** Interface compilée (web/dist) servie par le même serveur ; absente en développement (serveur Vite). */
+  WEB_DIR: z.string().default('../web/dist'),
 });
 
 export type Config = z.infer<typeof schema>;

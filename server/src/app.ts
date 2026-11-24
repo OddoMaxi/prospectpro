@@ -1,4 +1,6 @@
 /** Application HTTP du serveur cible. */
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import express from 'express';
 import type { Config } from './config.js';
 import { GardienLocal, GardienVault, MoteurChiffrement } from './moteurs/chiffrement.js';
@@ -38,6 +40,12 @@ export function creerApplication(config: Config) {
   app.use('/api/admin', authentifier(ctx), routesAdministration());
   app.use('/api', authentifier(ctx), routesReferentiels(ctx), routesCatalogue(), routesSocle());
   app.use('/api', (_req, res) => { res.status(404).json({ code: 'NON_TROUVE', message: 'Route inconnue' }); });
+  // Interface (application monopage) : fichiers statiques, puis page d'entrée pour toute autre adresse hors /api
+  const web = resolve(config.WEB_DIR);
+  if (existsSync(join(web, 'index.html'))) {
+    app.use(express.static(web, { index: false, maxAge: '1h' }));
+    app.get(/^(?!\/api\/).*/, (_req, res) => { res.set('Cache-Control', 'no-cache').sendFile(join(web, 'index.html')); });
+  }
   app.use(gestionErreurs);
   return { app, ctx };
 }
