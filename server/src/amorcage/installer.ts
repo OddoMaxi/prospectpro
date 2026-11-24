@@ -11,12 +11,15 @@ import { creer } from '../modules/organisation/service.js';
 import { attribuerProfil, creerUtilisateur } from '../modules/habilitations/service.js';
 import { creerTiers } from '../modules/referentiels/tiers.js';
 import { creerCompteGeneral, creerNature } from '../modules/comptabilite/plan.js';
+import { creerExercice } from '../modules/comptabilite/exercices.js';
+import { enregistrerSchema } from '../modules/comptabilite/schemas.js';
 import {
-  COMPTES_PROPOSES, DELEGATIONS, DEPARTEMENTS, MOTIFS_BLOCAGE, NATURES_COMPTE, FONCTION_ADMIN, FONCTIONS_SYSTEME, INCOMPATIBILITES, MATRICE, MODELES_NOTIFICATION,
+  BRANCHES, COMPTES_PROPOSES, DELEGATIONS, DEPARTEMENTS, JOURNAUX, MOTIFS_BLOCAGE, NATURES_COMPTE, SCHEMAS, FONCTION_ADMIN, FONCTIONS_SYSTEME, INCOMPATIBILITES, MATRICE, MODELES_NOTIFICATION,
   PARAMETRES, PROFILS, REGLES_LEGALES,
 } from './referentiel-initial.js';
 
-const ACTIONS = { C: ['CONSULTER'], S: ['CREER', 'MODIFIER'], M: ['MODIFIER'], V1: ['VALIDER'], V2: ['VALIDER'], P: ['PARAMETRER'], X: ['EXPORTER'] } as const;
+/** Qui saisit, valide, paramètre ou exporte une fonction peut aussi la consulter (annexe B : « S, P » sans « C » pour le comptable, par exemple). */
+const ACTIONS = { C: ['CONSULTER'], S: ['CONSULTER', 'CREER', 'MODIFIER'], M: ['CONSULTER', 'MODIFIER'], V1: ['CONSULTER', 'VALIDER'], V2: ['CONSULTER', 'VALIDER'], P: ['CONSULTER', 'PARAMETRER'], X: ['CONSULTER', 'EXPORTER'] } as const;
 /** Fonctions d'administration du système : seules fonctions où l'administrateur peut valider (ORG-RG-044). */
 const FONCTIONS_ADMINISTRATIVES = new Set(['ORGANISATION', 'UTILISATEURS']);
 
@@ -108,6 +111,20 @@ export async function installer(q: Executant, admin: CompteInitial, direction: C
   for (const c of COMPTES_PROPOSES) {
     await creerCompteGeneral(q, systeme, { numero: c.numero, libelle: c.libelle, parentNumero: c.parent, collectif: c.collectif, imputable: c.imputable, sensHabituel: c.sens, dateEffet });
   }
+
+  // Branches, journaux, exercice en cours et schémas comptables (§ 11.7, 11.10, 11.13)
+  const compteId = async (n: string) => (await q.query<{ id: string }>(`SELECT id FROM compte WHERE numero = rpad($1, 8, '0')`, [n])).rows[0]!.id;
+  for (const b of BRANCHES) {
+    await q.query('INSERT INTO branche_comptable (code, libelle, compte_primes_id, compte_annulations_id, compte_sinistres_id) VALUES ($1,$2,$3,$4,$5)',
+      [b.code, b.libelle, await compteId(b.primes), await compteId(b.annulations), await compteId(b.sinistres)]);
+  }
+  for (const j of JOURNAUX) {
+    await q.query(`INSERT INTO journal (code, libelle, type, mode, compte_tresorerie_id, numerotation, rapprochement, ferme) VALUES ($1,$2,$3,$4,$5,'CONTINUE_JOURNAL_EXERCICE',$6,false)`,
+      [j.code, j.libelle, j.type, j.mode, j.tresorerie ? await compteId(j.tresorerie) : null, j.type.startsWith('TRESORERIE')]);
+  }
+  const annee = dateEffet.slice(0, 4);
+  await creerExercice(q, systeme, { code: annee, dateDebut: `${annee}-01-01`, dateFin: `${annee}-12-31` });
+  for (const sc of SCHEMAS) await enregistrerSchema(q, systeme, { ...sc, dateEffet: `${annee}-01-01` });
 
   // Organisation (§ 3.2)
   const services = new Map<string, string>();

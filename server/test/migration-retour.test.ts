@@ -21,12 +21,12 @@ describe('Migrations : aller et retour', () => {
     await a.query('DROP DATABASE IF EXISTS prospectpro_test_retour WITH (FORCE)');
     await a.query('CREATE DATABASE prospectpro_test_retour');
     const montees = await migrer(URL, 'up');
-    expect(await compterTables()).toBe(162);
+    expect(await compterTables()).toBe(163);
     const descentes = await migrer(URL, 'down', montees.length);
     expect(descentes.length).toBe(montees.length);
     expect(await compterTables()).toBe(0);
     await migrer(URL, 'up');
-    expect(await compterTables()).toBe(162);
+    expect(await compterTables()).toBe(163);
     await a.query('DROP DATABASE prospectpro_test_retour WITH (FORCE)');
     await a.end();
   });

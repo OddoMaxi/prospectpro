@@ -152,6 +152,8 @@ export const DELEGATIONS: { type: string; niveaux: { niveau: number; profils: st
   { type: 'FICHE_SOCIETE', niveaux: [{ niveau: 1, profils: ['DAF', 'DIRECTION_GENERALE'] }] },
   { type: 'COORDONNEE_PAIEMENT', niveaux: [{ niveau: 1, profils: ['COMPTABLE', 'DAF'] }] },
   { type: 'CATALOGUE', niveaux: [{ niveau: 1, profils: ['COMITE_PARAMETRAGE'] }] },
+  { type: 'SCHEMA_COMPTABLE', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
+  { type: 'EXTOURNE_ECRITURE', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
 ];
 
 // ---------------------------------------------------------------- Règles légales (ARC-RG-003, annexe C)
@@ -321,4 +323,91 @@ export const COMPTES_PROPOSES: { numero: string; libelle: string; parent?: strin
   { numero: '4361', libelle: 'État – taxes sur primes d\'assurance', parent: '436', sens: 'C' },
   { numero: '437', libelle: 'État – retenues', parent: '43', imputable: false },
   { numero: '4371', libelle: 'État – retenue sur commissions', parent: '437', sens: 'C' },
+  { numero: '47', libelle: 'Comptes transitoires ou d\'attente', imputable: false },
+  { numero: '471', libelle: 'Encaissements en attente d\'affectation', parent: '47', sens: 'C' },
+  { numero: '57', libelle: 'Caisse', imputable: false },
+  { numero: '571', libelle: 'Caisse du siège', parent: '57', sens: 'D' },
+  { numero: '32', libelle: 'Provisions techniques', imputable: false },
+  { numero: '321', libelle: 'Provisions pour primes non acquises', parent: '32', imputable: false },
+  { numero: '3212', libelle: 'Primes non acquises', parent: '321', sens: 'C' },
+  { numero: '325', libelle: 'Provisions pour sinistres à payer', parent: '32', imputable: false },
+  { numero: '3251', libelle: 'Sinistres à payer', parent: '325', sens: 'C' },
+  { numero: '60', libelle: 'Prestations et frais payés', imputable: false },
+  { numero: '602', libelle: 'Sinistres', parent: '60', imputable: false },
+  { numero: '6021', libelle: 'Sinistres en principal', parent: '602', imputable: false },
+  { numero: '60211', libelle: 'Sinistres en principal – maladie', parent: '6021', sens: 'D' },
+  { numero: '60212', libelle: 'Sinistres en principal – accidents corporels', parent: '6021', sens: 'D' },
+  { numero: '6026', libelle: 'Frais accessoires (expertises)', parent: '602', sens: 'D' },
+  { numero: '64', libelle: 'Commissions', imputable: false },
+  { numero: '643', libelle: 'Commissions et courtages', parent: '64', imputable: false },
+  { numero: '6431', libelle: 'Commissions et courtages', parent: '643', sens: 'D' },
+  { numero: '65', libelle: 'Charges de provisions', imputable: false },
+  { numero: '659', libelle: 'Charges de provisions techniques', parent: '65', imputable: false },
+  { numero: '6591', libelle: 'Charges de provisions techniques', parent: '659', sens: 'D' },
+  { numero: '70', libelle: 'Primes', imputable: false },
+  { numero: '702', libelle: 'Primes et annulations', parent: '70', imputable: false },
+  { numero: '7021', libelle: 'Primes émises', parent: '702', imputable: false },
+  { numero: '70211', libelle: 'Primes émises – assurance maladie', parent: '7021', sens: 'C' },
+  { numero: '70212', libelle: 'Primes émises – accidents corporels', parent: '7021', sens: 'C' },
+  { numero: '7029', libelle: 'Annulations de primes', parent: '702', imputable: false },
+  { numero: '70291', libelle: 'Annulations de primes – assurance maladie', parent: '7029', sens: 'D' },
+  { numero: '70292', libelle: 'Annulations de primes – accidents corporels', parent: '7029', sens: 'D' },
+  { numero: '75', libelle: 'Autres produits techniques', imputable: false },
+  { numero: '751', libelle: 'Accessoires', parent: '75', imputable: false },
+  { numero: '7511', libelle: 'Coûts de polices et accessoires', parent: '751', sens: 'C' },
+];
+
+/** Branches BCRG de la phase 1 et leurs comptes (écart X22). */
+export const BRANCHES: { code: string; libelle: string; primes: string; annulations: string; sinistres: string }[] = [
+  { code: 'MALADIE', libelle: 'Assurance maladie', primes: '70211', annulations: '70291', sinistres: '60211' },
+  { code: 'ACCIDENTS_CORPORELS', libelle: 'Accidents corporels', primes: '70212', annulations: '70292', sinistres: '60212' },
+];
+
+/** Journaux créés à l'installation (§ 11.7) ; TRE est le journal de trésorerie générique, précisé par banque ou opérateur à l'opération. */
+export const JOURNAUX: { code: string; libelle: string; type: string; mode: 'AUTOMATIQUE' | 'MANUEL'; tresorerie?: string }[] = [
+  { code: 'DEP', libelle: 'Comptes de production des agents', type: 'ENCAISSEMENTS', mode: 'AUTOMATIQUE' },
+  { code: 'EMI', libelle: 'Émissions et annulations de primes', type: 'EMISSIONS', mode: 'AUTOMATIQUE' },
+  { code: 'ENC', libelle: 'Encaissements de primes', type: 'ENCAISSEMENTS', mode: 'AUTOMATIQUE' },
+  { code: 'COM', libelle: 'Commissions', type: 'OPERATIONS_DIVERSES', mode: 'AUTOMATIQUE' },
+  { code: 'SAN', libelle: 'Prestations santé', type: 'PRESTATIONS_SINISTRES', mode: 'AUTOMATIQUE' },
+  { code: 'SIN', libelle: 'Sinistres accident et décès', type: 'PRESTATIONS_SINISTRES', mode: 'AUTOMATIQUE' },
+  { code: 'ACH', libelle: 'Achats', type: 'ACHATS', mode: 'MANUEL' },
+  { code: 'TRE', libelle: 'Trésorerie (paiements validés)', type: 'TRESORERIE_BANQUE', mode: 'AUTOMATIQUE' },
+  { code: 'CAI', libelle: 'Caisse du siège', type: 'TRESORERIE_CAISSE', mode: 'AUTOMATIQUE', tresorerie: '571' },
+  { code: 'INV', libelle: 'Inventaire (provisions)', type: 'INVENTAIRE', mode: 'AUTOMATIQUE' },
+  { code: 'OD', libelle: 'Opérations diverses', type: 'OPERATIONS_DIVERSES', mode: 'MANUEL' },
+  { code: 'AUT', libelle: 'Opérations automatiques diverses', type: 'OPERATIONS_DIVERSES', mode: 'AUTOMATIQUE' },
+  { code: 'AN', libelle: 'À-nouveaux', type: 'A_NOUVEAUX', mode: 'AUTOMATIQUE' },
+];
+
+type L = { compte?: string; regle?: string; sens: 'D' | 'C'; formule: string };
+const d = (x: string, formule: string): L => (/^\d/.test(x) ? { compte: x, sens: 'D', formule } : { regle: x, sens: 'D', formule });
+const c = (x: string, formule: string): L => (/^\d/.test(x) ? { compte: x, sens: 'C', formule } : { regle: x, sens: 'C', formule });
+const EMISSION: L[] = [d('CLIENT', 'PRIME_TOTALE'), c('PRIMES_BRANCHE', 'PRIME_NETTE'), c('7511', 'ACCESSOIRES'), c('TAXES', '*')];
+const COMMISSION: L[] = [d('6431', 'COMMISSION'), c('COMMISSIONS_A_PAYER', '*')];
+
+/** Catalogue des événements comptables du lot 2 (§ 11.13), schémas initiaux modifiables par le chef comptable. */
+export const SCHEMAS: { codeEvt: string; typeEvenement: string; journal: string; libelle: string; lignes: L[] }[] = [
+  { codeEvt: 'EVT-01', typeEvenement: 'DEPOT_CONFIRME', journal: 'DEP', libelle: 'Approvisionnement {{reference}} – bureau {{bureau}}', lignes: [d('TRESORERIE', 'MONTANT'), c('COMPTE_PRODUCTION', 'MONTANT')] },
+  { codeEvt: 'EVT-02', typeEvenement: 'POLICE_EMISE', journal: 'EMI', libelle: 'Prime {{reference}} – police {{police}}', lignes: EMISSION },
+  { codeEvt: 'EVT-02', typeEvenement: 'POLICE_EMISE', journal: 'ENC', libelle: 'Règlement {{reference}} par compte de production – bureau {{bureau}}', lignes: [d('COMPTE_PRODUCTION', 'PRIME_TOTALE'), c('CLIENT', 'PRIME_TOTALE')] },
+  { codeEvt: 'EVT-02', typeEvenement: 'POLICE_EMISE', journal: 'COM', libelle: 'Commission {{reference}} – police {{police}}', lignes: COMMISSION },
+  { codeEvt: 'EVT-03', typeEvenement: 'POLICE_RENOUVELEE', journal: 'EMI', libelle: 'Prime {{reference}} – police {{police}}', lignes: EMISSION },
+  { codeEvt: 'EVT-03', typeEvenement: 'POLICE_RENOUVELEE', journal: 'ENC', libelle: 'Règlement direct {{reference}} – police {{police}}', lignes: [d('TRESORERIE', 'PRIME_TOTALE'), c('CLIENT', 'PRIME_TOTALE')] },
+  { codeEvt: 'EVT-03', typeEvenement: 'POLICE_RENOUVELEE', journal: 'COM', libelle: 'Commission {{reference}} – police {{police}}', lignes: COMMISSION },
+  { codeEvt: 'EVT-04', typeEvenement: 'POLICE_ANNULEE', journal: 'EMI', libelle: 'Annulation {{reference}} – police {{police}}',
+    lignes: [d('ANNULATIONS_BRANCHE', 'PRIME_NETTE'), d('7511', 'ACCESSOIRES'), d('TAXES', '*'), c('CLIENT', 'PRIME_TOTALE')] },
+  { codeEvt: 'EVT-04', typeEvenement: 'POLICE_ANNULEE', journal: 'ENC', libelle: 'Remboursement {{reference}} – police {{police}}', lignes: [d('CLIENT', 'PRIME_TOTALE'), c('REMBOURSEMENT', 'PRIME_TOTALE')] },
+  { codeEvt: 'EVT-04', typeEvenement: 'POLICE_ANNULEE', journal: 'COM', libelle: 'Reprise de commission {{reference}}', lignes: [d('COMMISSIONS_A_PAYER', '*'), c('6431', 'COMMISSION')] },
+  { codeEvt: 'EVT-05', typeEvenement: 'PAIEMENT_EXECUTE', journal: 'TRE', libelle: 'Paiement facture de commissions {{reference}}', lignes: [d('COMMISSIONS_A_PAYER', 'BRUT'), c('4371', 'RETENUE'), c('TRESORERIE', 'NET')] },
+  { codeEvt: 'EVT-06', typeEvenement: 'DEPOT_REMBOURSE', journal: 'TRE', libelle: 'Restitution du compte de production {{reference}}', lignes: [d('COMPTE_PRODUCTION', 'MONTANT'), c('TRESORERIE', 'MONTANT')] },
+  { codeEvt: 'EVT-07', typeEvenement: 'PRIME_ANTICIPATION_ACQUISE', journal: 'COM', libelle: 'Prime de renouvellement anticipé {{reference}}', lignes: [d('6431', 'MONTANT'), c('COMMISSIONS_A_PAYER', 'MONTANT')] },
+  { codeEvt: 'EVT-13', typeEvenement: 'CLOTURE_PERIODE', journal: 'INV', libelle: 'Provision pour primes non acquises {{reference}}', lignes: [d('6591', 'PPNA'), c('3212', 'PPNA')] },
+  { codeEvt: 'EVT-21', typeEvenement: 'VERSEMENT_PROGRAMME_RECU', journal: 'ENC', libelle: 'Versement programmé {{reference}}', lignes: [d('TRESORERIE', 'MONTANT'), c('VERSEMENTS_AVANCE', 'MONTANT')] },
+  { codeEvt: 'EVT-22', typeEvenement: 'VERSEMENT_PROGRAMME_REMBOURSE', journal: 'TRE', libelle: 'Remboursement de versements {{reference}}', lignes: [d('VERSEMENTS_AVANCE', 'MONTANT'), c('TRESORERIE', 'MONTANT')] },
+  { codeEvt: 'EVT-23', typeEvenement: 'ENCAISSEMENT_EN_ATTENTE_RECU', journal: 'ENC', libelle: 'Encaissement en attente {{reference}}', lignes: [d('TRESORERIE', 'MONTANT'), c('471', 'MONTANT')] },
+  { codeEvt: 'EVT-24', typeEvenement: 'ENCAISSEMENT_EN_ATTENTE_REMBOURSE', journal: 'TRE', libelle: 'Remboursement d\'encaissement en attente {{reference}}', lignes: [d('471', 'MONTANT'), c('TRESORERIE', 'MONTANT')] },
+  { codeEvt: 'EVT-26', typeEvenement: 'FRAIS_HORS_PRIME_FACTURES', journal: 'ENC', libelle: 'Frais hors prime {{reference}}', lignes: [d('TRESORERIE', 'TOTAL'), c('7511', 'ACCESSOIRES'), c('TAXES', '*')] },
+  { codeEvt: 'EVT-27', typeEvenement: 'FACTURE_COMMISSION_AFFECTEE', journal: 'AUT', libelle: 'Affectation facture de commissions {{reference}} au compte de production',
+    lignes: [d('COMMISSIONS_A_PAYER', 'BRUT'), c('4371', 'RETENUE'), c('COMPTE_PRODUCTION', 'NET')] },
 ];
