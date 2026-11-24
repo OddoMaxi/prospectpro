@@ -248,6 +248,7 @@ export const PARAMETRES: P[] = [
   // Finances (chapitre 11)
   // Collectifs des rôles à incidence comptable (REF-RG-004, FIN-RG-003 ; comptes proposés au § 11.10)
   ['COLLECTIF_COMPTE_PRODUCTION', 'Collectif des comptes de production des agents', 'FIN', 'TEXTE', '4111'],
+  ['COLLECTIF_VERSEMENTS_AVANCE', 'Collectif des versements programmés reçus d\'avance', 'FIN', 'TEXTE', '4191'],
   ['COLLECTIF_SOUSCRIPTEUR', 'Collectif des souscripteurs (assurés)', 'FIN', 'TEXTE', '412'],
   ['COLLECTIF_AGENT_GENERAL', 'Collectif des commissions à payer aux agents généraux', 'FIN', 'TEXTE', '4112'],
   ['COLLECTIF_APPORTEUR', 'Collectif des commissions à payer aux juniors et prescripteurs', 'FIN', 'TEXTE', '4113'],
@@ -271,6 +272,9 @@ export const MODELES_NOTIFICATION: { code: string; canal: string; contenu: strin
   { code: 'ENFANT_AGE_LIMITE', canal: 'SMS', contenu: 'Prospect Pro : {{enfant}} atteint le {{date}} l\'âge limite de sa couverture. Sans justificatif (scolarité, handicap) transmis avant cette date, il sortira de la couverture à l\'échéance suivante.' },
   { code: 'RECLAMATION_RECUE', canal: 'SMS', contenu: 'Prospect Pro : votre réclamation n° {{numero}} est enregistrée. Une réponse vous sera apportée au plus tard le {{echeance}}.' },
   { code: 'RECLAMATION_REPONDUE', canal: 'SMS', contenu: 'Prospect Pro : une réponse à votre réclamation n° {{numero}} est disponible dans votre espace assuré ou auprès de votre bureau.' },
+  { code: 'RAPPEL_ECHEANCE', canal: 'SMS', contenu: 'Prospect Pro : votre police n° {{police}} arrive à échéance le {{echeance}}. Prime de renouvellement : {{prime}}, reste à payer {{reste}}. Paiement au bureau {{bureau}}, par monnaie électronique ou à la caisse du siège.' },
+  { code: 'POLICE_RENOUVELEE', canal: 'SMS', contenu: 'Prospect Pro : votre police n° {{police}} est renouvelée du {{debut}} au {{fin}}. Vos cartes sont actives.' },
+  { code: 'VERSEMENT_RECU', canal: 'SMS', contenu: 'Prospect Pro : versement {{numero}} de {{montant}} reçu pour la police {{police}}. Cumul : {{cumul}} ; reste à payer pour le renouvellement : {{reste}}.' },
   { code: 'POLICE_EMISE', canal: 'SMS', contenu: 'Prospect Pro : votre police n° {{police}} est émise, effet le {{date_effet}}, prime payée {{prime}}. Vos documents (bulletin, conditions générales, quittance, attestation) sont disponibles dans votre espace assuré.' },
   { code: 'APPROVISIONNEMENT_CONFIRME', canal: 'SMS', contenu: 'Prospect Pro : approvisionnement {{numero}} de {{montant}} confirmé sur le compte de production du bureau {{bureau}}. Nouveau solde : {{solde}}.' },
   { code: 'COMPTE_PRODUCTION_SEUIL', canal: 'SMS', contenu: 'Prospect Pro : le solde du compte de production du bureau {{bureau}} est passé sous votre seuil d\'alerte : {{solde}}. Pensez à l\'approvisionner.' },
@@ -465,6 +469,11 @@ export const MODELES_DOCUMENTS: { code: string; libelle: string; contenu: string
     code: 'QUITTANCE', libelle: 'Quittance',
     contenu: ['# Quittance n° {{quittance}}', 'Police n° {{police}} – {{souscripteur}}', 'Période : du {{date_effet}} au {{date_fin}}', '| Libellé | Montant |',
       '{{#lignes}}| {{libelle}} | {{montant}} |', '{{/lignes}}', 'Mode de paiement : {{mode_paiement}}.', '---', 'Fait à Conakry, le {{date_document}}.'].join('\n'),
+  },
+  {
+    code: 'RECU_VERSEMENT', libelle: 'Reçu de versement programmé',
+    contenu: ['# Reçu de versement programmé n° {{numero}}', 'Police n° {{police}}', '| Versement | Cumul | Prime de renouvellement | Reste à payer |', '| {{montant}} | {{cumul}} | {{prime}} | {{reste}} |', '',
+      'Ce versement est reçu d\'avance : il ne constitue pas une prime et n\'ouvre aucune garantie. Il sera affecté au renouvellement dès que le cumul atteindra la prime.', '---', 'Conakry, le {{date_document}}'].join('\n'),
   },
   {
     code: 'ATTESTATION', libelle: 'Attestation d\'assurance',

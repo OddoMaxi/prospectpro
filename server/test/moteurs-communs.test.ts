@@ -238,7 +238,7 @@ describe('Ordonnanceur', () => {
     await c.connect();
     const planifies = (await c.query(`SELECT name FROM pgboss.schedule ORDER BY name`)).rows.map(r => r.name);
     await c.end();
-    expect(planifies).toEqual(['ages-limites', 'organisation-differee', 'propositions-expiration', 'reclamations-escalade', 'scellement-ecritures', 'societe-du-jour']);
+    expect(planifies).toEqual(['ages-limites', 'echeances-polices', 'organisation-differee', 'propositions-expiration', 'rappels-renouvellement', 'reclamations-escalade', 'scellement-ecritures', 'societe-du-jour']);
     await arreter();
   }, 30_000);
 });

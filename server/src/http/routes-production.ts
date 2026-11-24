@@ -8,6 +8,8 @@ import {
   accepterRecapitulatif, controlerDossier, enregistrerDonnees, lireDossier, listerDossiers, ouvrirDossier, presenterRecapitulatif, rejeterDossier, soumettreDossier, tarifierDossier,
 } from '../modules/production/dossiers.js';
 import { emettre, lirePolice, proposerAnnulationErreur, rechercherPolices } from '../modules/production/emission.js';
+import { demanderNonRenouvellement, disponibleVersements, lirePoliceVie, policesARenouveler, primeRenouvellement, recevoirVersement, rembourserVersements, renouveler } from '../modules/production/renouvellement.js';
+import { ajouterJours, aujourdhui } from '../noyau/dates.js';
 import { droit, ecrire } from './socle.js';
 
 const uuid = z.string().uuid();
@@ -101,6 +103,38 @@ export function routesProduction(): Router {
   r.post('/polices/:id/annulation-erreur', droit('ANNULATION_ERREUR', 'CREER'), async (req, res) => {
     const { motif } = z.object({ motif: z.string().min(1) }).parse(req.body);
     res.status(201).json(await ecrire(req, q => proposerAnnulationErreur(q, req.acteur, uuid.parse(req.params.id), motif)));
+  });
+  // ---------------------------------------------------------------- Renouvellement et versements (PR-03, AS-06)
+  r.get('/polices-a-renouveler', droit('SOUSCRIPTION', 'CONSULTER'), async (req, res) => {
+    const { jours } = z.object({ jours: z.coerce.number().int().min(1).max(120).default(45) }).parse(req.query);
+    res.json(await policesARenouveler(getPool(), await bureauxVisibles(req), jours));
+  });
+  r.get('/polices/:id/renouvellement', droit('SOUSCRIPTION', 'CONSULTER'), async (req, res) => {
+    const p = await lirePoliceVie(getPool(), uuid.parse(req.params.id));
+    const debut = p.statut === 'ACTIVE' ? ajouterJours(p.echeance, 1) : aujourdhui();
+    const { tarif } = await primeRenouvellement(getPool(), p, debut);
+    res.json({ echeance: p.echeance, dateDebut: debut, tarif, versements: await disponibleVersements(getPool(), p.id), statut: p.statut, nePasRenouveler: p.ne_pas_renouveler });
+  });
+  r.post('/polices/:id/renouvellement', droit('SOUSCRIPTION', 'CREER'), async (req, res) => {
+    const mode = z.discriminatedUnion('type', [
+      z.object({ type: z.literal('COMPTE_PRODUCTION') }),
+      z.object({ type: z.literal('PAIEMENT_DIRECT'), moyen: z.enum(['ESPECES_SIEGE', 'BANQUE', 'MONNAIE_ELECTRONIQUE']), banque: z.string().optional(), reference: z.string().max(60).optional() }),
+      z.object({ type: z.literal('VERSEMENTS') }),
+    ]).parse(req.body);
+    res.status(201).json(await ecrire(req, q => renouveler(q, req.acteur, uuid.parse(req.params.id), mode)));
+  });
+  r.post('/polices/:id/non-renouvellement', droit('SOUSCRIPTION', 'CREER'), async (req, res) => {
+    const { motif } = z.object({ motif: z.string().min(1) }).parse(req.body);
+    await ecrire(req, q => demanderNonRenouvellement(q, req.acteur, uuid.parse(req.params.id), motif));
+    res.status(204).end();
+  });
+  r.post('/polices/:id/versements', droit('SOUSCRIPTION', 'CREER'), async (req, res) => {
+    const d = z.object({ montant: z.number().int().positive(), moyen: z.enum(['MONNAIE_ELECTRONIQUE', 'BUREAU']), banque: z.string().optional(), reference: z.string().max(60).optional() }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => recevoirVersement(q, req.acteur, { ...d, policeId: uuid.parse(req.params.id) })));
+  });
+  r.post('/polices/:id/versements/remboursement', droit('PAIEMENT', 'CREER'), async (req, res) => {
+    const d = z.object({ banque: z.string(), pieceDocumentId: uuid }).parse(req.body);
+    res.json(await ecrire(req, q => rembourserVersements(q, req.acteur, uuid.parse(req.params.id), d)));
   });
   return r;
 }

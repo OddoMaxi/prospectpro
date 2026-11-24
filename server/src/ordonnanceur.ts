@@ -15,6 +15,7 @@ import { escaladerReclamations } from './modules/reclamations/service.js';
 import { appliquerReorganisationsDifferees } from './modules/organisation/service.js';
 import { scellerEcritures } from './modules/comptabilite/moteur.js';
 import { expirerDossiers } from './modules/production/dossiers.js';
+import { envoyerRappels, traiterEcheances } from './modules/production/renouvellement.js';
 
 export interface Traitement { nom: string; cron: string; libelle: string; executer: () => Promise<unknown> }
 
@@ -34,6 +35,8 @@ export const TRAITEMENTS: Traitement[] = [
   quotidien('societe-du-jour', 'Fiche de la Compagnie : prise d\'effet des modifications datées', '5 0 * * *', q => rafraichirSociete(q)),
   quotidien('ages-limites', 'Enfants atteignant l\'âge limite : notification et sortie (REF-RG-009)', '0 6 * * *', q => traiterAgesLimites(q, systeme, aujourdhui())),
   quotidien('propositions-expiration', 'Expiration des propositions non finalisées (PROD-RG-001)', '10 0 * * *', q => expirerDossiers(q)),
+  quotidien('echeances-polices', 'Échéances : renouvellement par versements, polices échues puis expirées (PROD-RG-025 à 027)', '20 0 * * *', q => traiterEcheances(q, systeme)),
+  quotidien('rappels-renouvellement', 'Rappels de renouvellement J-30, J-15, J-7, J-1 (PROD-RG-021)', '0 8 * * *', q => envoyerRappels(q)),
   quotidien('reclamations-escalade', 'Escalade des réclamations sans réponse à l\'échéance (§ 8.10)', '0 7 * * *', q => escaladerReclamations(q, systeme)),
 ];
 
