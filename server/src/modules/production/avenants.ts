@@ -23,14 +23,14 @@ import { tresorerieDe, type Moyen } from '../finances/tresorerie.js';
 import { compteComptable, compteProductionDuBureau, lireCompteProduction, mouvementer } from '../commercial/comptesProduction.js';
 import { confirmerAcceptation, demanderAcceptation } from '../documents/acceptation.js';
 import { Refus } from '../auth/service.js';
-import { lirePoliceVie } from './renouvellement.js';
+import { lirePoliceVie, type PoliceVie } from './renouvellement.js';
 
 const gnf = (n: number) => `${n.toLocaleString('fr-FR').replace(/ /g, ' ')} GNF`;
 const fr = (d: string) => d.split('-').reverse().join('/');
 const jours = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000) + 1;
 
 /** Période en cours d'une police (la dernière). */
-async function periodeCourante(q: Executant, policeId: string) {
+export async function periodeCourante(q: Executant, policeId: string) {
   const r = (await q.query<{ date_debut: string; date_fin: string }>(
     'SELECT date_debut::text, date_fin::text FROM police_periode WHERE police_id = $1 ORDER BY rang DESC LIMIT 1', [policeId])).rows[0];
   if (!r) throw nonTrouve('Période de la police');
@@ -42,7 +42,7 @@ export function prorata(montantAnnuel: number, dateEffet: string, debut: string,
   return Math.round(montantAnnuel * jours(dateEffet, fin) / jours(debut, fin));
 }
 
-async function compteCommissions(q: Executant, intervenantId: string): Promise<CompteResolu> {
+export async function compteCommissions(q: Executant, intervenantId: string): Promise<CompteResolu> {
   const r = (await q.query<{ compte_auxiliaire_id: string; collectif_id: string }>(
     `SELECT tr.compte_auxiliaire_id, a.collectif_id FROM intervenant i JOIN tiers_role tr ON tr.tiers_id = i.tiers_id AND tr.role = i.role AND tr.date_fin IS NULL
        JOIN compte_auxiliaire a ON a.id = tr.compte_auxiliaire_id WHERE i.id = $1`, [intervenantId])).rows[0];
@@ -53,7 +53,7 @@ async function compteCommissions(q: Executant, intervenantId: string): Promise<C
 /** CA-PROD-07 : ajout d'un conjoint ou d'un enfant en cours de période, prime au prorata, payée avant l'entrée. */
 export async function ajouterAyantDroit(q: Executant, acteur: Acteur, policeId: string, d: {
   tiersId: string; qualite: 'CONJOINT' | 'ENFANT'; parentTiersId?: string; categorieEnfant?: 'A_CHARGE' | 'ETUDIANT' | 'HANDICAPE';
-  paiement: { type: 'COMPTE_PRODUCTION' } | { type: 'PAIEMENT_DIRECT'; moyen: Moyen; banque?: string };
+  paiement: PaiementAvenant;
 }, jour = aujourdhui()) {
   const p = await lirePoliceVie(q, policeId, true);
   exiger(p.statut === 'ACTIVE', 'STATUT_INVALIDE', 'Un ayant droit s\'ajoute à une police active');
@@ -79,53 +79,13 @@ export async function ajouterAyantDroit(q: Executant, acteur: Acteur, policeId: 
   const taxes = annuel.taxes.map(x => ({ ...x, montant: Math.round(nette * x.taux) }));
   const totale = nette + taxes.reduce((s, x) => s + x.montant, 0);
 
-  let perception: CompteResolu, journalTresorerie: string | undefined, cp: Awaited<ReturnType<typeof lireCompteProduction>> | null = null, modePaiement: string;
-  if (d.paiement.type === 'COMPTE_PRODUCTION') {
-    cp = await lireCompteProduction(q, (await compteProductionDuBureau(q, p.bureau_gestion_id)).id, true);
-    exiger(cp.statut === 'ACTIF', 'COMPTE_PRODUCTION_GELE', 'Compte de production gelé ou clôturé');
-    if (cp.solde < totale) throw new ErreurMetier('SOLDE_INSUFFISANT', `Solde insuffisant : il manque ${gnf(totale - cp.solde)}`, 422, { manque: totale - cp.solde });
-    perception = compteComptable(cp); modePaiement = 'DEPOT';
-  } else {
-    const tr = await tresorerieDe(q, d.paiement.moyen, d.paiement.banque);
-    perception = { compteId: tr.compteId }; journalTresorerie = tr.journal; modePaiement = d.paiement.moyen === 'BANQUE' ? 'VIREMENT' : d.paiement.moyen;
-  }
-  const b = (await q.query<{ taux: string }>(`SELECT taux FROM bareme_commission WHERE produit_id = $1 AND role = 'AGENT_GENERAL' AND date_effet <= $2 AND supprime_le IS NULL ORDER BY date_effet DESC LIMIT 1`, [p.produit_id, jour])).rows[0];
-  const intervenants = (await q.query<{ intervenant_id: string; cle_repartition: string }>(`SELECT intervenant_id, cle_repartition FROM police_intervenant WHERE police_id = $1 AND date_fin IS NULL ORDER BY cle_repartition DESC`, [policeId])).rows;
-  const totalCom = Math.round(nette * Number(b?.taux ?? 0));
-  const commissions = intervenants.map(i => ({ intervenantId: i.intervenant_id, montant: Math.round(totalCom * Number(i.cle_repartition)) }));
-  const ecart = totalCom - commissions.reduce((s, x) => s + x.montant, 0);
-  if (ecart && commissions[0]) commissions[0].montant += ecart;
-
-  const avenantId = crypto.randomUUID(), quittanceId = crypto.randomUUID();
+  const avenantId = crypto.randomUUID();
   const numero = await attribuer(q, acteur, { type: 'AVENANT', numeroPolice: p.numero }, { type: 'avenant', id: avenantId });
-  const numeroQuittance = await attribuer(q, acteur, { type: 'QUITTANCE', codeBureau: p.bureau, annee: Number(jour.slice(0, 4)) }, { type: 'quittance', id: quittanceId });
   const nom = (await q.query<{ n: string }>(`SELECT trim(nom || ' ' || COALESCE(prenoms, '')) AS n FROM tiers WHERE id = $1`, [d.tiersId])).rows[0]!.n;
-  const docQuittance = await genererDocument(q, acteur, { modeleCode: 'QUITTANCE', typeDocument: 'QUITTANCE', objet: { type: 'police', id: policeId }, variables: {
-    quittance: numeroQuittance, police: p.numero, souscripteur: (await q.query<{ n: string }>(`SELECT trim(nom || ' ' || COALESCE(prenoms, '')) AS n FROM tiers WHERE id = $1`, [p.souscripteur_id])).rows[0]!.n,
-    date_effet: fr(jour), date_fin: fr(periode.date_fin), mode_paiement: modePaiement === 'DEPOT' ? `débit du compte de production du bureau ${p.bureau}` : modePaiement.toLowerCase().replace(/_/g, ' '),
-    lignes: [{ libelle: `Avenant ${numero} : ajout de ${nom}, prime au prorata (${jours(jour, periode.date_fin)} jours)`, montant: gnf(nette) }, ...taxes.map(x => ({ libelle: x.libelle, montant: gnf(x.montant) })), { libelle: 'Total', montant: gnf(totale) }],
-  } });
-  const client = (await q.query<{ id: string; collectif_id: string }>(
-    `SELECT a.id, a.collectif_id FROM tiers_role r JOIN compte_auxiliaire a ON a.id = r.compte_auxiliaire_id WHERE r.tiers_id = $1 AND r.role = 'SOUSCRIPTEUR' AND r.date_fin IS NULL`, [p.souscripteur_id])).rows[0]!;
-  const branche = (await q.query<{ compte_primes_id: string }>('SELECT compte_primes_id FROM branche_comptable WHERE code = $1', [p.branche])).rows[0]!;
-  const ecritures = await comptabiliser(q, acteur, {
-    codeEvt: d.paiement.type === 'COMPTE_PRODUCTION' ? 'EVT-02' : 'EVT-03', reference: numeroQuittance, pieceDocumentId: docQuittance.id, journalTresorerie,
-    libelle: { police: p.numero, bureau: p.bureau },
-    montants: { PRIME_NETTE: nette, ACCESSOIRES: 0, PRIME_TOTALE: totale, COMMISSION: totalCom },
-    comptes: { CLIENT: { compteId: client.collectif_id, auxiliaireId: client.id }, PRIMES_BRANCHE: { compteId: branche.compte_primes_id },
-      TAXES: taxes.map(x => ({ compteId: x.compteId, montant: x.montant, codeTaxeId: x.codeTaxeId })), COMPTE_PRODUCTION: perception, TRESORERIE: perception,
-      COMMISSIONS_A_PAYER: await Promise.all(commissions.filter(x => x.montant > 0).map(async x => ({ ...(await compteCommissions(q, x.intervenantId)), montant: x.montant }))) },
-  });
-  const emi = ecritures.find(e => e.journal === 'EMI')!, enc = ecritures.find(e => e.journal !== 'EMI' && e.journal !== 'COM')!, com = ecritures.find(e => e.journal === 'COM');
-  await q.query(
-    `INSERT INTO quittance (id, numero, police_id, type, periode_debut, periode_fin, prime_nette, accessoires, taxes, prime_totale, mode_paiement, statut, ecriture_constatation_id, ecriture_perception_id)
-     VALUES ($1,$2,$3,'AVENANT',$4,$5,$6,0,$7,$8,$9,'SOLDEE',$10,$11)`,
-    [quittanceId, numeroQuittance, policeId, jour, periode.date_fin, nette, totale - nette, totale, modePaiement, emi.id, enc.id]);
-  for (const x of commissions.filter(y => y.montant > 0)) {
-    await q.query(`INSERT INTO commission (police_id, quittance_id, intervenant_id, type, assiette, taux, montant, statut, ecriture_id) VALUES ($1,$2,$3,'COMMISSION',$4,$5,$6,'DUE',$7)`,
-      [policeId, quittanceId, x.intervenantId, nette, b?.taux ?? 0, x.montant, com!.id]);
-  }
-  if (cp) await mouvementer(q, acteur, { compteId: cp.id, nature: 'EMISSION', montant: totale, reference: numero, ecritureId: enc.id });
+  const { quittanceId, numeroQuittance } = await encaisserPrimeAvenant(q, acteur, p, {
+    numeroAvenant: numero, libelle: `Avenant ${numero} : ajout de ${nom}, prime au prorata (${jours(jour, periode.date_fin)} jours)`,
+    nette, taxes, debut: jour, fin: periode.date_fin, paiement: d.paiement,
+  }, jour);
 
   // Entrée de l'ayant droit à la date du paiement : la carence court à partir de cette date (PROD-RG-040)
   const rang = (await q.query<{ r: number }>(`SELECT COALESCE(max(rang_carte::int), -1) + 1 AS r FROM police_assure WHERE police_id = $1`, [policeId])).rows[0]!.r;
@@ -144,6 +104,72 @@ export async function ajouterAyantDroit(q: Executant, acteur: Acteur, policeId: 
   await journaliser(q, { ...acteur.trace(), action: 'CREATION', objetType: 'avenant', objetId: avenantId, apres: { numero, police: p.numero, nette, totale } });
   await publier(q, acteur, { type: 'AVENANT_EMIS', objet: { type: 'avenant', id: avenantId }, charge: { police: p.numero, type: 'AJOUT_AYANT_DROIT', tiersId: d.tiersId }, cleIdempotence: `avenant:${avenantId}` });
   return { avenantId, numero, quittance: numeroQuittance, primeNette: nette, primeTotale: totale, joursCouverts: jours(jour, periode.date_fin) };
+}
+
+export type PaiementAvenant = { type: 'COMPTE_PRODUCTION' } | { type: 'PAIEMENT_DIRECT'; moyen: Moyen; banque?: string };
+export interface TaxeCalculee { libelle: string; montant: number; compteId: string; codeTaxeId: string }
+
+/**
+ * PROD-RG-044 : prime d'un avenant encaissée par le compte de production (EVT-02) ou payée directement (EVT-03) :
+ * quittance soldée, commissions selon la clé de répartition, débit du compte de production dans la même transaction.
+ */
+export async function encaisserPrimeAvenant(q: Executant, acteur: Acteur, p: PoliceVie, d: {
+  numeroAvenant: string; libelle: string; nette: number; taxes: TaxeCalculee[]; debut: string; fin: string; paiement: PaiementAvenant;
+}, jour = aujourdhui()) {
+  const totale = d.nette + d.taxes.reduce((s, x) => s + x.montant, 0);
+  let perception: CompteResolu, journalTresorerie: string | undefined, cp: Awaited<ReturnType<typeof lireCompteProduction>> | null = null, modePaiement: string;
+  if (d.paiement.type === 'COMPTE_PRODUCTION') {
+    cp = await lireCompteProduction(q, (await compteProductionDuBureau(q, p.bureau_gestion_id)).id, true);
+    exiger(cp.statut === 'ACTIF', 'COMPTE_PRODUCTION_GELE', 'Compte de production gelé ou clôturé');
+    if (cp.solde < totale) throw new ErreurMetier('SOLDE_INSUFFISANT', `Solde insuffisant : il manque ${gnf(totale - cp.solde)}`, 422, { manque: totale - cp.solde });
+    perception = compteComptable(cp); modePaiement = 'DEPOT';
+  } else {
+    const tr = await tresorerieDe(q, d.paiement.moyen, d.paiement.banque);
+    perception = { compteId: tr.compteId }; journalTresorerie = tr.journal; modePaiement = d.paiement.moyen === 'BANQUE' ? 'VIREMENT' : d.paiement.moyen;
+  }
+  const b = (await q.query<{ taux: string }>(`SELECT taux FROM bareme_commission WHERE produit_id = $1 AND role = 'AGENT_GENERAL' AND date_effet <= $2 AND supprime_le IS NULL ORDER BY date_effet DESC LIMIT 1`, [p.produit_id, jour])).rows[0];
+  const intervenants = (await q.query<{ intervenant_id: string; cle_repartition: string }>(`SELECT intervenant_id, cle_repartition FROM police_intervenant WHERE police_id = $1 AND date_fin IS NULL ORDER BY cle_repartition DESC`, [p.id])).rows;
+  const totalCom = Math.round(d.nette * Number(b?.taux ?? 0));
+  const commissions = intervenants.map(i => ({ intervenantId: i.intervenant_id, montant: Math.round(totalCom * Number(i.cle_repartition)) }));
+  const ecart = totalCom - commissions.reduce((s, x) => s + x.montant, 0);
+  if (ecart && commissions[0]) commissions[0].montant += ecart;
+
+  const quittanceId = crypto.randomUUID();
+  const numeroQuittance = await attribuer(q, acteur, { type: 'QUITTANCE', codeBureau: p.bureau, annee: Number(jour.slice(0, 4)) }, { type: 'quittance', id: quittanceId });
+  const docQuittance = await genererDocument(q, acteur, { modeleCode: 'QUITTANCE', typeDocument: 'QUITTANCE', objet: { type: 'police', id: p.id }, variables: {
+    quittance: numeroQuittance, police: p.numero, souscripteur: (await q.query<{ n: string }>(`SELECT trim(nom || ' ' || COALESCE(prenoms, '')) AS n FROM tiers WHERE id = $1`, [p.souscripteur_id])).rows[0]!.n,
+    date_effet: fr(d.debut), date_fin: fr(d.fin), mode_paiement: modePaiement === 'DEPOT' ? `débit du compte de production du bureau ${p.bureau}` : modePaiement.toLowerCase().replace(/_/g, ' '),
+    lignes: [{ libelle: d.libelle, montant: gnf(d.nette) }, ...d.taxes.map(x => ({ libelle: x.libelle, montant: gnf(x.montant) })), { libelle: 'Total', montant: gnf(totale) }],
+  } });
+  const client = await compteClient(q, p.souscripteur_id);
+  const branche = (await q.query<{ compte_primes_id: string }>('SELECT compte_primes_id FROM branche_comptable WHERE code = $1', [p.branche])).rows[0]!;
+  const ecritures = await comptabiliser(q, acteur, {
+    codeEvt: d.paiement.type === 'COMPTE_PRODUCTION' ? 'EVT-02' : 'EVT-03', reference: numeroQuittance, pieceDocumentId: docQuittance.id, journalTresorerie,
+    libelle: { police: p.numero, bureau: p.bureau },
+    montants: { PRIME_NETTE: d.nette, ACCESSOIRES: 0, PRIME_TOTALE: totale, COMMISSION: totalCom },
+    comptes: { CLIENT: client, PRIMES_BRANCHE: { compteId: branche.compte_primes_id },
+      TAXES: d.taxes.map(x => ({ compteId: x.compteId, montant: x.montant, codeTaxeId: x.codeTaxeId })), COMPTE_PRODUCTION: perception, TRESORERIE: perception,
+      COMMISSIONS_A_PAYER: await Promise.all(commissions.filter(x => x.montant > 0).map(async x => ({ ...(await compteCommissions(q, x.intervenantId)), montant: x.montant }))) },
+  });
+  const emi = ecritures.find(e => e.journal === 'EMI')!, enc = ecritures.find(e => e.journal !== 'EMI' && e.journal !== 'COM')!, com = ecritures.find(e => e.journal === 'COM');
+  await q.query(
+    `INSERT INTO quittance (id, numero, police_id, type, periode_debut, periode_fin, prime_nette, accessoires, taxes, prime_totale, mode_paiement, statut, ecriture_constatation_id, ecriture_perception_id)
+     VALUES ($1,$2,$3,'AVENANT',$4,$5,$6,0,$7,$8,$9,'SOLDEE',$10,$11)`,
+    [quittanceId, numeroQuittance, p.id, d.debut, d.fin, d.nette, totale - d.nette, totale, modePaiement, emi.id, enc.id]);
+  for (const x of commissions.filter(y => y.montant > 0)) {
+    await q.query(`INSERT INTO commission (police_id, quittance_id, intervenant_id, type, assiette, taux, montant, statut, ecriture_id) VALUES ($1,$2,$3,'COMMISSION',$4,$5,$6,'DUE',$7)`,
+      [p.id, quittanceId, x.intervenantId, d.nette, b?.taux ?? 0, x.montant, com!.id]);
+  }
+  if (cp) await mouvementer(q, acteur, { compteId: cp.id, nature: 'EMISSION', montant: totale, reference: d.numeroAvenant, ecritureId: enc.id });
+  return { quittanceId, numeroQuittance, totale };
+}
+
+/** Auxiliaire du souscripteur (collectif des assurés). */
+export async function compteClient(q: Executant, souscripteurId: string): Promise<CompteResolu> {
+  const r = (await q.query<{ id: string; collectif_id: string }>(
+    `SELECT a.id, a.collectif_id FROM tiers_role r JOIN compte_auxiliaire a ON a.id = r.compte_auxiliaire_id WHERE r.tiers_id = $1 AND r.role = 'SOUSCRIPTEUR' AND r.date_fin IS NULL`, [souscripteurId])).rows[0];
+  if (!r) throw new ErreurMetier('COMPTE_CLIENT_ABSENT', 'Souscripteur sans compte client', 422);
+  return { compteId: r.collectif_id, auxiliaireId: r.id };
 }
 
 // ---------------------------------------------------------------- bénéficiaires (PROD-RG-012, 013, 043)

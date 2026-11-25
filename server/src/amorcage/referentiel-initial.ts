@@ -163,6 +163,10 @@ export const DELEGATIONS: { type: string; niveaux: { niveau: number; profils: st
   { type: 'MOUVEMENT_PORTEFEUILLE', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }] },
   { type: 'ECRITURE_MANUELLE', niveaux: [{ niveau: 1, profils: ['COMPTABLE'] }, { niveau: 2, profils: ['DAF'] }] },
   { type: 'DECLARATION_TAXE', niveaux: [{ niveau: 1, profils: ['COMPTABLE'] }, { niveau: 2, profils: ['DAF'] }] },
+  { type: 'AVENANT_CORRECTION', niveaux: [{ niveau: 1, profils: ['GEST_PRODUCTION'] }] },
+  { type: 'RETRAIT_AYANT_DROIT', niveaux: [{ niveau: 1, profils: ['GEST_PRODUCTION'] }] },
+  { type: 'RESILIATION', niveaux: [{ niveau: 1, profils: ['GEST_PRODUCTION'] }, { niveau: 2, profils: ['DAF'] }] },
+  { type: 'PAIEMENT_RIST', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
 ];
 
 // ---------------------------------------------------------------- Règles légales (ARC-RG-003, annexe C)
@@ -231,6 +235,7 @@ export const PARAMETRES: P[] = [
   ['PROD_DESIGNATION_DELEGUEE', 'Désignation des bénéficiaires déléguée à l\'adhérent', 'PRD', 'BOOLEEN', 'NON'],
   ['PROD_AVANCE_CONSERVATION_MOIS', 'Conservation d\'une avance incomplète (mois)', 'PRD', 'DUREE', '12'],
   ['PROD_APPEL_RENOUVELLEMENT_COLLECTIF_JOURS', 'Appel de renouvellement des contrats collectifs (jours avant l\'échéance)', 'PRD', 'DUREE', '45'],
+  ['PROD_DELAI_RENONCIATION_JOURS', 'Délai de renonciation après une souscription en ligne, à défaut de délai propre au produit (jours, à confirmer en annexe E)', 'PRD', 'DUREE', '30'],
   ['PROD_PASSERELLE_INDIVIDUEL', 'Passerelle vers un contrat individuel', 'PRD', 'BOOLEEN', 'NON'],
   ['RECLAMATION_DELAI_JOURS_OUVRABLES', 'Délai de traitement d\'une réclamation (jours ouvrables)', 'PRD', 'DUREE', '15'],
   // Santé (chapitre 9)
@@ -289,6 +294,9 @@ export const MODELES_NOTIFICATION: { code: string; canal: string; contenu: strin
   { code: 'APPROVISIONNEMENT_CONFIRME', canal: 'SMS', contenu: 'Prospect Pro : approvisionnement {{numero}} de {{montant}} confirmé sur le compte de production du bureau {{bureau}}. Nouveau solde : {{solde}}.' },
   { code: 'COMPTE_PRODUCTION_SEUIL', canal: 'SMS', contenu: 'Prospect Pro : le solde du compte de production du bureau {{bureau}} est passé sous votre seuil d\'alerte : {{solde}}. Pensez à l\'approvisionner.' },
   { code: 'CHANGEMENT_INTERLOCUTEUR', canal: 'SMS', contenu: 'Prospect Pro : pour votre police {{police}}, votre interlocuteur commercial est désormais {{interlocuteur}} ({{telephone}}). Vos garanties ne changent pas.' },
+  { code: 'POLICE_RESILIEE', canal: 'SMS', contenu: 'Prospect Pro : votre police {{police}} est résiliée à compter du {{date}} ({{motif}}). Les cartes de ses assurés ne sont plus valables.{{ristourne}}' },
+  { code: 'POLICE_RESILIEE_AGENT', canal: 'SMS', contenu: 'Prospect Pro : la police {{police}} de {{souscripteur}} est résiliée à compter du {{date}} ({{motif}}).' },
+  { code: 'POLICE_RENONCIATION', canal: 'SMS', contenu: 'Prospect Pro : votre renonciation à la police {{police}} est enregistrée. La police est annulée et {{montant}} vous seront remboursés.' },
   { code: 'VERIFICATION_TELEPHONE', canal: 'SMS', contenu: 'Prospect Pro : votre code de vérification est {{code}}. Communiquez-le uniquement à la personne qui vous assiste. Valable 10 minutes.' },
   { code: 'ACCEPTATION_DOCUMENT', canal: 'SMS', contenu: 'Prospect Pro : code {{code}} pour accepter « {{document}} » (réf. {{empreinte}}). Valable 5 minutes. Ne le communiquez qu\'à la personne qui vous assiste, après avoir lu le document.' },
 ];
@@ -425,7 +433,9 @@ export const SCHEMAS: { codeEvt: string; typeEvenement: string; journal: string;
   { codeEvt: 'EVT-03', typeEvenement: 'POLICE_RENOUVELEE', journal: 'COM', libelle: 'Commission {{reference}} – police {{police}}', lignes: COMMISSION },
   { codeEvt: 'EVT-04', typeEvenement: 'POLICE_ANNULEE', journal: 'EMI', libelle: 'Annulation {{reference}} – police {{police}}',
     lignes: [d('ANNULATIONS_BRANCHE', 'PRIME_NETTE'), d('7511', 'ACCESSOIRES'), d('TAXES', '*'), c('CLIENT', 'PRIME_TOTALE')] },
-  { codeEvt: 'EVT-04', typeEvenement: 'POLICE_ANNULEE', journal: 'ENC', libelle: 'Remboursement {{reference}} – police {{police}}', lignes: [d('CLIENT', 'PRIME_TOTALE'), c('REMBOURSEMENT', 'PRIME_TOTALE')] },
+  // Remboursement au compte de production (REMBOURSE) ; une ristourne payée au client passe par la chaîne de paiement (PAIEMENT_RISTOURNE, journal TRE)
+  { codeEvt: 'EVT-04', typeEvenement: 'POLICE_ANNULEE', journal: 'ENC', libelle: 'Remboursement {{reference}} – police {{police}}', lignes: [d('CLIENT', 'REMBOURSE'), c('REMBOURSEMENT', 'REMBOURSE')] },
+  { codeEvt: 'EVT-04', typeEvenement: 'POLICE_ANNULEE', journal: 'TRE', libelle: 'Paiement de la ristourne {{reference}} – police {{police}}', lignes: [d('CLIENT', 'PAIEMENT_RISTOURNE'), c('TRESORERIE', 'PAIEMENT_RISTOURNE')] },
   { codeEvt: 'EVT-04', typeEvenement: 'POLICE_ANNULEE', journal: 'COM', libelle: 'Reprise de commission {{reference}}', lignes: [d('COMMISSIONS_A_PAYER', '*'), c('6431', 'COMMISSION')] },
   { codeEvt: 'EVT-05', typeEvenement: 'PAIEMENT_EXECUTE', journal: 'TRE', libelle: 'Paiement facture de commissions {{reference}}', lignes: [d('COMMISSIONS_A_PAYER', 'BRUT'), c('4371', 'RETENUE'), c('TRESORERIE', 'NET')] },
   { codeEvt: 'EVT-06', typeEvenement: 'DEPOT_REMBOURSE', journal: 'TRE', libelle: 'Restitution du compte de production {{reference}}', lignes: [d('COMPTE_PRODUCTION', 'MONTANT'), c('TRESORERIE', 'MONTANT')] },
@@ -489,6 +499,32 @@ export const MODELES_DOCUMENTS: { code: string; libelle: string; contenu: string
     code: 'AVENANT_BENEFICIAIRES', libelle: 'Avenant de désignation des bénéficiaires',
     contenu: ['# Avenant n° {{numero}} – Bénéficiaires du capital décès', 'Police n° {{police}}', '| Bénéficiaire | Quotité | Rang |', '{{#beneficiaires}}| {{nom}} | {{quotite}} | {{rang}} |', '{{/beneficiaires}}', '',
       'En saisissant le code reçu par SMS, le souscripteur confirme cette désignation, qui remplace la précédente sans incidence sur la prime.', '---', 'Conakry, le {{date_document}}'].join('\n'),
+  },
+  {
+    code: 'AVENANT_CORRECTION', libelle: 'Avenant de correction',
+    contenu: ['# Avenant n° {{numero}} – Correction', 'Police n° {{police}} – {{souscripteur}}', 'Assuré concerné : {{assure}}', '| Donnée | Avant | Après |', '{{#corrections}}| {{donnee}} | {{avant}} | {{apres}} |', '{{/corrections}}', '',
+      'Prime annuelle recalculée : {{prime_avant}} → {{prime_apres}}. Différence au prorata du {{date_effet}} au {{date_fin}} ({{jours}} jours) :', '| Libellé | Montant |', '{{#lignes}}| {{libelle}} | {{montant}} |', '{{/lignes}}',
+      'Le numéro de la police et les délais de carence déjà courus sont conservés.', '---', 'Conakry, le {{date_document}}'].join('\n'),
+  },
+  {
+    code: 'LETTRE_RESILIATION', libelle: 'Lettre de résiliation',
+    contenu: ['# Résiliation de la police n° {{police}}', 'Souscripteur : {{souscripteur}}', 'Avenant n° {{numero}}', '', 'La Compagnie résilie la police à compter du {{date_effet}} pour le motif suivant : {{motif}}.',
+      'Les cartes de tous les assurés de la police sont bloquées à cette date.', '| Libellé | Montant |', '{{#lignes}}| {{libelle}} | {{montant}} |', '{{/lignes}}', '{{mention_ristourne}}', '---', 'Conakry, le {{date_document}}'].join('\n'),
+  },
+  {
+    code: 'ATTESTATION_RENONCIATION', libelle: 'Attestation de renonciation',
+    contenu: ['# Renonciation à la police n° {{police}}', 'Souscripteur : {{souscripteur}}', 'Avenant n° {{numero}}', '', 'Demande de renonciation reçue le {{date_demande}}, dans le délai de {{delai}} jours suivant la souscription, sans prestation enregistrée.',
+      'La police est annulée depuis l\'origine ; la prime est remboursée intégralement :', '| Libellé | Montant |', '{{#lignes}}| {{libelle}} | {{montant}} |', '{{/lignes}}', 'Remboursement : {{destination}}.', '---', 'Conakry, le {{date_document}}'].join('\n'),
+  },
+  {
+    code: 'AVENANT_RETRAIT', libelle: 'Avenant de retrait d\'un ayant droit',
+    contenu: ['# Avenant n° {{numero}} – Retrait d\'un ayant droit', 'Police n° {{police}} – {{souscripteur}}', 'Ayant droit retiré : {{assure}} – {{motif}}', 'Date de sortie : {{date_sortie}}', '| Libellé | Montant |', '{{#lignes}}| {{libelle}} | {{montant}} |', '{{/lignes}}', '{{mention}}', '---', 'Conakry, le {{date_document}}'].join('\n'),
+  },
+  {
+    code: 'AVENANT_SOUSCRIPTEUR', libelle: 'Avenant de changement de souscripteur',
+    contenu: ['# Avenant n° {{numero}} – Changement de souscripteur', 'Police n° {{police}}', 'Ancien souscripteur : {{ancien}}', 'Nouveau souscripteur : {{nouveau}}', 'Motif : {{motif}}', '',
+      'Le nouveau souscripteur reprend la police à compter du {{date_effet}}, sans incidence sur la prime. Il confirme la désignation des bénéficiaires du capital décès ci-dessous :',
+      '| Bénéficiaire | Quotité | Rang |', '{{#beneficiaires}}| {{nom}} | {{quotite}} | {{rang}} |', '{{/beneficiaires}}', 'En saisissant le code reçu par SMS, le nouveau souscripteur accepte cet avenant.', '---', 'Conakry, le {{date_document}}'].join('\n'),
   },
   {
     code: 'FACTURE_COMMISSION', libelle: 'Facture mensuelle de commissions',

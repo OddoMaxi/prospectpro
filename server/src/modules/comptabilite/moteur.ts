@@ -102,6 +102,8 @@ export async function comptabiliser(q: Executant, acteur: Acteur, ev: Evenement)
     const libelle = rendre(s.libelle_modele, { evt: ev.codeEvt, reference: ev.reference, ...(ev.libelle ?? {}) });
     const lignes: LigneCalculee[] = [];
     for (const ls of lignesSchema) {
+      // Montant nul par formule : la ligne n'a pas lieu, son compte n'a pas à être déterminé (ex. pas de remboursement)
+      if (ls.formule_montant.trim() !== '*' && evaluer(ls.formule_montant, montants) === 0) continue;
       const cibles: CompteResolu[] = ls.compte_id
         ? [{ compteId: ls.compte_id }]
         : (() => {

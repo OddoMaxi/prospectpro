@@ -271,7 +271,7 @@ enregistrerOperation(OPERATION_ANNULATION, {
     const ecritures = await comptabiliser(q, acteur, {
       codeEvt: 'EVT-04', reference: qt.numero, pieceDocumentId: (await q.query<{ id: string }>(`SELECT id FROM document WHERE objet_type = 'police' AND objet_id = $1 AND type_document = 'QUITTANCE' LIMIT 1`, [policeId])).rows[0]!.id,
       libelle: { police: p.numero },
-      montants: { PRIME_NETTE: Number(qt.prime_nette), ACCESSOIRES: Number(qt.accessoires), PRIME_TOTALE: Number(qt.prime_totale), COMMISSION: commissions.reduce((s, c) => s + Number(c.montant), 0) },
+      montants: { PRIME_NETTE: Number(qt.prime_nette), ACCESSOIRES: Number(qt.accessoires), PRIME_TOTALE: Number(qt.prime_totale), REMBOURSE: Number(qt.prime_totale), PAIEMENT_RISTOURNE: 0, COMMISSION: commissions.reduce((s, c) => s + Number(c.montant), 0) },
       comptes: {
         CLIENT: { compteId: client.compte_id, auxiliaireId: client.compte_auxiliaire_id }, ANNULATIONS_BRANCHE: { compteId: branche.compte_annulations_id }, TAXES: taxes,
         REMBOURSEMENT: compteComptable(cp), COMMISSIONS_A_PAYER: await Promise.all(commissions.map(async c => ({ ...(await compteCommissions(q, c.intervenant_id)), montant: Number(c.montant) }))),

@@ -18,7 +18,7 @@ import { STOCKAGE_TEST } from './env.js';
 import { ficheSocieteComplete, installee, MDP, pieceFictive, sms, utilisateur } from './outils.js';
 
 export interface Contexte {
-  admin: Acteur; dg: Acteur; resp1: Acteur; resp2: Acteur; daf: Acteur; caissier: Acteur; tresorier: Acteur; agentU: Acteur;
+  admin: Acteur; dg: Acteur; resp1: Acteur; resp2: Acteur; daf: Acteur; caissier: Acteur; tresorier: Acteur; agentU: Acteur; gest: Acteur;
   agent: string; bureau: string; produitId: string; formuleId: string;
 }
 
@@ -73,7 +73,7 @@ export async function preparer(): Promise<Contexte> {
   const agentU = new Acteur(u);
   const cp = await compteProductionDuBureau(getPool(), bureau);
   await transaction(caissier.utilisateurId, q => declarerApprovisionnement(q, caissier, { compteId: cp.id, moyen: 'ESPECES_SIEGE', montant: 100_000_000 }));
-  return { admin, dg, resp1, resp2, daf, caissier, tresorier, agentU, agent, bureau, produitId, formuleId };
+  return { admin, dg, resp1, resp2, daf, caissier, tresorier, agentU, gest, agent, bureau, produitId, formuleId };
 }
 
 /** Émet une police d'un assuré principal (prime totale 6 090 000) et renvoie son identifiant. */

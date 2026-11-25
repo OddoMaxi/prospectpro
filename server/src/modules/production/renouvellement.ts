@@ -26,7 +26,7 @@ import { compteComptable, compteProductionDuBureau, lireCompteProduction, mouvem
 const gnf = (n: number) => `${n.toLocaleString('fr-FR').replace(/ /g, ' ')} GNF`;
 const fr = (d: string) => d.split('-').reverse().join('/');
 
-interface PoliceVie {
+export interface PoliceVie {
   id: string; numero: string; statut: string; souscripteur_id: string; produit_id: string; formule_id: string; bureau_gestion_id: string;
   bureau: string; ne_pas_renouveler: boolean; echeance: string; telephone: string | null; branche: string; produit_ferme: string | null; formule_remplacement_id: string | null;
 }

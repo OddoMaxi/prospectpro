@@ -48,9 +48,17 @@ await transaction(c.admin.utilisateurId, q => creerBanqueOperateur(q, c.admin, {
 await transaction(c.admin.utilisateurId, q => creerCodeTaxe(q, c.admin, { code: 'RAS', libelle: 'Retenue à la source sur commissions', type: 'RETENUE_SOURCE', taux: 0.10, assiette: 'COMMISSION', compteNumero: '4371', exigibilite: 'ENCAISSEMENT', dateEffet: '2020-01-01' }));
 
 console.log('Polices…');
-for (const nom of ['CAMARA', 'KEITA', 'DIALLO', 'CISSE']) await emettrePolice(c, nom);
+const polices = [];
+for (const nom of ['CAMARA', 'KEITA', 'DIALLO', 'CISSE']) polices.push(await emettrePolice(c, nom));
 const echue = await emettrePolice(c, 'BAH');
 await fixerEcheance(echue.policeId, ajouterJours(aujourdhui(), 12)); // à renouveler sous 30 jours
+
+console.log('Vie du contrat : correction à valider, police souscrite en ligne (renonciation possible)…');
+const { proposerCorrection } = await import('../src/modules/production/vieContrat.js');
+const camara = (await getPool().query(`SELECT id FROM police_assure WHERE police_id = $1 AND qualite = 'ASSURE_PRINCIPAL'`, [polices[0]!.policeId])).rows[0].id;
+await transaction(c.agentU.utilisateurId, q => proposerCorrection(q, c.agentU, polices[0]!.policeId, { policeAssureId: camara, dateNaissance: '1983-02-02', dateEffet: ajouterJours(aujourdhui(), 1), motif: 'Acte de naissance produit par le client' }));
+const enLigne = await emettrePolice(c, 'TOURE');
+await getPool().query(`UPDATE police SET canal = 'EN_LIGNE' WHERE id = $1`, [enLigne.policeId]);
 
 console.log('Approvisionnement bancaire déclaré, à confirmer par la Trésorerie…');
 const cp = await compteProductionDuBureau(getPool(), c.bureau);

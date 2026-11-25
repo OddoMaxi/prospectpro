@@ -11,6 +11,9 @@ import { emettre, lirePolice, proposerAnnulationErreur, rechercherPolices } from
 import { demanderNonRenouvellement, disponibleVersements, lirePoliceVie, policesARenouveler, primeRenouvellement, recevoirVersement, rembourserVersements, renouveler } from '../modules/production/renouvellement.js';
 import { ajouterJours, aujourdhui } from '../noyau/dates.js';
 import { ajouterAyantDroit, confirmerChangementBeneficiaires, enregistrerAcceptationBeneficiaire, preparerChangementBeneficiaires } from '../modules/production/avenants.js';
+import {
+  avenantsDePolice, confirmerChangementSouscripteur, delaiRenonciation, preparerChangementSouscripteur, proposerCorrection, proposerResiliation, reglerAvenant, renoncer, retirerAyantDroit,
+} from '../modules/production/vieContrat.js';
 import { droit, ecrire } from './socle.js';
 
 const uuid = z.string().uuid();
@@ -24,6 +27,15 @@ async function bureauxVisibles(req: Request): Promise<string[] | null> {
   if (r.rowCount) return r.rows.map(x => x.code);
   return req.perimetre?.bureaux?.length ? req.perimetre.bureaux : null;
 }
+async function exigerPoliceVisible(req: Request, id: string) {
+  const v = await bureauxVisibles(req);
+  if (!v) return;
+  const b = (await getPool().query<{ code: string }>('SELECT b.code FROM police p JOIN bureau b ON b.id = p.bureau_gestion_id WHERE p.id = $1', [id])).rows[0];
+  if (!b || !v.includes(b.code)) throw new ErreurMetier('NON_TROUVE', 'Police introuvable', 404);
+}
+const paiementAvenant = z.discriminatedUnion('type', [z.object({ type: z.literal('COMPTE_PRODUCTION') }),
+  z.object({ type: z.literal('PAIEMENT_DIRECT'), moyen: z.enum(['ESPECES_SIEGE', 'BANQUE', 'MONNAIE_ELECTRONIQUE']), banque: z.string().optional() })]);
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 async function exigerDossierVisible(req: Request, id: string) {
   const d = await lireDossier(getPool(), id);
   const b = (await getPool().query<{ code: string }>('SELECT code FROM bureau WHERE id = $1', [d.bureau_id])).rows[0]!.code;
@@ -160,6 +172,56 @@ export function routesProduction(): Router {
     const d = z.object({ tiersId: uuid, preuveBeneficiaireId: uuid, preuveSouscripteurId: uuid, preuveAssureId: uuid.optional() }).parse(req.body);
     await ecrire(req, q => enregistrerAcceptationBeneficiaire(q, req.acteur, { ...d, policeId: uuid.parse(req.params.id) }));
     res.status(204).end();
+  });
+  // ---------------------------------------------------------------- Vie du contrat : correction, retrait, souscripteur, résiliation, renonciation
+  r.get('/polices/:id/avenants', droit('SOUSCRIPTION', 'CONSULTER'), async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    await exigerPoliceVisible(req, id);
+    const p = (await getPool().query<{ produit_id: string; canal: string; emission: string }>(`SELECT produit_id, canal, (cree_le AT TIME ZONE 'Africa/Conakry')::date::text AS emission FROM police WHERE id = $1`, [id])).rows[0];
+    if (!p) throw new ErreurMetier('NON_TROUVE', 'Police introuvable', 404);
+    const delai = await delaiRenonciation(getPool(), p.produit_id);
+    res.json({ avenants: await avenantsDePolice(getPool(), id), renonciation: p.canal === 'EN_LIGNE' ? { delai, limite: ajouterJours(p.emission, delai) } : null });
+  });
+  r.post('/polices/:id/avenants/correction', droit('AVENANT', 'CREER'), async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    await exigerPoliceVisible(req, id);
+    const d = z.object({ policeAssureId: uuid, dateNaissance: date.optional(), qualite: z.enum(['CONJOINT', 'ENFANT']).optional(), dateEffet: date.optional(),
+      motif: z.string().min(1).max(500), pieceDocumentId: uuid.optional(), coordonneeId: uuid.optional() }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => proposerCorrection(q, req.acteur, id, d)));
+  });
+  r.post('/avenants/:id/reglement', droit('AVENANT', 'CREER'), async (req, res) => {
+    const paiement = paiementAvenant.parse(req.body);
+    res.json(await ecrire(req, q => reglerAvenant(q, req.acteur, uuid.parse(req.params.id), paiement)));
+  });
+  r.post('/polices/:id/avenants/retrait', droit('AVENANT', 'CREER'), async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    await exigerPoliceVisible(req, id);
+    const d = z.object({ policeAssureId: uuid, motif: z.enum(['DEMANDE', 'DECES']), dateDeces: date.optional(), pieceDocumentId: uuid.optional(), coordonneeId: uuid.optional() }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => retirerAyantDroit(q, req.acteur, id, d)));
+  });
+  r.post('/polices/:id/avenants/souscripteur', droit('AVENANT', 'CREER'), async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    await exigerPoliceVisible(req, id);
+    const d = z.object({ nouveauTiersId: uuid, motif: z.enum(['DECES_SOUSCRIPTEUR', 'ACCORD_PARTIES']) }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => preparerChangementSouscripteur(q, req.acteur, id, d)));
+  });
+  r.post('/avenants/:id/acceptation-souscripteur', droit('AVENANT', 'CREER'), async (req, res) => {
+    const { code } = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
+    const x = await ecrire(req, q => confirmerChangementSouscripteur(q, req.acteur, uuid.parse(req.params.id), code));
+    if (x instanceof Refus) throw x.erreur;
+    res.json(x);
+  });
+  r.post('/polices/:id/resiliation', droit('AVENANT', 'CREER'), async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    await exigerPoliceVisible(req, id);
+    const d = z.object({ motif: z.enum(['FRAUDE', 'USURPATION_IDENTITE']), justification: z.string().min(1).max(1000), pieceDocumentId: uuid.optional(), coordonneeId: uuid.optional() }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => proposerResiliation(q, req.acteur, id, d)));
+  });
+  r.post('/polices/:id/renonciation', droit('AVENANT', 'CREER'), async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    await exigerPoliceVisible(req, id);
+    const d = z.object({ dateDemande: date.optional(), pieceDocumentId: uuid.optional(), coordonneeId: uuid.optional() }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => renoncer(q, req.acteur, id, d)));
   });
   return r;
 }

@@ -27,6 +27,14 @@ export function resume(d: Pick<Demande, 'type_operation' | 'donnees'>): string {
       const p = x.perimetre as { bureaux?: string[] } | null;
       return `Profil « ${x.profilLibelle ?? x.profil} » pour ${x.identifiant ?? ''}${p?.bureaux?.length ? ` (bureaux ${p.bureaux.join(', ')})` : ''}`;
     }
+    case 'AVENANT_CORRECTION': {
+      const g = (n: unknown) => Number(n ?? 0).toLocaleString('fr-FR');
+      const c = (x.corrections as { donnee: string; avant: string; apres: string }[] | undefined) ?? [];
+      const nature = x.nature === 'PRIME_SUPPLEMENTAIRE' ? `prime supplémentaire de ${g(x.montant)} GNF` : x.nature === 'RISTOURNE' ? `ristourne de ${g(x.montant)} GNF` : 'sans incidence sur la prime';
+      return `Police ${x.numero} – ${x.assure} : ${c.map(y => `${y.donnee.toLowerCase()} ${y.avant} → ${y.apres}`).join(', ')} ; prime annuelle ${g(x.primeAvant)} → ${g(x.primeApres)} GNF, ${nature} (${x.motif})`;
+    }
+    case 'RETRAIT_AYANT_DROIT': return `Police ${x.numero} – retrait de ${x.assure} (décès le ${String(x.dateDeces ?? '').split('-').reverse().join('/')}) ; ristourne ${Number(x.ristourne ?? 0).toLocaleString('fr-FR')} GNF`;
+    case 'RESILIATION': return `Police ${x.numero} – résiliation pour ${x.motif} : ${x.justification} ; ristourne ${Number(x.ristourneEstimee ?? 0).toLocaleString('fr-FR')} GNF`;
     default: return JSON.stringify(x);
   }
 }

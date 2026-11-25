@@ -2,7 +2,7 @@
 import { Fragment, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, date, dateHeure, montant, ouvrirFichier } from '../../noyau/api';
-import { Carte, Champ, Chargement, Indicateur, LienTiers, Message, MessageErreur, Modale, Onglets, Page, Statut, useAvis } from '../../noyau/composants';
+import { Carte, Champ, ChoixTiers, Chargement, Indicateur, LienTiers, Message, MessageErreur, Modale, Onglets, Page, Statut, useAvis } from '../../noyau/composants';
 import { useAction, useDonnees } from '../../noyau/donnees';
 import { useSession } from '../../noyau/session';
 
@@ -57,7 +57,7 @@ interface Police {
   preuveAcceptation: { niveau: string; horodatage: string; empreinte_document: string } | null;
   historique: { horodatage: string; action: string; valeur_apres: Record<string, unknown> | null; auteur: string }[];
 }
-type Onglet = 'synthese' | 'assures' | 'garanties' | 'quittances' | 'beneficiaires' | 'documents' | 'historique';
+type Onglet = 'synthese' | 'assures' | 'garanties' | 'quittances' | 'avenants' | 'beneficiaires' | 'documents' | 'historique';
 
 export function PageFichePolice() {
   const { id } = useParams();
@@ -67,6 +67,8 @@ export function PageFichePolice() {
   const [onglet, setOnglet] = useState<Onglet>('synthese');
   const [annulation, setAnnulation] = useState(false);
   const [renouveler, setRenouveler] = useState(false);
+  const [modifier, setModifier] = useState(false);
+  const av = useDonnees<VieContrat>(`/polices/${id}/avenants`);
   const { avis, Avis } = useAvis();
   if (p.erreur) return <Page titre="Police"><MessageErreur erreur={p.erreur} /></Page>;
   if (!p.donnees) return <Page titre="Police"><Chargement /></Page>;
@@ -77,12 +79,13 @@ export function PageFichePolice() {
   return (
     <Page fil={['Production', <Link key="p" to="/production/polices">Polices</Link>, d.numero]} titre={`Police ${d.numero}`} actions={<>
       {['ACTIVE', 'ECHUE'].includes(d.statut) && peut('SOUSCRIPTION:CREER') && <button className="bouton" onClick={() => setRenouveler(true)}>Renouveler</button>}
+      {['ACTIVE', 'ECHUE', 'SUSPENDUE'].includes(d.statut) && peut('AVENANT:CREER') && <button className="bouton secondaire" onClick={() => setModifier(true)}>Avenant…</button>}
       {d.statut === 'ACTIVE' && peut('ANNULATION_ERREUR:CREER') && <button className="bouton danger" onClick={() => setAnnulation(true)}>Annuler pour erreur</button>}
       {peut('RECLAMATIONS:CREER') && <button className="bouton secondaire" onClick={() => aller('/production/reclamations')}>Réclamation</button>}</>}>
       <div className="filtres"><StatutPolice s={d.statut} /><span className="doux">{d.produit} · {d.formule} · Bureau {d.bureau} · Souscripteur : <LienTiers id={d.souscripteur_id}>{d.souscripteur}</LienTiers> <span className="repere">1</span></span>
         {d.ne_pas_renouveler && <Statut couleur="orange">Non-renouvellement demandé</Statut>}</div>
       <Onglets<Onglet> actif={onglet} choisir={setOnglet} onglets={[{ code: 'synthese', libelle: 'Synthèse' }, { code: 'assures', libelle: `Assurés (${enVie.length})` }, { code: 'garanties', libelle: 'Garanties' },
-        { code: 'quittances', libelle: 'Quittances' }, { code: 'beneficiaires', libelle: 'Bénéficiaires' }, { code: 'documents', libelle: 'Documents' }, { code: 'historique', libelle: 'Historique' }]} />
+        { code: 'quittances', libelle: 'Quittances' }, { code: 'avenants', libelle: `Avenants (${av.donnees?.avenants.length ?? 0})` }, { code: 'beneficiaires', libelle: 'Bénéficiaires' }, { code: 'documents', libelle: 'Documents' }, { code: 'historique', libelle: 'Historique' }]} />
       {onglet === 'synthese' && <><div className="grille trois">
         <Carte titre="Période en cours" repere={2}>{periode && <dl className="details">
           <dt>Du</dt><dd>{date(periode.date_debut)}</dd><dt>Au</dt><dd>{date(periode.date_fin)}</dd><dt>Prime totale</dt><dd>{montant(periode.prime_totale)} GNF</dd>
@@ -103,6 +106,7 @@ export function PageFichePolice() {
       {onglet === 'quittances' && <Carte titre="Quittances"><table className="tableau"><thead><tr><th>N°</th><th>Type</th><th>Période</th><th className="nombre">Prime nette</th><th className="nombre">Accessoires</th><th className="nombre">Taxes</th><th className="nombre">Total</th><th>Mode</th><th>Statut</th></tr></thead>
         <tbody>{d.quittances.map(q => <tr key={q.id}><td className="code">{q.numero}</td><td>{libelle(q.type)}</td><td>{date(q.periode_debut)} – {date(q.periode_fin)}</td><td className="nombre">{montant(q.prime_nette)}</td>
           <td className="nombre">{montant(q.accessoires)}</td><td className="nombre">{montant(q.taxes)}</td><td className="nombre">{montant(q.prime_totale)}</td><td>{MODES[q.mode_paiement] ?? libelle(q.mode_paiement)}</td><td><Statut valeur={q.statut} /></td></tr>)}</tbody></table></Carte>}
+      {onglet === 'avenants' && <Avenants v={av.donnees} peutRegler={peut('AVENANT:CREER')} apres={m => { avis(m); void p.recharger(); void av.recharger(); }} />}
       {onglet === 'beneficiaires' && <Carte titre="Bénéficiaires du capital décès (versions)">{!d.beneficiaires.length ? <div className="vide">Aucune désignation.</div> :
         <table className="tableau"><thead><tr><th>Version</th><th>Effet</th><th>Mode</th><th>Bénéficiaire</th><th>Rang</th><th className="nombre">Quotité</th><th>Acceptant</th></tr></thead>
           <tbody>{d.beneficiaires.map((b, i) => <tr key={i}><td>{b.version}</td><td>{date(b.date_effet)}</td><td>{libelle(b.mode)}</td><td>{b.nom ?? b.clause_texte ?? '—'}</td><td>{b.rang ?? '—'}</td>
@@ -113,9 +117,201 @@ export function PageFichePolice() {
       {onglet === 'historique' && <Historique h={d.historique} />}
       {annulation && <AnnulationErreur id={d.id} fermer={() => setAnnulation(false)} apres={() => { setAnnulation(false); avis('Annulation soumise à la Direction commerciale puis à la DAF.'); }} />}
       {renouveler && <Renouvellement id={d.id} numero={d.numero} fermer={() => setRenouveler(false)} apres={m => { setRenouveler(false); avis(m); void p.recharger(); }} />}
+      {modifier && <ModificationContrat police={d} vie={av.donnees} fermer={() => setModifier(false)}
+        apres={m => { setModifier(false); avis(m); void p.recharger(); void av.recharger(); }} />}
       <Avis />
     </Page>
   );
+}
+
+// ---------------------------------------------------------------- avenants (PROD-RG-041, 044 à 046, 060 à 062, 074)
+
+interface VieContrat {
+  avenants: { id: string; numero: string; type: string; date_effet: string; description: string; difference_prime: number; quittance: string | null; confirme: boolean; a_regler: boolean }[];
+  renonciation: { delai: number; limite: string } | null;
+}
+const TYPES_AVENANT: Record<string, string> = {
+  AJOUT_AYANT_DROIT: 'Ajout d\'un ayant droit', RETRAIT_AYANT_DROIT: 'Retrait d\'un ayant droit', BENEFICIAIRES: 'Bénéficiaires', COORDONNEES: 'Coordonnées', CORRECTION: 'Correction',
+  CHANGEMENT_SOUSCRIPTEUR: 'Changement de souscripteur', ANNULATION: 'Renonciation', RESILIATION: 'Résiliation',
+};
+
+function Avenants({ v, peutRegler, apres }: { v: VieContrat | null; peutRegler: boolean; apres: (m: string) => void }) {
+  const [regler, setRegler] = useState<VieContrat['avenants'][number] | null>(null);
+  if (!v) return <Carte titre="Avenants"><Chargement /></Carte>;
+  return (
+    <Carte titre="Avenants">
+      {!v.avenants.length ? <div className="vide">Aucun avenant.</div> :
+        <table className="tableau"><thead><tr><th>N°</th><th>Type</th><th>Effet</th><th>Objet</th><th className="nombre">Incidence sur la prime</th><th>Quittance</th><th /></tr></thead>
+          <tbody>{v.avenants.map(a => <tr key={a.id}><td className="code">{a.numero}</td><td>{TYPES_AVENANT[a.type] ?? libelle(a.type)}</td><td>{date(a.date_effet)}</td>
+            <td>{a.type === 'CHANGEMENT_SOUSCRIPTEUR' || a.type === 'BENEFICIAIRES' ? (a.confirme ? 'Accepté par code' : <Statut couleur="orange">En attente du code</Statut>) : a.description}</td>
+            <td className="nombre">{Number(a.difference_prime) === 0 ? '—' : <span style={{ color: Number(a.difference_prime) < 0 ? 'var(--vert)' : undefined }}>{Number(a.difference_prime) > 0 ? '+' : '−'}{montant(Math.abs(Number(a.difference_prime)))}</span>}</td>
+            <td className="code">{a.quittance ?? (a.a_regler ? <Statut couleur="orange">À régler</Statut> : '—')}</td>
+            <td>{a.a_regler && peutRegler && <button className="lien" onClick={() => setRegler(a)}>Régler</button>}</td></tr>)}</tbody></table>}
+      {regler && <ReglementAvenant a={regler} fermer={() => setRegler(null)} apres={m => { setRegler(null); apres(m); }} />}
+    </Carte>
+  );
+}
+
+/** Mode de paiement d'une prime d'avenant : compte de production du bureau, ou paiement direct du client. */
+function ChoixPaiement({ valeur, choisir }: { valeur: Record<string, string>; choisir: (v: Record<string, string>) => void }) {
+  const banques = useDonnees<{ code: string; nom: string }[]>('/banques-operateurs');
+  return (<>
+    <Champ libelle="Paiement"><select value={valeur.type} onChange={e => choisir({ ...valeur, type: e.target.value })}>
+      <option value="COMPTE_PRODUCTION">Débit du compte de production du bureau</option><option value="PAIEMENT_DIRECT">Paiement direct du client</option></select></Champ>
+    {valeur.type === 'PAIEMENT_DIRECT' && <>
+      <Champ libelle="Moyen"><select value={valeur.moyen ?? 'BANQUE'} onChange={e => choisir({ ...valeur, moyen: e.target.value })}><option value="BANQUE">Banque</option><option value="MONNAIE_ELECTRONIQUE">Monnaie électronique</option><option value="ESPECES_SIEGE">Espèces au siège</option></select></Champ>
+      {(valeur.moyen ?? 'BANQUE') !== 'ESPECES_SIEGE' && <Champ libelle="Banque ou opérateur"><select value={valeur.banque ?? ''} onChange={e => choisir({ ...valeur, banque: e.target.value })}><option value="">Choisir…</option>{banques.donnees?.map(b => <option key={b.code} value={b.code}>{b.nom}</option>)}</select></Champ>}
+    </>}
+  </>);
+}
+const corpsPaiement = (v: Record<string, string>) => v.type === 'PAIEMENT_DIRECT' ? { type: v.type, moyen: v.moyen ?? 'BANQUE', banque: (v.moyen ?? 'BANQUE') === 'ESPECES_SIEGE' ? undefined : v.banque } : { type: v.type };
+
+function ReglementAvenant({ a, fermer, apres }: { a: VieContrat['avenants'][number]; fermer: () => void; apres: (m: string) => void }) {
+  const [paiement, setPaiement] = useState<Record<string, string>>({ type: 'COMPTE_PRODUCTION' });
+  const action = useAction();
+  return (
+    <Modale titre={`Régler l'avenant ${a.numero}`} fermer={fermer}>
+      <p>{a.description}</p>
+      <dl className="details"><dt>Prime supplémentaire</dt><dd><b>{montant(a.difference_prime)} GNF</b></dd></dl>
+      <div className="formulaire"><ChoixPaiement valeur={paiement} choisir={setPaiement} /></div>
+      <MessageErreur erreur={action.erreur} />
+      <div className="boutons"><button className="bouton" disabled={action.enCours || (paiement.type === 'PAIEMENT_DIRECT' && (paiement.moyen ?? 'BANQUE') !== 'ESPECES_SIEGE' && !paiement.banque)}
+        onClick={() => void action.executer(() => api<{ quittance: string }>('POST', `/avenants/${a.id}/reglement`, corpsPaiement(paiement))).then(r => r && apres(`Avenant réglé : quittance ${r.quittance}.`))}>Encaisser</button></div>
+    </Modale>
+  );
+}
+
+type TypeModification = 'CORRECTION' | 'RETRAIT' | 'SOUSCRIPTEUR' | 'RESILIATION' | 'RENONCIATION';
+
+function ModificationContrat({ police, vie, fermer, apres }: { police: Police; vie: VieContrat | null; fermer: () => void; apres: (m: string) => void }) {
+  const renonciation = vie?.renonciation && police.statut === 'ACTIVE' && new Date().toISOString().slice(0, 10) <= vie.renonciation.limite;
+  const choix: { code: TypeModification; libelle: string; aide: string; visible: boolean }[] = [
+    { code: 'CORRECTION', libelle: 'Correction d\'une donnée', aide: 'Date de naissance ou qualité erronée : prime recalculée, différence au prorata (validation)', visible: police.statut === 'ACTIVE' },
+    { code: 'RETRAIT', libelle: 'Retrait d\'un ayant droit', aide: 'À l\'échéance sans ristourne, ou au décès (validation)', visible: police.statut === 'ACTIVE' },
+    { code: 'SOUSCRIPTEUR', libelle: 'Changement de souscripteur', aide: 'Décès du souscripteur ou accord des parties ; acceptation par code du nouveau souscripteur', visible: ['ACTIVE', 'ECHUE'].includes(police.statut) },
+    { code: 'RESILIATION', libelle: 'Résiliation par la Compagnie', aide: 'Fraude avérée ou usurpation d\'identité ; décision validée (gestion puis DAF)', visible: ['ACTIVE', 'SUSPENDUE'].includes(police.statut) },
+    { code: 'RENONCIATION', libelle: 'Renonciation du client', aide: vie?.renonciation ? `Souscription en ligne : jusqu'au ${date(vie.renonciation.limite)} (${vie.renonciation.delai} jours)` : '', visible: !!renonciation },
+  ];
+  const [type, setType] = useState<TypeModification | null>(null);
+  return (
+    <Modale titre={`Avenant – police ${police.numero}`} large fermer={fermer}>
+      {!type ? <div className="avenant-choix">{choix.filter(c => c.visible).map(c => <button key={c.code} onClick={() => setType(c.code)}><b>{c.libelle}</b><small>{c.aide}</small></button>)}</div> : <>
+        <button className="lien" onClick={() => setType(null)}>‹ Autre avenant</button>
+        {type === 'CORRECTION' && <FormCorrection police={police} apres={apres} />}
+        {type === 'RETRAIT' && <FormRetrait police={police} apres={apres} />}
+        {type === 'SOUSCRIPTEUR' && <FormSouscripteur police={police} apres={apres} />}
+        {type === 'RESILIATION' && <FormResiliation police={police} apres={apres} />}
+        {type === 'RENONCIATION' && <FormRenonciation police={police} apres={apres} />}
+      </>}
+    </Modale>
+  );
+}
+
+const ayantsDroit = (p: Police) => p.assures.filter(a => !a.date_sortie || a.date_sortie.slice(0, 10) > new Date().toISOString().slice(0, 10));
+
+function FormCorrection({ police, apres }: { police: Police; apres: (m: string) => void }) {
+  const [assure, setAssure] = useState(ayantsDroit(police)[0]?.id ?? '');
+  const a = police.assures.find(x => x.id === assure);
+  const [naissance, setNaissance] = useState('');
+  const [qualite, setQualite] = useState('');
+  const [effet, setEffet] = useState('');
+  const [motif, setMotif] = useState('');
+  const action = useAction();
+  const [resultat, setResultat] = useState<{ primeAvant: number; primeApres: number; sens: number; nette: number; totale: number; joursRestants: number } | null>(null);
+  if (resultat) return (<>
+    <Message type="succes">Correction soumise à validation. Prime annuelle {montant(resultat.primeAvant)} → {montant(resultat.primeApres)} GNF.
+      {resultat.sens > 0 ? ` Prime supplémentaire de ${montant(resultat.totale)} GNF (${resultat.joursRestants} jours), à régler après la validation.` : resultat.sens < 0 ? ` Ristourne de ${montant(resultat.totale)} GNF (${resultat.joursRestants} jours) après la validation.` : ' Sans incidence sur la prime.'}</Message>
+    <div className="boutons"><button className="bouton" onClick={() => apres('Avenant de correction soumis à validation.')}>Fermer</button></div></>);
+  return (<>
+    <Message>Le numéro de police et les délais de carence déjà courus sont conservés. La prime est recalculée au tarif de la période ; la différence court de la date d'effet à l'échéance.</Message>
+    <div className="formulaire">
+      <Champ libelle="Assuré"><select value={assure} onChange={e => { setAssure(e.target.value); setQualite(''); setNaissance(''); }}>{ayantsDroit(police).map(x => <option key={x.id} value={x.id}>{x.nom} ({QUALITES[x.qualite] ?? x.qualite})</option>)}</select></Champ>
+      <Champ libelle="Date de naissance corrigée" aide={a ? `Actuelle : ${date(a.date_naissance)}` : undefined}><input type="date" value={naissance} onChange={e => setNaissance(e.target.value)} /></Champ>
+      {a && a.qualite !== 'ASSURE_PRINCIPAL' && <Champ libelle="Qualité corrigée"><select value={qualite} onChange={e => setQualite(e.target.value)}><option value="">Inchangée</option><option value="CONJOINT">Conjoint</option><option value="ENFANT">Enfant</option></select></Champ>}
+      <Champ libelle="Date d'effet" aide="Par défaut : aujourd'hui"><input type="date" value={effet} onChange={e => setEffet(e.target.value)} /></Champ>
+      <Champ libelle="Motif et pièce produite" large><textarea value={motif} onChange={e => setMotif(e.target.value)} placeholder="Ex. acte de naissance produit par le souscripteur" /></Champ>
+    </div>
+    <MessageErreur erreur={action.erreur} />
+    <div className="boutons"><button className="bouton" disabled={action.enCours || !motif.trim() || (!naissance && !qualite)}
+      onClick={() => void action.executer(() => api<typeof resultat>('POST', `/polices/${police.id}/avenants/correction`, { policeAssureId: assure, dateNaissance: naissance || undefined, qualite: qualite || undefined, dateEffet: effet || undefined, motif })).then(r => r && setResultat(r))}>Calculer et soumettre</button></div>
+  </>);
+}
+
+function FormRetrait({ police, apres }: { police: Police; apres: (m: string) => void }) {
+  const liste = ayantsDroit(police).filter(a => a.qualite !== 'ASSURE_PRINCIPAL');
+  const [assure, setAssure] = useState(liste[0]?.id ?? '');
+  const [motif, setMotif] = useState<'DEMANDE' | 'DECES'>('DEMANDE');
+  const [deces, setDeces] = useState('');
+  const action = useAction();
+  if (!liste.length) return <Message>Aucun ayant droit à retirer : seul l'assuré principal est couvert.</Message>;
+  return (<>
+    <div className="formulaire">
+      <Champ libelle="Ayant droit"><select value={assure} onChange={e => setAssure(e.target.value)}>{liste.map(x => <option key={x.id} value={x.id}>{x.nom} ({QUALITES[x.qualite] ?? x.qualite})</option>)}</select></Champ>
+      <Champ libelle="Motif"><select value={motif} onChange={e => setMotif(e.target.value as typeof motif)}><option value="DEMANDE">Demande du souscripteur</option><option value="DECES">Décès</option></select></Champ>
+      {motif === 'DECES' && <Champ libelle="Date du décès"><input type="date" value={deces} onChange={e => setDeces(e.target.value)} /></Champ>}
+    </div>
+    <Message type="attention">{motif === 'DEMANDE' ? 'Sortie à l\'échéance, sans ristourne : l\'ayant droit reste couvert jusque-là et n\'est pas repris au renouvellement.'
+      : 'Sortie à la date du décès ; ristourne au prorata si le produit le prévoit, après validation par la gestion production.'}</Message>
+    <MessageErreur erreur={action.erreur} />
+    <div className="boutons"><button className="bouton" disabled={action.enCours || (motif === 'DECES' && !deces)}
+      onClick={() => void action.executer(() => api<{ dateSortie: string; ristourne: number; demandeValidation?: string }>('POST', `/polices/${police.id}/avenants/retrait`, { policeAssureId: assure, motif, dateDeces: deces || undefined }))
+        .then(r => r && apres(r.demandeValidation ? `Retrait soumis à validation (ristourne prévue : ${montant(r.ristourne)} GNF).` : `Retrait enregistré : sortie le ${date(r.dateSortie)}.`))}>Enregistrer le retrait</button></div>
+  </>);
+}
+
+function FormSouscripteur({ police, apres }: { police: Police; apres: (m: string) => void }) {
+  const [nouveau, setNouveau] = useState<{ id: string; nom: string } | null>(null);
+  const [motif, setMotif] = useState<'DECES_SOUSCRIPTEUR' | 'ACCORD_PARTIES'>('ACCORD_PARTIES');
+  const [envoi, setEnvoi] = useState<{ avenantId: string; numero: string; documentId: string } | null>(null);
+  const [code, setCode] = useState('');
+  const action = useAction();
+  if (envoi) return (<>
+    <Message>Avenant {envoi.numero} présenté à {nouveau?.nom}. Un code lui a été envoyé par SMS : il le saisit après avoir lu l'avenant, qui reprend la désignation des bénéficiaires qu'il confirme.</Message>
+    <div className="filtres"><button className="lien" onClick={() => void ouvrirFichier('GET', `/documents/${envoi.documentId}/fichier`)}>Ouvrir l'avenant</button>
+      <input inputMode="numeric" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} placeholder="Code à 6 chiffres" />
+      <button className="bouton" disabled={code.length !== 6 || action.enCours} onClick={() => void action.executer(() => api('POST', `/avenants/${envoi.avenantId}/acceptation-souscripteur`, { code })).then(r => r && apres(`Changement de souscripteur accepté : ${nouveau?.nom} reprend la police.`))}>Confirmer</button></div>
+    <MessageErreur erreur={action.erreur} /></>);
+  return (<>
+    <div className="formulaire">
+      <Champ libelle="Ancien souscripteur"><input value={police.souscripteur} disabled /></Champ>
+      <Champ libelle="Motif"><select value={motif} onChange={e => setMotif(e.target.value as typeof motif)}><option value="ACCORD_PARTIES">Accord des parties</option><option value="DECES_SOUSCRIPTEUR">Décès du souscripteur</option></select></Champ>
+      <Champ libelle="Nouveau souscripteur" large aide="Personne majeure, téléphone vérifié"><ChoixTiers valeur={nouveau} choisir={setNouveau} /></Champ>
+    </div>
+    <MessageErreur erreur={action.erreur} />
+    <div className="boutons"><button className="bouton" disabled={!nouveau || action.enCours}
+      onClick={() => void action.executer(() => api<{ avenantId: string; numero: string; documentId: string }>('POST', `/polices/${police.id}/avenants/souscripteur`, { nouveauTiersId: nouveau!.id, motif })).then(r => r && setEnvoi(r))}>Préparer l'avenant et envoyer le code</button></div>
+  </>);
+}
+
+function FormResiliation({ police, apres }: { police: Police; apres: (m: string) => void }) {
+  const [motif, setMotif] = useState<'FRAUDE' | 'USURPATION_IDENTITE'>('FRAUDE');
+  const [justification, setJustification] = useState('');
+  const action = useAction();
+  return (<>
+    <Message type="attention">La Compagnie ne résilie en cours de période que pour fraude avérée ou usurpation d'identité : aucune déclaration du risque n'étant recueillie, la fausse déclaration ne peut être invoquée.
+      À la demande du client, utiliser le non-renouvellement. La décision est validée par la gestion production puis la DAF ; les cartes sont bloquées et le souscripteur et l'agent prévenus.</Message>
+    <div className="formulaire">
+      <Champ libelle="Motif"><select value={motif} onChange={e => setMotif(e.target.value as typeof motif)}><option value="FRAUDE">Fraude avérée</option><option value="USURPATION_IDENTITE">Usurpation d'identité</option></select></Champ>
+      <Champ libelle="Justification de la décision" large><textarea value={justification} onChange={e => setJustification(e.target.value)} /></Champ>
+    </div>
+    <MessageErreur erreur={action.erreur} />
+    <div className="boutons"><button className="bouton danger" disabled={!justification.trim() || action.enCours}
+      onClick={() => void action.executer(() => api<{ ristourneEstimee: number }>('POST', `/polices/${police.id}/resiliation`, { motif, justification }))
+        .then(r => r && apres(`Résiliation soumise à validation${r.ristourneEstimee ? ` (ristourne estimée : ${montant(r.ristourneEstimee)} GNF)` : ', sans ristourne'}.`))}>Soumettre la résiliation</button></div>
+  </>);
+}
+
+function FormRenonciation({ police, apres }: { police: Police; apres: (m: string) => void }) {
+  const [demande, setDemande] = useState(new Date().toISOString().slice(0, 10));
+  const action = useAction();
+  return (<>
+    <Message type="attention">Dans le délai et en l'absence de prestation, la police est annulée depuis l'origine et la prime remboursée intégralement : au compte de production si elle en a été débitée, sinon au client par la chaîne de paiement (coordonnées vérifiées requises).</Message>
+    <div className="formulaire"><Champ libelle="Date de réception de la demande"><input type="date" value={demande} onChange={e => setDemande(e.target.value)} /></Champ></div>
+    <MessageErreur erreur={action.erreur} />
+    <div className="boutons"><button className="bouton danger" disabled={action.enCours}
+      onClick={() => void action.executer(() => api<{ rembourse: number; ordrePaiement: string | null }>('POST', `/polices/${police.id}/renonciation`, { dateDemande: demande }))
+        .then(r => r && apres(`Police annulée : ${montant(r.rembourse)} GNF remboursés${r.ordrePaiement ? ` (ordre de paiement ${r.ordrePaiement})` : ' au compte de production'}.`))}>Enregistrer la renonciation</button></div>
+  </>);
 }
 
 const Historique = ({ h }: { h: Police['historique'] }) => (
