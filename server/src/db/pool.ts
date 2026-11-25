@@ -19,6 +19,8 @@ let pool: pg.Pool | undefined;
 
 export function initialiserPool(databaseUrl: string): pg.Pool {
   pool = new pg.Pool({ connectionString: databaseUrl, max: 20 });
+  // Une connexion inactive coupée par la base (redémarrage, maintenance) est retirée du pool sans arrêter le serveur
+  pool.on('error', e => console.error(`[base] connexion inactive perdue : ${e.message}`));
   return pool;
 }
 

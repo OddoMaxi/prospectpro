@@ -6,7 +6,8 @@ import { journaliser } from '../moteurs/audit.js';
 import { controlerDroit } from '../modules/habilitations/droits.js';
 import { creerBureau, lireBureau, listerBureaux } from '../modules/referentiels/bureaux.js';
 import { creerTiers, lireTiers, modifierTiers, rechercherDoublons, schemaTiers } from '../modules/referentiels/tiers.js';
-import type { ContexteAuth } from '../modules/auth/service.js';
+import { Refus, type ContexteAuth } from '../modules/auth/service.js';
+import { confirmerVerificationTelephone, demanderVerificationTelephone } from '../modules/documents/acceptation.js';
 import { attribuerRole, ROLES, rolesDuTiers, terminerRole } from '../modules/referentiels/roles.js';
 import { changerCategorie, declarerMembre, foyer, retirerMembre } from '../modules/referentiels/foyer.js';
 import { listerCoordonnees, lireNumero, proposerCoordonnee } from '../modules/referentiels/coordonnees.js';
@@ -35,6 +36,15 @@ export function routesReferentiels(ctx: ContexteAuth): Router {
     // Passer outre un doublon probable relève d'un gestionnaire habilité (REF-RG-002)
     if (decisionDoublon) await controlerDroit(getPool(), req.acteur.utilisateurId!, 'TIERS', 'VALIDER');
     res.status(201).json({ id: await ecrire(req, q => creerTiers(q, req.acteur, t as never, decisionDoublon)) });
+  });
+  r.post('/tiers/:id/telephone/code', droit('TIERS', 'MODIFIER'), async (req, res) => {
+    res.json(await ecrire(req, q => demanderVerificationTelephone(q, req.acteur, uuid.parse(req.params.id))));
+  });
+  r.post('/tiers/:id/telephone/verification', droit('TIERS', 'MODIFIER'), async (req, res) => {
+    const { code } = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
+    const x = await ecrire(req, q => confirmerVerificationTelephone(q, req.acteur, uuid.parse(req.params.id), code));
+    if (x instanceof Refus) throw x.erreur;
+    res.json(x);
   });
   r.get('/tiers/:id', droit('TIERS', 'CONSULTER'), async (req, res) => {
     const id = uuid.parse(req.params.id);

@@ -40,6 +40,8 @@ const { Acteur } = await import('../src/noyau/acteur.js');
 await ouvrir();
 console.log('Base vidée et réinstallée…');
 const c = await preparer();
+// Profil privilégié de l'agent général : attribution validée par la Direction générale
+for (const { id } of (await getPool().query(`SELECT id FROM demande_validation WHERE type_operation = 'ATTRIBUTION_PROFIL_PRIVILEGIE' AND statut = 'EN_ATTENTE'`)).rows) await valider(c.dg, id);
 const comptable = await utilisateur(c.admin, 'comptable', [{ code: 'COMPTABLE' }], c.dg);
 const chef = await utilisateur(c.admin, 'chef.comptable', [{ code: 'COMPTABLE' }], c.dg);
 await transaction(c.admin.utilisateurId, q => creerBanqueOperateur(q, c.admin, { code: 'BICI', nom: 'BICIGUI', type: 'BANQUE', compteNumero: '5621', responsableId: c.tresorier.utilisateurId! }));
@@ -65,6 +67,24 @@ if (f) {
   const code = sms.dernier(tel)!.texte.match(/code (\d{6})/)![1]!;
   await transaction(c.agentU.utilisateurId, q => confirmerEmission(q, c.agentU, factureId, code));
 }
+
+console.log('Junior rattaché à l\'agent, avec un dossier soumis…');
+const { creerIntervenant, validerControlesJunior } = await import('../src/modules/commercial/intervenants.js');
+const { creerUtilisateur } = await import('../src/modules/habilitations/service.js');
+const { personne, telephone } = await import('../test/contexte-production.js');
+const { ouvrirDossier, enregistrerDonnees, tarifierDossier, presenterRecapitulatif, accepterRecapitulatif, soumettreDossier } = await import('../src/modules/production/dossiers.js');
+const jt = await personne(c.admin, 'BARRY', '1999-03-03');
+const junior = await transaction(c.resp1.utilisateurId, q => creerIntervenant(q, c.resp1, { tiersId: jt, role: 'JUNIOR', rattachementId: c.agent }));
+await transaction(c.agentU.utilisateurId, q => validerControlesJunior(q, c.agentU, junior));
+const uj = await transaction(c.admin.utilisateurId, async q => creerUtilisateur(q, c.admin, { identifiant: 'junior.barry', tiersId: jt, typeCompte: 'JUNIOR', motDePasse: MDP, telephone: await telephone(jt) }));
+const juniorU = new Acteur(uj);
+const sj = await personne(c.admin, 'SYLLA', '1990-07-07', true);
+const dj = await transaction(uj, q => ouvrirDossier(q, juniorU, { souscripteurId: sj, formuleId: c.formuleId, bureauId: c.bureau }));
+await transaction(uj, q => enregistrerDonnees(q, juniorU, dj.id, { dateEffet: aujourdhui(), assures: [{ tiersId: sj, qualite: 'ASSURE_PRINCIPAL' }], consentementsDeces: [], pieces: [] }, 5));
+await transaction(uj, q => tarifierDossier(q, juniorU, dj.id));
+const rj = await transaction(uj, q => presenterRecapitulatif(q, juniorU, dj.id));
+await transaction(uj, async q => accepterRecapitulatif(q, juniorU, dj.id, rj.documentId, sms.dernier(await telephone(sj))!.texte.match(/code (\d{6})/)![1]!));
+await transaction(uj, q => soumettreDossier(q, juniorU, dj.id));
 
 console.log('Fiche d\'imputation au brouillard…');
 await transaction(comptable.utilisateurId, async q => creerFicheImputation(q, comptable, {

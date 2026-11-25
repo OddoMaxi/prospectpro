@@ -27,6 +27,7 @@ import { PageApprovisionnements, PageJourneeComptable, PagePaiements } from './p
 import { PageFichesImputation } from './pages/comptabilite/Saisie';
 import { PageEditions, PageInterrogation, PageSchemas } from './pages/comptabilite/Etats';
 import { PageClotures, PageDeclarations } from './pages/comptabilite/Cloture';
+import { ApplicationAgent, ROLES_RESEAU } from './agent/Agent';
 
 function Protege({ droit, children }: { droit?: string; children: JSX.Element }) {
   const { peut } = useSession();
@@ -41,8 +42,10 @@ export function App() {
   return (
     <Routes>
       <Route path="/connexion" element={<Connexion />} />
+      <Route path="/agent/*" element={moi ? <ApplicationAgent /> : <Navigate to="/connexion" replace state={{ depuis: lieu.pathname }} />} />
       <Route element={moi ? <Coquille /> : <Navigate to="/connexion" replace state={{ depuis: lieu.pathname }} />}>
-        <Route index element={<PageAccueil />} />
+        {/* Les intervenants du réseau commercial arrivent sur l'application agent */}
+        <Route index element={moi && ROLES_RESEAU.includes(moi.type_compte) ? <Navigate to="/agent" replace /> : <PageAccueil />} />
         <Route path="validations" element={<PageValidations />} />
         <Route path="administration/compagnie" element={<Protege droit="SOCIETE:CONSULTER"><PageCompagnie /></Protege>} />
         <Route path="administration/organigramme" element={<Protege droit="ORGANISATION:CONSULTER"><PageOrganigramme /></Protege>} />

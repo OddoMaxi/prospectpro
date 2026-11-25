@@ -104,3 +104,38 @@ export async function preuvesDuDocument(q: Executant, documentId: string) {
        FROM dossier_preuve p JOIN tiers t ON t.id = p.signataire_tiers_id LEFT JOIN utilisateur u ON u.id = p.assistant_id
       WHERE p.document_id = $1 ORDER BY p.horodatage`, [documentId])).rows;
 }
+
+// ---------------------------------------------------------------- vérification du téléphone d'un tiers (REF-RG-005)
+
+const OBJET_TELEPHONE = 'VERIFICATION_TELEPHONE';
+
+/** Envoie un code au numéro de la fiche ; le client le communique à la personne qui l'assiste (agent, gestionnaire). */
+export async function demanderVerificationTelephone(q: Executant, acteur: Acteur, tiersId: string) {
+  const t = (await q.query<{ telephone: string | null; telephone_verifie: boolean | null }>('SELECT telephone, telephone_verifie FROM tiers WHERE id = $1 AND supprime_le IS NULL', [tiersId])).rows[0];
+  if (!t) throw nonTrouve('Tiers');
+  exiger(t.telephone, 'TELEPHONE_ABSENT', 'Aucun numéro de téléphone sur la fiche');
+  exiger(!t.telephone_verifie, 'DEJA_VERIFIE', 'Ce numéro est déjà vérifié', 409);
+  const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+  const sel = randomBytes(8).toString('hex');
+  await q.query(`UPDATE code_usage_unique SET expire_le = now() WHERE tiers_id = $1 AND objet = $2 AND utilise_le IS NULL`, [tiersId, OBJET_TELEPHONE]);
+  await q.query(
+    `INSERT INTO code_usage_unique (tiers_id, utilisateur_id, objet, objet_id, empreinte_code, telephone, expire_le) VALUES ($1,$2,$3,$1,$4,$5, now() + interval '10 minutes')`,
+    [tiersId, acteur.utilisateurId, OBJET_TELEPHONE, `${sel}$${hacher(code, t.telephone!, sel)}`, t.telephone]);
+  await notifier(q, { tiersId, code: 'VERIFICATION_TELEPHONE', canal: 'SMS', adresse: t.telephone!, variables: { code } });
+  return { envoyeA: `${t.telephone!.slice(0, 4)}•••${t.telephone!.slice(-2)}` };
+}
+
+export async function confirmerVerificationTelephone(q: Executant, acteur: Acteur, tiersId: string, code: string) {
+  const c = (await q.query<{ id: string; empreinte_code: string; tentatives: number; telephone: string }>(
+    `SELECT id, empreinte_code, tentatives, telephone FROM code_usage_unique WHERE tiers_id = $1 AND objet = $2 AND utilise_le IS NULL AND expire_le > now()
+      ORDER BY cree_le DESC LIMIT 1 FOR UPDATE`, [tiersId, OBJET_TELEPHONE])).rows[0];
+  if (!c || c.tentatives >= 3) return new Refus(new ErreurMetier('CODE_EXPIRE', 'Code expiré ou épuisé : demandez un nouveau code', 401));
+  const [sel, h] = c.empreinte_code.split('$') as [string, string];
+  const ok = timingSafeEqual(Buffer.from(h), Buffer.from(hacher(code.trim(), c.telephone, sel)));
+  await q.query('UPDATE code_usage_unique SET tentatives = tentatives + 1, utilise_le = CASE WHEN $2 THEN now() END WHERE id = $1', [c.id, ok]);
+  if (!ok) return new Refus(new ErreurMetier('CODE_INCORRECT', `Code incorrect (${2 - c.tentatives} essai(s) restant(s))`, 401));
+  // Le numéro vérifié est celui auquel le code a été envoyé
+  await q.query('UPDATE tiers SET telephone_verifie = true WHERE id = $1 AND telephone = $2', [tiersId, c.telephone]);
+  await journaliser(q, { ...acteur.trace(), action: 'MODIFICATION', objetType: 'tiers', objetId: tiersId, apres: { telephoneVerifie: c.telephone } });
+  return { verifie: true };
+}

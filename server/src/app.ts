@@ -16,6 +16,7 @@ import { routesCommercial } from './http/routes-commercial.js';
 import { routesProduction } from './http/routes-production.js';
 import { routesRemuneration } from './http/routes-remuneration.js';
 import { routesFinances } from './http/routes-finances.js';
+import { routesAgent } from './http/routes-agent.js';
 import { configurerStockage, StockageLocal } from './moteurs/documents.js';
 // Enregistrement des opérations soumises à validation
 import './modules/parametrage/service.js';
@@ -52,7 +53,7 @@ export function creerApplication(config: Config) {
   app.get('/api/sante', (_req, res) => { res.json({ statut: 'ok', version: '3.0.0-lot1' }); });
   app.use('/api/auth', routesAuth(ctx));
   app.use('/api/admin', authentifier(ctx), routesAdministration());
-  app.use('/api', authentifier(ctx), routesReferentiels(ctx), routesCatalogue(), routesSocle(), routesComptabilite(), routesCommercial(), routesProduction(), routesRemuneration(), routesFinances());
+  app.use('/api', authentifier(ctx), routesReferentiels(ctx), routesCatalogue(), routesSocle(), routesComptabilite(), routesCommercial(), routesProduction(), routesRemuneration(), routesFinances(), routesAgent());
   app.use('/api', (_req, res) => { res.status(404).json({ code: 'NON_TROUVE', message: 'Route inconnue' }); });
   // Interface (application monopage) : fichiers statiques, puis page d'entrée pour toute autre adresse hors /api
   const web = resolve(config.WEB_DIR);

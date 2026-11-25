@@ -61,6 +61,12 @@ export async function creerUtilisateur(q: Executant, acteur: Acteur, d: {
       await attribuerProfil(q, acteur, { utilisateurId: id, profilId: f.rows[0].profil_defaut_id });
     }
   }
+  // Comptes du réseau commercial : profil de même nom que le type de compte (annexe B) ; s'il est privilégié (agent général),
+  // l'attribution part en validation (ADMIN_GENERAL ou DIRECTION_GENERALE), comme toute attribution de profil privilégié
+  if (['AGENT_GENERAL', 'COLLABORATEUR', 'JUNIOR', 'PRESCRIPTEUR'].includes(d.typeCompte) && acteur.utilisateurId) {
+    const p = (await q.query<{ id: string }>('SELECT id FROM profil WHERE code = $1 AND supprime_le IS NULL', [d.typeCompte])).rows[0];
+    if (p) await attribuerProfil(q, acteur, { utilisateurId: id, profilId: p.id });
+  }
   await journaliser(q, { ...acteur.trace(), action: 'CREATION', objetType: 'utilisateur', objetId: id, apres: { ...d, motDePasse: undefined, statut } });
   return id;
 }

@@ -228,7 +228,7 @@ export async function formuleEnVigueur(q: Executant, produitId: string, code: st
 /** Catalogue commercialisé à une date : produits ouverts et dernière version de chaque formule. */
 export async function catalogue(q: Executant, date = aujourdhui()) {
   return (await q.query(
-    `SELECT p.id, p.code, p.libelle, p.branche_bcrg, p.type_couverture, p.type_contrat, p.age_min, p.age_max, p.date_fin_commercialisation,
+    `SELECT p.id, p.code, p.libelle, p.branche_bcrg, p.type_couverture, p.type_contrat, p.age_min, p.age_max, p.date_fin_commercialisation, p.documents_exiges,
             COALESCE((SELECT json_agg(json_build_object('id', f.id, 'code', f.code, 'libelle', f.libelle, 'version', f.version, 'date_effet', f.date_effet) ORDER BY f.code)
                FROM (SELECT DISTINCT ON (code) * FROM formule WHERE produit_id = p.id AND date_effet <= $1 AND supprime_le IS NULL ORDER BY code, date_effet DESC, version DESC) f), '[]') AS formules
        FROM produit p WHERE p.supprime_le IS NULL AND p.date_effet <= $1 AND (p.date_fin_commercialisation IS NULL OR p.date_fin_commercialisation > $1)
