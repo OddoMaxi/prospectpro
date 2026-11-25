@@ -5,6 +5,7 @@
  * Transaction unique : contrôle du solde, numéro de police, quittance, activation du contrat, documents, écritures EVT-02
  * (constatation, perception, commission), débit du compte de production. En cas d'échec d'une étape, rien n'est enregistré.
  */
+import { convertirProspect } from '../commercial/prospects.js';
 import type { Executant } from '../../db/pool.js';
 import type { Acteur } from '../../noyau/acteur.js';
 import { ErreurMetier, exiger, interdit, nonTrouve } from '../../noyau/erreurs.js';
@@ -164,10 +165,16 @@ export async function emettre(q: Executant, acteur: Acteur, dossierId: string) {
   const client = { compteId: (await q.query<{ collectif_id: string }>('SELECT collectif_id FROM compte_auxiliaire WHERE id = $1', [auxClient])).rows[0]!.collectif_id, auxiliaireId: auxClient };
 
   // Intervenants de la police (COM-RG-070) et commissions (COM-RG-041 : acquises à l'encaissement de la prime)
+  // Apporteur : le junior qui a préparé le dossier, sinon le junior du réseau qui avait enregistré le prospect (COM-RG-070)
   const preparateur = (await q.query<{ role: string }>('SELECT role FROM intervenant WHERE id = $1', [d.prepare_par_id])).rows[0]!;
+  const prospecteur = await convertirProspect(q, d.souscripteur_id);
+  const apporteurProspect = prospecteur ? (await q.query<{ id: string }>(`SELECT id FROM intervenant WHERE id = $1 AND role = 'JUNIOR' AND rattachement_id = $2`, [prospecteur, agentId])).rows[0]?.id : null;
+  // Prescripteur : titulaire du code saisi, s'il est toujours actif (COM-RG-083)
+  const prescripteur = d.code_prescripteur_id ? (await q.query<{ intervenant_id: string }>(
+    `SELECT c.intervenant_id FROM code_prescripteur c JOIN intervenant i ON i.id = c.intervenant_id WHERE c.id = $1 AND c.statut = 'ACTIF' AND i.statut = 'ACTIF'`, [d.code_prescripteur_id])).rows[0]?.intervenant_id : null;
   const commissions = await calculerCommissions(q, {
     produitId: d.produit_id, dateEffet: x.dateEffet, assiette: tarif.primeNette, titulaireId: agentId,
-    apporteurId: preparateur.role === 'JUNIOR' ? d.prepare_par_id : null, prescripteurId: null,
+    apporteurId: preparateur.role === 'JUNIOR' ? d.prepare_par_id : apporteurProspect ?? null, prescripteurId: prescripteur ?? null,
     assuresEtSouscripteur: [d.souscripteur_id, ...x.assures.map(a => a.tiersId)],
   });
   const totalCommission = commissions.reduce((s, c) => s + c.montant, 0);

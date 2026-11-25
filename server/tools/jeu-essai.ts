@@ -86,6 +86,29 @@ const rj = await transaction(uj, q => presenterRecapitulatif(q, juniorU, dj.id))
 await transaction(uj, async q => accepterRecapitulatif(q, juniorU, dj.id, rj.documentId, sms.dernier(await telephone(sj))!.texte.match(/code (\d{6})/)![1]!));
 await transaction(uj, q => soumettreDossier(q, juniorU, dj.id));
 
+console.log('Prescripteur avec son code, prospect, carte de l\'agent…');
+const { enregistrerTraite, proposerAgrement } = await import('../src/modules/commercial/intervenants.js');
+const { attribuerCode } = await import('../src/modules/commercial/prescripteurs.js');
+const { enregistrerProspect } = await import('../src/modules/commercial/prospects.js');
+const { listerCartes, validerCarte, produireCarte, demanderRemise, confirmerRemise } = await import('../src/modules/commercial/cartes.js');
+const conformite = new Acteur((await getPool().query(`SELECT id FROM utilisateur WHERE identifiant = 'conformite'`)).rows[0].id);
+const tp = await personne(c.admin, 'DIABATE', '1992-04-04', true);
+const prescripteur = await transaction(c.resp1.utilisateurId, q => creerIntervenant(q, c.resp1, { tiersId: tp, role: 'PRESCRIPTEUR' }));
+await transaction(c.resp1.utilisateurId, async q => enregistrerTraite(q, c.resp1, prescripteur, await pieceFictive()));
+const ap = await transaction(c.resp1.utilisateurId, q => proposerAgrement(q, c.resp1, prescripteur));
+await valider(c.resp2, ap.id); await valider(conformite, ap.id);
+await transaction(c.resp1.utilisateurId, q => attribuerCode(q, c.resp1, prescripteur, 'Karamoko'));
+await transaction(c.admin.utilisateurId, async q => creerUtilisateur(q, c.admin, { identifiant: 'prescripteur.diabate', tiersId: tp, typeCompte: 'PRESCRIPTEUR', motDePasse: MDP, telephone: await telephone(tp) }));
+const pr = await personne(c.admin, 'KOUYATE', '1991-09-09', true);
+await transaction(c.agentU.utilisateurId, q => enregistrerProspect(q, c.agentU, c.agent, pr));
+const carte = (await listerCartes(getPool(), { intervenantId: c.agent }))[0];
+if (carte) {
+  await transaction(c.resp1.utilisateurId, q => validerCarte(q, c.resp1, carte.id));
+  await transaction(c.resp1.utilisateurId, q => produireCarte(q, c.resp1, carte.id, 'http://localhost:5173/verification/carte'));
+  await transaction(c.resp1.utilisateurId, q => demanderRemise(q, c.resp1, carte.id));
+  await transaction(c.resp1.utilisateurId, async q => confirmerRemise(q, c.resp1, carte.id, sms.dernier(await telephone(agentTiers))!.texte.match(/code (\d{6})/)![1]!));
+}
+
 console.log('Fiche d\'imputation au brouillard…');
 await transaction(comptable.utilisateurId, async q => creerFicheImputation(q, comptable, {
   journal: 'OD', reference: 'REG-2026-01', libelle: 'Frais d\'expertise payés en caisse', pieceDocumentId: await pieceFictive('piece_comptable'),

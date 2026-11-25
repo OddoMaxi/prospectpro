@@ -160,6 +160,7 @@ export const DELEGATIONS: { type: string; niveaux: { niveau: number; profils: st
   { type: 'AFFECTATION_COMMISSION', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
   { type: 'ANNULATION_ERREUR', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }, { niveau: 2, profils: ['DAF'] }] },
   { type: 'RESTITUTION_COMPTE_PRODUCTION', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }, { niveau: 2, profils: ['DAF'] }] },
+  { type: 'MOUVEMENT_PORTEFEUILLE', niveaux: [{ niveau: 1, profils: ['RESP_COMMERCIAL'] }] },
   { type: 'ECRITURE_MANUELLE', niveaux: [{ niveau: 1, profils: ['COMPTABLE'] }, { niveau: 2, profils: ['DAF'] }] },
   { type: 'DECLARATION_TAXE', niveaux: [{ niveau: 1, profils: ['COMPTABLE'] }, { niveau: 2, profils: ['DAF'] }] },
 ];
@@ -211,6 +212,8 @@ export const PARAMETRES: P[] = [
   ['COM_EXCLUSIVITE_PROSPECT_JOURS', 'Exclusivité d\'un prospect (jours)', 'COM', 'DUREE', '90'],
   ['COM_CODE_PRESCRIPTEUR_MIN', 'Longueur minimale du code prescripteur', 'COM', 'ENTIER', '4'],
   ['COM_CODE_PRESCRIPTEUR_MAX', 'Longueur maximale du code prescripteur', 'COM', 'ENTIER', '20'],
+  ['COM_CODES_INTERDITS', 'Mots interdits dans un code prescripteur (séparés par des virgules)', 'COM', 'LISTE', 'CGS,PROSPECT,ASSURANCE,ASSUR,POLICE,SINISTRE,ADMIN,ARNAQUE'],
+  ['COM_INACTIVITE_JUNIOR_MOIS', 'Inactivité prolongée d\'un junior permettant le transfert de ses clients (mois)', 'COM', 'DUREE', '6'],
   ['COM_REVALIDATION_CARTE_PRO', 'Revalidation périodique de la carte professionnelle', 'COM', 'BOOLEEN', 'NON'],
   // Production (chapitre 8)
   ['PROD_EXPIRATION_PROPOSITION_JOURS', 'Expiration d\'une proposition (jours)', 'PRD', 'DUREE', '30'],
@@ -285,6 +288,7 @@ export const MODELES_NOTIFICATION: { code: string; canal: string; contenu: strin
   { code: 'POLICE_EMISE', canal: 'SMS', contenu: 'Prospect Pro : votre police n° {{police}} est émise, effet le {{date_effet}}, prime payée {{prime}}. Vos documents (bulletin, conditions générales, quittance, attestation) sont disponibles dans votre espace assuré.' },
   { code: 'APPROVISIONNEMENT_CONFIRME', canal: 'SMS', contenu: 'Prospect Pro : approvisionnement {{numero}} de {{montant}} confirmé sur le compte de production du bureau {{bureau}}. Nouveau solde : {{solde}}.' },
   { code: 'COMPTE_PRODUCTION_SEUIL', canal: 'SMS', contenu: 'Prospect Pro : le solde du compte de production du bureau {{bureau}} est passé sous votre seuil d\'alerte : {{solde}}. Pensez à l\'approvisionner.' },
+  { code: 'CHANGEMENT_INTERLOCUTEUR', canal: 'SMS', contenu: 'Prospect Pro : pour votre police {{police}}, votre interlocuteur commercial est désormais {{interlocuteur}} ({{telephone}}). Vos garanties ne changent pas.' },
   { code: 'VERIFICATION_TELEPHONE', canal: 'SMS', contenu: 'Prospect Pro : votre code de vérification est {{code}}. Communiquez-le uniquement à la personne qui vous assiste. Valable 10 minutes.' },
   { code: 'ACCEPTATION_DOCUMENT', canal: 'SMS', contenu: 'Prospect Pro : code {{code}} pour accepter « {{document}} » (réf. {{empreinte}}). Valable 5 minutes. Ne le communiquez qu\'à la personne qui vous assiste, après avoir lu le document.' },
 ];
@@ -496,6 +500,11 @@ export const MODELES_DOCUMENTS: { code: string; libelle: string; contenu: string
     code: 'AVIS_PAIEMENT', libelle: 'Avis de paiement',
     contenu: ['# Avis de paiement {{numero}}', 'Bénéficiaire : {{beneficiaire}}', 'Objet : {{objet}}', '| Libellé | Montant |', '{{#detail}}| {{libelle}} | {{montant}} |', '{{/detail}}',
       'Montant versé : {{montant}} – destination : {{etablissement}}.', '---', 'Conakry, le {{date_document}}'].join('\n'),
+  },
+  {
+    code: 'CARTE_PROFESSIONNELLE', libelle: 'Carte professionnelle',
+    contenu: ['# {{titre}}', '{{societe_raison_sociale}}', '## {{porteur}}', '{{qualite}}', '{{responsabilite}}', '', 'N° de série : {{numero}}',
+      'Vérifier la validité de cette carte : {{verification}}', '---', 'Valable tant que le porteur est en activité. Délivrée le {{date_document}}.'].join('\n'),
   },
   {
     code: 'ETAT_PPNA', libelle: 'État de la provision pour primes non acquises',

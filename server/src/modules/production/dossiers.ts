@@ -6,6 +6,8 @@
  * à usage unique (ou signature manuscrite numérisée à défaut de téléphone). Étape 8 : émission (emission.ts).
  * Toute modification après l'acceptation l'annule : le client accepte toujours ce qui sera émis.
  */
+import { agentDe, relationExistante } from '../commercial/prospects.js';
+import { codeActif } from '../commercial/prescripteurs.js';
 import { z } from 'zod';
 import type { Executant } from '../../db/pool.js';
 import type { Acteur } from '../../noyau/acteur.js';
@@ -59,7 +61,7 @@ async function intervenantDe(q: Executant, utilisateurId: string) {
 }
 
 /** Étapes 1 et 2 : ouverture du dossier pour un client existant, sur un produit et une formule commercialisés. */
-export async function ouvrirDossier(q: Executant, acteur: Acteur, d: { souscripteurId: string; formuleId: string; bureauId: string; donnees?: unknown }) {
+export async function ouvrirDossier(q: Executant, acteur: Acteur, d: { souscripteurId: string; formuleId: string; bureauId: string; donnees?: unknown; codePrescripteur?: string }) {
   const i = await intervenantDe(q, acteur.utilisateurId!);
   if (!i) throw interdit('Seul un intervenant commercial actif prépare une souscription');
   exiger(i.role !== 'PRESCRIPTEUR', 'INTERDIT', 'Un prescripteur ne prépare aucune souscription (COM-RG-064)', 403);
@@ -72,14 +74,23 @@ export async function ouvrirDossier(q: Executant, acteur: Acteur, d: { souscript
   exiger(gere.rowCount, 'BUREAU_INVALIDE', 'Ce bureau n\'est pas géré par votre agent général');
   const s = await q.query('SELECT 1 FROM tiers WHERE id = $1 AND supprime_le IS NULL', [d.souscripteurId]);
   exiger(s.rowCount, 'CLIENT_INCONNU', 'Client introuvable : créez sa fiche (recherche de doublons) avant la souscription');
+  // COM-RG-071 : un client actif ou un prospect sous exclusivité d'un autre réseau garde son titulaire
+  const relation = await relationExistante(q, d.souscripteurId);
+  if (relation && (await agentDe(q, relation.intervenantId)) !== agent) {
+    throw new ErreurMetier('RELATION_EXISTANTE', relation.type === 'TITULAIRE'
+      ? 'Ce client est déjà en portefeuille chez un autre intervenant : il garde son titulaire (COM-RG-071)'
+      : 'Ce prospect est sous l\'exclusivité d\'un autre intervenant (COM-RG-071)', 409);
+  }
+  // COM-RG-083 : code prescripteur saisi à la souscription (le prescripteur est intervenant rémunéré)
+  const code = d.codePrescripteur?.trim() ? await codeActif(q, d.codePrescripteur) : null;
   const id = crypto.randomUUID();
   const numero = await attribuer(q, acteur, { type: 'DOSSIER_SOUSCRIPTION', annee: Number(aujourdhui().slice(0, 4)) }, { type: 'dossier_souscription', id });
   const expire = ajouterJours(aujourdhui(), await entier(q, 'PROD_EXPIRATION_PROPOSITION_JOURS'));
   const donnees = d.donnees ? schemaDonnees.parse(d.donnees) : { dateEffet: aujourdhui(), assures: [{ tiersId: d.souscripteurId, qualite: 'ASSURE_PRINCIPAL' as const }], consentementsDeces: [], pieces: [] };
   await q.query(
-    `INSERT INTO dossier_souscription (id, numero_dossier, canal, souscripteur_id, produit_id, formule_id, bureau_id, prepare_par_id, etape_courante, donnees, statut, expire_le)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,2,$9,'BROUILLON',$10)`,
-    [id, numero, i.role === 'JUNIOR' ? 'JUNIOR' : 'BUREAU', d.souscripteurId, f.produit_id, d.formuleId, d.bureauId, i.id, JSON.stringify(donnees), expire]);
+    `INSERT INTO dossier_souscription (id, numero_dossier, canal, souscripteur_id, produit_id, formule_id, bureau_id, prepare_par_id, etape_courante, donnees, statut, expire_le, code_prescripteur_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,2,$9,'BROUILLON',$10,$11)`,
+    [id, numero, i.role === 'JUNIOR' ? 'JUNIOR' : 'BUREAU', d.souscripteurId, f.produit_id, d.formuleId, d.bureauId, i.id, JSON.stringify(donnees), expire, code?.id ?? null]);
   await journaliser(q, { ...acteur.trace(), action: 'CREATION', objetType: 'dossier_souscription', objetId: id, apres: { numero, ...d } });
   return { id, numero, expireLe: expire };
 }

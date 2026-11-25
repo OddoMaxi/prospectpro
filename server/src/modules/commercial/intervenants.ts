@@ -7,6 +7,7 @@
  * - L'émission n'est activable que si toutes les conditions de COM-RG-002 sont réunies (CA-COM-01).
  * - Un bureau direct a un gestionnaire daté ; sa première affectation ouvre son compte de production (COM-RG-003).
  */
+import { demanderCarte, suivreStatutIntervenant } from './cartes.js';
 import type { Executant } from '../../db/pool.js';
 import type { Acteur } from '../../noyau/acteur.js';
 import { ErreurMetier, exiger, nonTrouve } from '../../noyau/erreurs.js';
@@ -56,7 +57,10 @@ export async function creerIntervenant(q: Executant, acteur: Acteur, d: {
     .catch(e => { if (e.code === '23505') throw new ErreurMetier('INTERVENANT_EXISTANT', 'Cette personne est déjà intervenant en activité avec ce rôle', 409); throw e; });
   const id = r.rows[0]!.id;
   await journaliser(q, { ...acteur.trace(), action: 'CREATION', objetType: 'intervenant', objetId: id, apres: { ...d, statut } });
-  if (statut === 'ACTIF') await publier(q, acteur, { type: 'INTERVENANT_ACTIVE', objet: { type: 'intervenant', id }, charge: { role: d.role }, cleIdempotence: `intervenant:${id}:active` });
+  if (statut === 'ACTIF') {
+    await publier(q, acteur, { type: 'INTERVENANT_ACTIVE', objet: { type: 'intervenant', id }, charge: { role: d.role }, cleIdempotence: `intervenant:${id}:active` });
+    await demanderCarte(q, acteur, id); // COM-RG-101 : demande de carte à l'activation
+  }
   return id;
 }
 
@@ -83,6 +87,7 @@ enregistrerOperation(OPERATION_AGREMENT, {
     await q.query(`UPDATE intervenant SET statut = 'ACTIF', agrement_accorde_le = current_date, visa_conformite_id = $2 WHERE id = $1`, [demande.objet_id, acteur.utilisateurId]);
     await journaliser(q, { ...acteur.trace(), action: 'VALIDATION', objetType: 'intervenant', objetId: demande.objet_id, apres: { agrement: true } });
     await publier(q, acteur, { type: 'INTERVENANT_ACTIVE', objet: { type: 'intervenant', id: demande.objet_id }, charge: {}, cleIdempotence: `intervenant:${demande.objet_id}:active` });
+    await demanderCarte(q, acteur, demande.objet_id);
   },
 });
 
@@ -174,6 +179,7 @@ export async function changerStatutIntervenant(q: Executant, acteur: Acteur, int
   for (const c of comptes.rows) {
     await changerStatut(q, acteur, c.id, statut === 'SORTI' ? 'DESACTIVE' : statut === 'SUSPENDU' ? 'SUSPENDU' : 'ACTIF', `Intervenant ${statut.toLowerCase()} : ${motif}`);
   }
+  await suivreStatutIntervenant(q, acteur, intervenantId, statut); // COM-RG-103, CA-COM-16 : carte bloquée ou retirée
   await journaliser(q, { ...acteur.trace(), action: 'MODIFICATION', objetType: 'intervenant', objetId: intervenantId, avant: { statut: i.statut }, apres: { statut, motif } });
   if (statut === 'SORTI') await publier(q, acteur, { type: 'INTERVENANT_SORTI', objet: { type: 'intervenant', id: intervenantId }, charge: { motif }, cleIdempotence: `intervenant:${intervenantId}:sorti` });
 }

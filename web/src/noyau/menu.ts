@@ -30,8 +30,11 @@ export const MENU: Rubrique[] = [
     rubrique: 'Commercial', entrees: [
       { libelle: 'Bureaux directs', chemin: '/commercial/bureaux', droit: 'BUREAUX:CONSULTER' },
       { libelle: 'Intervenants', chemin: '/commercial/intervenants', droit: 'AGREMENT:CONSULTER' },
+      { libelle: 'Prescripteurs et codes', chemin: '/commercial/prescripteurs', droit: 'AGREMENT:CONSULTER' },
       { libelle: 'Factures de commissions', chemin: '/commercial/factures', droit: 'FACTURE_COMMISSION:CONSULTER' },
+      { libelle: 'Cartes professionnelles', chemin: '/commercial/cartes', droit: 'CARTE_PRO:CONSULTER' },
       { libelle: 'Comptes de production', chemin: '/commercial/comptes-production', droit: 'COMPTE_PRODUCTION:CONSULTER' },
+      { libelle: 'Mouvements de portefeuille', chemin: '/commercial/mouvements', droit: 'MOUVEMENT_PORTEFEUILLE:CONSULTER' },
     ],
   },
   {

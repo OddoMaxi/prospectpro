@@ -6,6 +6,7 @@ import { Chargement, DepotPiece, Message, MessageErreur, Statut, useAvis } from 
 import { useAction, useDonnees } from '../noyau/donnees';
 import { useSession } from '../noyau/session';
 import { Entete, estAgentGeneral, useAgent } from './Agent';
+import { ChoixPersonne } from './Souscription';
 
 const ROLES: Record<string, string> = { AGENT_GENERAL: 'Agent général', COLLABORATEUR: 'Collaborateur', JUNIOR: 'Junior', PRESCRIPTEUR: 'Prescripteur' };
 
@@ -22,11 +23,13 @@ export function PageProfilAgent() {
         <div><b>{i.prenoms} {i.nom}</b><small>{ROLES[i.role] ?? i.role}{i.role !== 'AGENT_GENERAL' ? ` · ${i.agent}` : ''}</small><small>Identifiant : {moi?.identifiant}</small></div>
       </section>
       <nav className="ag-carte ag-liens">
+        {i.role !== 'PRESCRIPTEUR' && <Link to="/agent/dossiers">Mes dossiers de souscription<span>›</span></Link>}
+        <Link to="/agent/carte">Carte professionnelle<span>›</span></Link>
         <Link to="/agent/factures">Factures de commissions<span>›</span></Link>
         {estAgentGeneral(accueil) && <Link to="/agent/reseau">Mon réseau<span>›</span></Link>}
-        <Link to="/agent/compte">Compte de production<span>›</span></Link>
+        {i.role !== 'PRESCRIPTEUR' && <Link to="/agent/mouvements">Mouvements de portefeuille<span>›</span></Link>}
+        {i.role !== 'PRESCRIPTEUR' && <Link to="/agent/compte">Compte de production<span>›</span></Link>}
       </nav>
-      <Message>Carte professionnelle numérique vérifiable par QR code (AG-20) : disponible avec la gestion des cartes professionnelles.</Message>
       <button className="bouton secondaire large" onClick={() => void fermer().then(() => aller('/connexion'))}>Se déconnecter</button>
     </>
   );
@@ -113,8 +116,33 @@ export function PageReseauAgent() {
             ? <button className="bouton petit" disabled={action.enCours} onClick={() => valider(m)}>Valider</button> : <Statut valeur={m.statut} />}</div>
         </div>)}
       </section>}
-      <Message>Un junior travaille en prospection seule tant que vous n'avez pas validé ses contrôles ; sans validation sous 15 jours, son compte est suspendu. La création des comptes de votre réseau se fait avec la Direction commerciale <span className="repere">2</span>.</Message>
+      <NouveauMembre apres={m => { avis(m); void l.recharger(); }} />
+      <Message>Vous créez et validez vous-même les comptes de vos juniors et collaborateurs, chacun à son nom <span className="repere">2</span>. Un junior travaille en prospection seule tant que vous n'avez pas validé ses contrôles ; sans validation sous 15 jours, son compte est suspendu. La sortie bloque compte et carte <span className="repere">3</span>.</Message>
       <Avis />
     </>
+  );
+}
+
+function NouveauMembre({ apres }: { apres: (m: string) => void }) {
+  const [ouvert, setOuvert] = useState(false);
+  const [tiers, setTiers] = useState<{ id: string; nom: string } | null>(null);
+  const [role, setRole] = useState<'JUNIOR' | 'COLLABORATEUR'>('JUNIOR');
+  const [identifiant, setIdentifiant] = useState('');
+  const [motDePasse, setMotDePasse] = useState('');
+  const action = useAction();
+  if (!ouvert) return <button className="bouton large" onClick={() => setOuvert(true)}>+ Créer un compte de junior ou de collaborateur</button>;
+  return (
+    <section className="ag-carte">
+      <h2>Nouveau compte</h2>
+      <p className="doux">Depuis la fiche tiers de la personne ; elle reçoit un identifiant et un mot de passe initial que vous lui remettez.</p>
+      <ChoixPersonne valeur={tiers} choisir={setTiers} />
+      <label className="ag-champ">Rôle<select value={role} onChange={e => setRole(e.target.value as typeof role)}><option value="JUNIOR">Junior</option><option value="COLLABORATEUR">Collaborateur</option></select></label>
+      <label className="ag-champ">Identifiant<input value={identifiant} onChange={e => setIdentifiant(e.target.value.toLowerCase())} placeholder="prenom.nom" autoCapitalize="none" /></label>
+      <label className="ag-champ">Mot de passe initial<input type="password" value={motDePasse} onChange={e => setMotDePasse(e.target.value)} autoComplete="new-password" /></label>
+      <MessageErreur erreur={action.erreur} />
+      <button className="bouton large" disabled={!tiers || !identifiant || !motDePasse || action.enCours}
+        onClick={() => void action.executer(() => api('POST', '/agent/reseau', { tiersId: tiers!.id, role, identifiant, motDePasse })).then(x => { if (x) { setOuvert(false); apres(`Compte ${identifiant} créé et validé.`); } })}>Créer et valider le compte</button>
+      <button className="lien" onClick={() => setOuvert(false)}>Annuler</button>
+    </section>
   );
 }

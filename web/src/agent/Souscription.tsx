@@ -3,7 +3,7 @@
  * Le dossier est enregistré à chaque étape (il expire après 30 jours) ; toute modification annule le tarif et l'acceptation.
  */
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, aujourdhui, date, ErreurApi, montant, ouvrirFichier } from '../noyau/api';
 import { Chargement, ChoixTiers, DepotPiece, Message, MessageErreur } from '../noyau/composants';
 import { useAction, useDonnees } from '../noyau/donnees';
@@ -50,15 +50,18 @@ function NouveauDossier() {
   const { accueil } = useAgent();
   const aller = useNavigate();
   const catalogue = useDonnees<Produit[]>('/catalogue');
-  const [etape, setEtape] = useState(1);
-  const [client, setClient] = useState<{ id: string; nom: string } | null>(null);
+  const [params] = useSearchParams();
+  const prospect = params.get('client') ? { id: params.get('client')!, nom: params.get('nom') ?? 'Client' } : null;
+  const [etape, setEtape] = useState(prospect ? 2 : 1);
+  const [client, setClient] = useState<{ id: string; nom: string } | null>(prospect);
+  const [codePrescripteur, setCode] = useState('');
   const [produitId, setProduit] = useState('');
   const [formuleId, setFormule] = useState('');
   const [bureauId, setBureau] = useState(accueil.bureaux[0]?.id ?? '');
   const action = useAction();
   const produit = catalogue.donnees?.find(p => p.id === produitId);
   if (accueil.intervenant.prospectionSeule) return <><Entete titre="Nouvelle souscription" /><Message type="attention">Vous travaillez en prospection seule tant que vos contrôles de conformité ne sont pas validés.</Message></>;
-  const ouvrir = () => void action.executer(() => api<{ id: string }>('POST', '/dossiers', { souscripteurId: client!.id, formuleId, bureauId }))
+  const ouvrir = () => void action.executer(() => api<{ id: string }>('POST', '/dossiers', { souscripteurId: client!.id, formuleId, bureauId, codePrescripteur: codePrescripteur.trim() || undefined }))
     .then(r => r && aller(`/agent/souscrire/${r.id}`, { replace: true }));
   return (
     <>
@@ -69,6 +72,7 @@ function NouveauDossier() {
         <p className="doux">Recherchez le client au référentiel ; s'il n'existe pas, créez sa fiche.</p>
         <ChoixPersonne valeur={client} choisir={setClient} />
         <button className="bouton large" disabled={!client} onClick={() => setEtape(2)}>Continuer</button>
+        <Link to="/agent/dossiers">Reprendre un dossier en cours</Link>
       </section>}
       {etape === 2 && <>
         <section className="ag-carte"><h2>Client</h2><div className="ag-ligne statique"><div><b>{client?.nom}</b></div><span className="statut vert">Identifié</span></div></section>
@@ -80,6 +84,7 @@ function NouveauDossier() {
             {produit && <label className="ag-champ">Formule<select value={formuleId} onChange={e => setFormule(e.target.value)}><option value="">Choisir…</option>
               {produit.formules.map(f => <option key={f.id} value={f.id}>{f.code} – {f.libelle}</option>)}</select></label>}
             {produit && <p className="doux">Assuré principal de {produit.age_min} à {produit.age_max} ans.</p>}
+            <label className="ag-champ">Code prescripteur (facultatif)<input value={codePrescripteur} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="Si le client en a un" autoCapitalize="characters" /></label>
             {accueil.bureaux.length > 1 && <label className="ag-champ">Bureau émetteur<select value={bureauId} onChange={e => setBureau(e.target.value)}>{accueil.bureaux.map(b => <option key={b.id} value={b.id}>{b.code} – {b.nom}</option>)}</select></label>}
           </>}
         </section>
@@ -92,7 +97,7 @@ function NouveauDossier() {
 }
 
 /** Recherche d'une personne au référentiel, ou création de sa fiche (nom, prénoms, naissance, téléphone). */
-function ChoixPersonne({ valeur, choisir, sansTelephone }: { valeur: { id: string; nom: string } | null; choisir: (t: { id: string; nom: string } | null) => void; sansTelephone?: boolean }) {
+export function ChoixPersonne({ valeur, choisir, sansTelephone }: { valeur: { id: string; nom: string } | null; choisir: (t: { id: string; nom: string } | null) => void; sansTelephone?: boolean }) {
   const [creation, setCreation] = useState(false);
   const [f, setF] = useState({ nom: '', prenoms: '', date_naissance: '', sexe: '', telephone: '' });
   const action = useAction();

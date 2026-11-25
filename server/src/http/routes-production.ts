@@ -40,7 +40,7 @@ export function routesProduction(): Router {
     res.json(await listerDossiers(getPool(), { statut: f.statut, bureaux: await bureauxVisibles(req) }));
   });
   r.post('/dossiers', droit('SOUSCRIPTION', 'CREER'), async (req, res) => {
-    const d = z.object({ souscripteurId: uuid, formuleId: uuid, bureauId: uuid }).parse(req.body);
+    const d = z.object({ souscripteurId: uuid, formuleId: uuid, bureauId: uuid, codePrescripteur: z.string().max(40).optional() }).parse(req.body);
     res.status(201).json(await ecrire(req, q => ouvrirDossier(q, req.acteur, d)));
   });
   r.get('/dossiers/:id', droit('SOUSCRIPTION', 'CONSULTER'), async (req, res) => {

@@ -277,3 +277,9 @@ label input[type=checkbox], label input[type=radio] { vertical-align: middle; ma
 .ag-contenu .onglets button { white-space: nowrap; padding-left: 12px; padding-right: 12px; }
 .ag-contenu .choix { font-size: 15px; }
 .ag-contenu .choix li { padding: 8px 12px; }
+
+.ag-cartepro { background: linear-gradient(135deg, var(--marine), #2f4a8f); color: #fff; border-radius: 16px; padding: 20px; margin-bottom: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.ag-cartepro small { color: #c4cce2; }
+.ag-cartepro b { font-size: 22px; }
+.ag-cartepro img { background: #fff; padding: 8px; border-radius: 10px; margin: 8px 0; width: 180px; height: 180px; }
+.ag-cartepro.inactive { background: #7f889e; }
