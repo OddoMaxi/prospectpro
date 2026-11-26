@@ -30,6 +30,8 @@ export const schemaGarantie = z.object({
   carenceJours: z.number().int().nonnegative(), accordPrealable: z.boolean().default(false), seuilAccordPrealable: montant.optional(),
   beneficiaires: z.enum(['VICTIME', 'AYANTS_DROIT']), modeCalcul: z.enum(['FORFAIT', 'COUT_REEL', 'CAPITAL_X_TAUX', 'INDEMNITE_JOURNALIERE']),
   capital: montant.optional(), indemniteJournaliere: montant.optional(), ageMinDeces: z.number().int().nonnegative().optional(),
+  /** Familles d'actes couvertes (vide : garantie générale de frais de soins). */
+  famillesActes: z.array(z.string().regex(/^[A-Z_]{2,30}$/)).optional(),
 });
 export const schemaTarif = z.object({
   qualite: z.enum(['ASSURE_PRINCIPAL', 'CONJOINT', 'ENFANT', 'ADULTE']),
@@ -50,6 +52,8 @@ export const schemaProduit = z.object({
   modeleCgId: z.uuid(), modeleCpId: z.uuid(), delaiRenonciationJours: z.number().int().nonnegative().optional(),
   ristourneDeces: z.boolean().default(false), taxes: z.array(z.uuid()).default([]),
   formules: z.array(schemaFormule).min(1),
+  /** SAN-RG-025 : exclusions du produit (contrôlées automatiquement si « automatique »). */
+  exclusions: z.array(z.object({ code: z.string().regex(/^[A-Z0-9_]{1,20}$/), libelle: z.string().trim().min(1).max(300), automatique: z.boolean().default(true), actes: z.array(z.string()).default([]) })).default([]),
 });
 
 export const schemaOperationCatalogue = z.discriminatedUnion('type', [
@@ -161,10 +165,11 @@ async function insererFormule(q: Executant, produitId: string, f: Formule, versi
   for (const g of f.garanties) {
     await q.query(
       `INSERT INTO garantie (formule_id, code, libelle, type, plafond, nombre_actes, taux_prise_en_charge, carence_jours, accord_prealable, seuil_accord_prealable,
-                             beneficiaires, mode_calcul, capital, indemnite_journaliere, age_min_deces)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+                             beneficiaires, mode_calcul, capital, indemnite_journaliere, age_min_deces, familles_actes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [id, g.code, g.libelle, g.type, g.plafond ?? null, g.nombreActes ?? null, g.tauxPriseEnCharge, g.carenceJours, g.accordPrealable,
-        g.seuilAccordPrealable ?? null, g.beneficiaires, g.modeCalcul, g.capital ?? null, g.indemniteJournaliere ?? null, g.ageMinDeces ?? null]);
+        g.seuilAccordPrealable ?? null, g.beneficiaires, g.modeCalcul, g.capital ?? null, g.indemniteJournaliere ?? null, g.ageMinDeces ?? null,
+        g.famillesActes?.length ? JSON.stringify(g.famillesActes) : null]);
   }
   await insererGrille(q, id, f.tarifs, dateEffet);
   return id;
@@ -193,6 +198,9 @@ enregistrerOperation(OPERATION_CATALOGUE, {
           [demande.objet_id, p.code, p.libelle, p.brancheBcrg, p.typeCouverture, p.typeContrat, p.ageMin, p.ageMax, p.dureeMois,
             JSON.stringify(p.documentsExiges), p.modeleCgId, p.modeleCpId, p.delaiRenonciationJours ?? null, p.ristourneDeces, op.dateEffet]);
         for (const f of p.formules) await insererFormule(q, demande.objet_id, f, 1, op.dateEffet);
+        for (const x of p.exclusions) {
+          await q.query('INSERT INTO exclusion (produit_id, code, libelle, automatique, actes) VALUES ($1,$2,$3,$4,$5)', [demande.objet_id, x.code, x.libelle, x.automatique, JSON.stringify(x.actes)]);
+        }
         for (const t of p.taxes) await q.query('INSERT INTO produit_taxe (produit_id, code_taxe_id, date_effet) VALUES ($1,$2,$3)', [demande.objet_id, t, op.dateEffet]);
         break;
       }

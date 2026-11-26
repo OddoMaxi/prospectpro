@@ -21,6 +21,7 @@ import {
   canalDigital, confirmerIdentification, confirmerPaiement, controlerPersonnesDuDossier, corbeilleCellule, declarerPersonne, demanderPaiement, dossierDuClient,
   espaceClient, identifier, installerCanalDigital, offre, operateurs, ouvrirDossierEnLigne, rejeterDossierEnLigne,
 } from '../modules/production/enLigne.js';
+import { soldes } from '../modules/sante/droits.js';
 import { cartesDuClient, declarerGroupeSanguin, declarerPerte, demanderCartePhysique, exigerCarteDuClient } from '../modules/sante/cartes.js';
 import { droit, ecrire } from './socle.js';
 
@@ -140,6 +141,13 @@ export function routesEnLignePubliques(ctx: ContexteAuth, config: Config): Route
   });
   // Cartes numériques (AS-02) : perte ou vol, carte physique sur demande (frais éventuels réglés au bureau), groupe sanguin
   s.get('/cartes', async (req, res) => { res.json(await cartesDuClient(getPool(), req.clientEnLigne!)); });
+  // SAN-RG-022 : consommation et soldes des personnes de ses polices
+  s.get('/consommation', async (req, res) => {
+    const personnes = (await getPool().query<{ id: string; nom: string; police: string }>(
+      `SELECT pa.id, trim(COALESCE(t.prenoms, '') || ' ' || t.nom) AS nom, p.numero AS police FROM police_assure pa JOIN police p ON p.id = pa.police_id JOIN tiers t ON t.id = pa.tiers_id
+        WHERE (p.souscripteur_id = $1 OR pa.tiers_id = $1) AND p.statut IN ('ACTIVE', 'SUSPENDUE', 'ECHUE') AND pa.date_sortie IS NULL ORDER BY p.numero, pa.rang_carte`, [req.clientEnLigne!])).rows;
+    res.json(await Promise.all(personnes.map(async p => ({ ...p, ...(await soldes(getPool(), p.id)) }))));
+  });
   s.post('/cartes/:id/perte', async (req, res) => {
     const id = uuid.parse(req.params.id);
     const { motif } = z.object({ motif: z.enum(['PERTE', 'VOL']) }).parse(req.body);

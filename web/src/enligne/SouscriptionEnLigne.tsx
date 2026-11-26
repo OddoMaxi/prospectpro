@@ -6,6 +6,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { api, date, ErreurApi, montant } from '../noyau/api';
 import { CarteNumeriqueVue, type CarteNumerique } from '../pages/sante/Cartes';
+import { SoldesVue, type SoldesPersonne } from '../pages/sante/Consommation';
 
 const CLE = 'prospectpro.enligne';
 const lire = () => { try { return JSON.parse(sessionStorage.getItem(CLE) ?? 'null') as { jeton: string; nom: string } | null; } catch { return null; } };
@@ -119,6 +120,7 @@ function ChoixFormule({ offre, espace, ouvrir, agir, enCours }: { offre: Offre |
   if (!offre) return <div className="vide">Chargement…</div>;
   return (<>
     {!!espace?.polices.length && <MesCartes />}
+    {!!espace?.polices.length && <MaConsommation />}
     {!!espace?.polices.length && <section className="el-carte"><h2>Mes contrats</h2>{espace.polices.map(p => <div key={p.id} className="el-ligne"><b className="code">{p.numero}</b><span>{p.produit}</span><span className="doux">échéance {date(p.echeance)}</span></div>)}</section>}
     <section className="el-carte"><h2>Formule</h2>
       <div className="el-formules">{offre.formules.map(f => <button key={f.id} className={`el-formule${choix === f.id ? ' choisie' : ''}`} onClick={() => setChoix(f.id)}>
@@ -291,5 +293,14 @@ function MesCartes() {
         {c.production === 'NUMERIQUE_SEULE' && <button className="bouton secondaire" onClick={() => void agir('physique', { lieu: 'SIEGE' }, 'Carte physique demandée : vous serez prévenu par SMS dès son impression (retrait au siège).')}>Demander une carte physique</button>}
       </div>
     </section>);
+}
+
+/** SAN-RG-022 : l'assuré consulte à tout moment sa consommation et ses soldes. */
+function MaConsommation() {
+  const session = lire();
+  const [l, setL] = useState<SoldesPersonne[] | null>(null);
+  useEffect(() => { void api<SoldesPersonne[]>('GET', '/public/en-ligne/consommation', undefined, session?.jeton).then(setL).catch(() => setL([])); }, [session?.jeton]);
+  if (!l?.length) return null;
+  return <section className="el-carte"><h2>Ma consommation</h2>{l.map(p => <SoldesVue key={p.id} p={p} />)}</section>;
 }
 

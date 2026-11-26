@@ -362,3 +362,13 @@ label input[type=checkbox], label input[type=radio] { vertical-align: middle; ma
 .carte-assure-recto small { opacity: .85; font-size: 11px; }
 .carte-assure-qr { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 14px; display: grid; justify-items: center; gap: 8px; text-align: center; }
 .carte-assure-qr small { color: var(--texte-doux); }
+
+/* Soldes et compteurs (SAN-RG-022) */
+.soldes-personne { display: grid; gap: 10px; }
+.soldes-personne h3 { margin: 0; color: var(--titre); }
+.jauge-ligne { display: grid; gap: 4px; }
+.jauge-titre { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.jauge { height: 8px; background: var(--fond); border-radius: 4px; overflow: hidden; }
+.jauge > div { height: 100%; background: var(--vert); }
+.jauge > div.orange { background: var(--orange); }
+.jauge > div.rouge { background: var(--rouge); }

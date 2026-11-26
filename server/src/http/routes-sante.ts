@@ -14,6 +14,7 @@ import {
 import { enregistrerActe, enregistrerMedicament, FAMILLES_ACTE, importer, listerActes, listerMedicaments } from '../modules/sante/nomenclatures.js';
 import { cartesDePolice, confirmerRemise, declarerGroupeSanguin, declarerPerte, demanderCartePhysique, demanderRemise, fileProduction, imprimerCarte, verifierCarte } from '../modules/sante/cartes.js';
 import { Refus } from '../modules/auth/service.js';
+import { evaluerDroits, soldes } from '../modules/sante/droits.js';
 import { droit, ecrire } from './socle.js';
 
 const uuid = z.string().uuid();
@@ -127,6 +128,19 @@ export function routesSante(): Router {
   r.get('/portail/cartes/verification', droit('SOINS', 'CONSULTER'), async (req, res) => {
     const d = z.object({ jeton: z.string().max(100).optional(), numero: z.string().max(30).optional() }).refine(x => x.jeton || x.numero).parse(req.query);
     res.json(await verifierCarte(getPool(), d));
+  });
+
+  // ---------------------------------------------------------------- moteur de droits (SAN-RG-020 à 027)
+  const ligne = z.object({ acteCode: z.string().optional(), medicamentCode: z.string().optional(), quantite: z.number().int().positive().optional(), montant: z.number().int().nonnegative() }).refine(l => !!l.acteCode !== !!l.medicamentCode, 'Un acte ou un médicament');
+  r.get('/polices/:id/soldes', droit('SOUSCRIPTION', 'CONSULTER'), async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    const personnes = (await getPool().query<{ id: string; nom: string; qualite: string; rang_carte: string }>(
+      `SELECT pa.id, trim(COALESCE(t.prenoms, '') || ' ' || t.nom) AS nom, pa.qualite, pa.rang_carte FROM police_assure pa JOIN tiers t ON t.id = pa.tiers_id WHERE pa.police_id = $1 AND pa.date_sortie IS NULL ORDER BY pa.rang_carte`, [id])).rows;
+    res.json(await Promise.all(personnes.map(async p => ({ ...p, ...(await soldes(getPool(), p.id)) }))));
+  });
+  r.post('/sante/droits/simulation', droit('PRESTATAIRES', 'CONSULTER'), async (req, res) => {
+    const d = z.object({ policeAssureId: uuid, date: date.optional(), accident: z.boolean().optional(), lignes: z.array(ligne).min(1).max(50) }).parse(req.body);
+    res.json(await evaluerDroits(getPool(), d));
   });
 
   // ---------------------------------------------------------------- portail : administrateur du prestataire (§ 9.4.1)
