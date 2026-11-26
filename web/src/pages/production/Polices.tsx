@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, date, dateHeure, montant, ouvrirFichier } from '../../noyau/api';
 import { Carte, Champ, ChoixTiers, Chargement, Indicateur, LienTiers, Message, MessageErreur, Modale, Onglets, Page, Statut, useAvis } from '../../noyau/composants';
 import { useAction, useDonnees } from '../../noyau/donnees';
+import { CartesPolice } from '../sante/Cartes';
 import { useSession } from '../../noyau/session';
 
 const STATUTS_POLICE: Record<string, [string, string]> = {
@@ -57,7 +58,7 @@ interface Police {
   preuveAcceptation: { niveau: string; horodatage: string; empreinte_document: string } | null;
   historique: { horodatage: string; action: string; valeur_apres: Record<string, unknown> | null; auteur: string }[];
 }
-type Onglet = 'synthese' | 'assures' | 'garanties' | 'quittances' | 'avenants' | 'beneficiaires' | 'documents' | 'historique';
+type Onglet = 'synthese' | 'assures' | 'garanties' | 'cartes' | 'quittances' | 'avenants' | 'beneficiaires' | 'documents' | 'historique';
 
 export function PageFichePolice() {
   const { id } = useParams();
@@ -85,7 +86,7 @@ export function PageFichePolice() {
       <div className="filtres"><StatutPolice s={d.statut} /><span className="doux">{d.produit} · {d.formule} · Bureau {d.bureau} · Souscripteur : <LienTiers id={d.souscripteur_id}>{d.souscripteur}</LienTiers> <span className="repere">1</span></span>
         {d.ne_pas_renouveler && <Statut couleur="orange">Non-renouvellement demandé</Statut>}</div>
       <Onglets<Onglet> actif={onglet} choisir={setOnglet} onglets={[{ code: 'synthese', libelle: 'Synthèse' }, { code: 'assures', libelle: `Assurés (${enVie.length})` }, { code: 'garanties', libelle: 'Garanties' },
-        { code: 'quittances', libelle: 'Quittances' }, { code: 'avenants', libelle: `Avenants (${av.donnees?.avenants.length ?? 0})` }, { code: 'beneficiaires', libelle: 'Bénéficiaires' }, { code: 'documents', libelle: 'Documents' }, { code: 'historique', libelle: 'Historique' }]} />
+        { code: 'cartes', libelle: 'Cartes' }, { code: 'quittances', libelle: 'Quittances' }, { code: 'avenants', libelle: `Avenants (${av.donnees?.avenants.length ?? 0})` }, { code: 'beneficiaires', libelle: 'Bénéficiaires' }, { code: 'documents', libelle: 'Documents' }, { code: 'historique', libelle: 'Historique' }]} />
       {onglet === 'synthese' && <><div className="grille trois">
         <Carte titre="Période en cours" repere={2}>{periode && <dl className="details">
           <dt>Du</dt><dd>{date(periode.date_debut)}</dd><dt>Au</dt><dd>{date(periode.date_fin)}</dd><dt>Prime totale</dt><dd>{montant(periode.prime_totale)} GNF</dd>
@@ -106,6 +107,7 @@ export function PageFichePolice() {
       {onglet === 'quittances' && <Carte titre="Quittances"><table className="tableau"><thead><tr><th>N°</th><th>Type</th><th>Période</th><th className="nombre">Prime nette</th><th className="nombre">Accessoires</th><th className="nombre">Taxes</th><th className="nombre">Total</th><th>Mode</th><th>Statut</th></tr></thead>
         <tbody>{d.quittances.map(q => <tr key={q.id}><td className="code">{q.numero}</td><td>{libelle(q.type)}</td><td>{date(q.periode_debut)} – {date(q.periode_fin)}</td><td className="nombre">{montant(q.prime_nette)}</td>
           <td className="nombre">{montant(q.accessoires)}</td><td className="nombre">{montant(q.taxes)}</td><td className="nombre">{montant(q.prime_totale)}</td><td>{MODES[q.mode_paiement] ?? libelle(q.mode_paiement)}</td><td><Statut valeur={q.statut} /></td></tr>)}</tbody></table></Carte>}
+      {onglet === 'cartes' && <CartesPolice policeId={d.id} />}
       {onglet === 'avenants' && <Avenants v={av.donnees} peutRegler={peut('AVENANT:CREER')} apres={m => { avis(m); void p.recharger(); void av.recharger(); }} />}
       {onglet === 'beneficiaires' && <Carte titre="Bénéficiaires du capital décès (versions)">{!d.beneficiaires.length ? <div className="vide">Aucune désignation.</div> :
         <table className="tableau"><thead><tr><th>Version</th><th>Effet</th><th>Mode</th><th>Bénéficiaire</th><th>Rang</th><th className="nombre">Quotité</th><th>Acceptant</th></tr></thead>

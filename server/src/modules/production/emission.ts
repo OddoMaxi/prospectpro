@@ -7,6 +7,7 @@
  */
 import { agentDe, convertirProspect, relationExistante } from '../commercial/prospects.js';
 import { controlerConcentrationCode } from '../conformite/alertes.js';
+import { creerCartes } from '../sante/cartes.js';
 import type { Executant } from '../../db/pool.js';
 import type { Acteur } from '../../noyau/acteur.js';
 import { ErreurMetier, exiger, interdit, nonTrouve } from '../../noyau/erreurs.js';
@@ -263,6 +264,8 @@ export async function emettre(q: Executant, acteur: Acteur, dossierId: string) {
   else await q.query(`UPDATE encaissement_attente SET statut = 'AFFECTE', affecte_a = $2 WHERE id = $1`, [encaissement!.id, policeId]);
   await q.query(`UPDATE dossier_souscription SET statut = 'EMIS', police_id = $2, etape_courante = 8 WHERE id = $1`, [dossierId, policeId]);
   await journaliser(q, { ...acteur.trace(), action: 'CREATION', objetType: 'police', objetId: policeId, apres: { numero, quittance: numeroQuittance, primeTotale: tarif.primeTotale, pieces: ecritures.map(e => e.numero) } });
+  // SAN-RG-011 : une carte numérique par personne couverte, dès l'émission
+  await creerCartes(q, acteur, policeId);
   // COM-RG-084 : concentration anormale de souscriptions sur le code prescripteur, signalée à la Conformité
   if (d.code_prescripteur_id) await controlerConcentrationCode(q, acteur, d.code_prescripteur_id);
   await publier(q, acteur, { type: 'POLICE_EMISE', objet: { type: 'police', id: policeId }, charge: { numero, assures: x.assures.length, dateEffet: x.dateEffet }, cleIdempotence: `police:${policeId}:emise` });

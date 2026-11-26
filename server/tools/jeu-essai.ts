@@ -223,6 +223,16 @@ console.log('Santé : nomenclatures, clinique agréée avec son administrateur e
   await structure('PHARMACIE DU NIGER', 'PHARMACIE', [['C01', 1]].slice(0, 0) as [string, number][]);
 }
 
+console.log('Cartes : une carte physique demandée, une imprimée à remettre…');
+{
+  const cartes = await import('../src/modules/sante/cartes.js');
+  const idCarte = async (policeId: string) => (await getPool().query(`SELECT c.id FROM carte_assure c JOIN police_assure pa ON pa.id = c.police_assure_id WHERE pa.police_id = $1 AND c.statut = 'ACTIVE' ORDER BY pa.rang_carte LIMIT 1`, [policeId])).rows[0].id as string;
+  const a = await idCarte(polices[2]!.policeId), b = await idCarte(polices[3]!.policeId);
+  await transaction(c.agentU.utilisateurId, q => cartes.demanderCartePhysique(q, c.agentU, a, { lieu: 'BUREAU', bureauId: c.bureau }));
+  await transaction(c.agentU.utilisateurId, q => cartes.demanderCartePhysique(q, c.agentU, b, { lieu: 'SIEGE', office: true }));
+  await transaction(c.gest.utilisateurId, q => cartes.imprimerCarte(q, c.gest, b));
+}
+
 // Comptes utilisables sans activation ni second facteur en développement (voir SECOND_FACTEUR_DISPENSE)
 await getPool().query(`UPDATE utilisateur SET statut = 'ACTIF' WHERE statut <> 'ACTIF'`);
 const comptes = (await getPool().query(`SELECT identifiant FROM utilisateur ORDER BY identifiant`)).rows.map(r => r.identifiant);

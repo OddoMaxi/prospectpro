@@ -12,6 +12,8 @@ import {
   structureDe, typesPrestataire,
 } from '../modules/sante/prestataires.js';
 import { enregistrerActe, enregistrerMedicament, FAMILLES_ACTE, importer, listerActes, listerMedicaments } from '../modules/sante/nomenclatures.js';
+import { cartesDePolice, confirmerRemise, declarerGroupeSanguin, declarerPerte, demanderCartePhysique, demanderRemise, fileProduction, imprimerCarte, verifierCarte } from '../modules/sante/cartes.js';
+import { Refus } from '../modules/auth/service.js';
 import { droit, ecrire } from './socle.js';
 
 const uuid = z.string().uuid();
@@ -91,6 +93,41 @@ export function routesSante(): Router {
     res.status(204).end();
   });
   r.get('/sante/prestataires/:id/journal', droit('PRESTATAIRES', 'CONSULTER'), async (req, res) => { res.json(await journalStructure(getPool(), uuid.parse(req.params.id))); });
+
+  // ---------------------------------------------------------------- cartes d'assuré (SAN-RG-011 à 019)
+  const paiement = z.discriminatedUnion('type', [z.object({ type: z.literal('COMPTE_PRODUCTION') }),
+    z.object({ type: z.literal('PAIEMENT_DIRECT'), moyen: z.enum(['ESPECES_SIEGE', 'BANQUE', 'MONNAIE_ELECTRONIQUE']), banque: z.string().optional() })]);
+  r.get('/sante/cartes/production', droit('CARTES_ASSURE', 'CONSULTER'), async (_req, res) => { res.json(await fileProduction(getPool())); });
+  r.get('/polices/:id/cartes', droit('SOUSCRIPTION', 'CONSULTER'), async (req, res) => { res.json(await cartesDePolice(getPool(), uuid.parse(req.params.id))); });
+  r.get('/sante/cartes/verification', droit('CARTES_ASSURE', 'CONSULTER'), async (req, res) => {
+    const d = z.object({ jeton: z.string().max(100).optional(), numero: z.string().max(30).optional() }).refine(x => x.jeton || x.numero).parse(req.query);
+    res.json(await verifierCarte(getPool(), d));
+  });
+  r.post('/sante/cartes/:id/physique', droit('CARTES_ASSURE', 'CREER'), async (req, res) => {
+    const d = z.object({ lieu: z.enum(['BUREAU', 'SIEGE', 'LIVRAISON']), bureauId: uuid.optional(), adresse: z.string().max(300).optional(), office: z.boolean().optional(), paiement: paiement.optional() }).parse(req.body);
+    res.json(await ecrire(req, q => demanderCartePhysique(q, req.acteur, uuid.parse(req.params.id), d)));
+  });
+  r.post('/sante/cartes/:id/impression', droit('CARTES_ASSURE', 'MODIFIER'), async (req, res) => { res.json(await ecrire(req, q => imprimerCarte(q, req.acteur, uuid.parse(req.params.id)))); });
+  r.post('/sante/cartes/:id/remise', droit('CARTES_ASSURE', 'MODIFIER'), async (req, res) => { res.json(await ecrire(req, q => demanderRemise(q, req.acteur, uuid.parse(req.params.id)))); });
+  r.post('/sante/cartes/:id/remise/confirmation', droit('CARTES_ASSURE', 'MODIFIER'), async (req, res) => {
+    const { code } = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
+    const x = await ecrire(req, q => confirmerRemise(q, req.acteur, uuid.parse(req.params.id), code));
+    if (x instanceof Refus) throw x.erreur;
+    res.json(x);
+  });
+  r.post('/sante/cartes/:id/perte', droit('CARTES_ASSURE', 'CREER'), async (req, res) => {
+    const { motif } = z.object({ motif: z.enum(['PERTE', 'VOL']) }).parse(req.body);
+    res.json(await ecrire(req, q => declarerPerte(q, req.acteur, uuid.parse(req.params.id), motif)));
+  });
+  r.post('/sante/cartes/:id/groupe-sanguin', droit('CARTES_ASSURE', 'MODIFIER'), async (req, res) => {
+    const d = z.object({ groupe: z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']).nullable(), consentementImpression: z.boolean() }).parse(req.body);
+    await ecrire(req, q => declarerGroupeSanguin(q, req.acteur, uuid.parse(req.params.id), d));
+    res.status(204).end();
+  });
+  r.get('/portail/cartes/verification', droit('SOINS', 'CONSULTER'), async (req, res) => {
+    const d = z.object({ jeton: z.string().max(100).optional(), numero: z.string().max(30).optional() }).refine(x => x.jeton || x.numero).parse(req.query);
+    res.json(await verifierCarte(getPool(), d));
+  });
 
   // ---------------------------------------------------------------- portail : administrateur du prestataire (§ 9.4.1)
   r.get('/portail/structure', droit('MA_STRUCTURE', 'CONSULTER'), async (req, res) => {

@@ -24,6 +24,7 @@ import { compteComptable, compteProductionDuBureau, lireCompteProduction, mouvem
 import { confirmerAcceptation, demanderAcceptation } from '../documents/acceptation.js';
 import { Refus } from '../auth/service.js';
 import { lirePoliceVie, type PoliceVie } from './renouvellement.js';
+import { creerCartes } from '../sante/cartes.js';
 
 const gnf = (n: number) => `${n.toLocaleString('fr-FR').replace(/ /g, ' ')} GNF`;
 const fr = (d: string) => d.split('-').reverse().join('/');
@@ -101,6 +102,7 @@ export async function ajouterAyantDroit(q: Executant, acteur: Acteur, policeId: 
   if (!role.rowCount) await attribuerRole(q, acteur, { tiersId: d.tiersId, role: 'ASSURE', dateDebut: jour });
   await q.query(`INSERT INTO avenant (id, numero, police_id, type, date_effet, description, difference_prime, quittance_id) VALUES ($1,$2,$3,'AJOUT_AYANT_DROIT',$4,$5,$6,$7)`,
     [avenantId, numero, policeId, jour, `Ajout de ${nom} (${d.qualite.toLowerCase()}), prime au prorata de ${jours(jour, periode.date_fin)} jours sur ${jours(periode.date_debut, periode.date_fin)}`, totale, quittanceId]);
+  await creerCartes(q, acteur, policeId); // SAN-RG-011 : carte du nouvel ayant droit
   await journaliser(q, { ...acteur.trace(), action: 'CREATION', objetType: 'avenant', objetId: avenantId, apres: { numero, police: p.numero, nette, totale } });
   await publier(q, acteur, { type: 'AVENANT_EMIS', objet: { type: 'avenant', id: avenantId }, charge: { police: p.numero, type: 'AJOUT_AYANT_DROIT', tiersId: d.tiersId }, cleIdempotence: `avenant:${avenantId}` });
   return { avenantId, numero, quittance: numeroQuittance, primeNette: nette, primeTotale: totale, joursCouverts: jours(jour, periode.date_fin) };

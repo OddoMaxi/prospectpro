@@ -5,6 +5,7 @@
  */
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { api, date, ErreurApi, montant } from '../noyau/api';
+import { CarteNumeriqueVue, type CarteNumerique } from '../pages/sante/Cartes';
 
 const CLE = 'prospectpro.enligne';
 const lire = () => { try { return JSON.parse(sessionStorage.getItem(CLE) ?? 'null') as { jeton: string; nom: string } | null; } catch { return null; } };
@@ -117,6 +118,7 @@ function ChoixFormule({ offre, espace, ouvrir, agir, enCours }: { offre: Offre |
   const [code, setCode] = useState('');
   if (!offre) return <div className="vide">Chargement…</div>;
   return (<>
+    {!!espace?.polices.length && <MesCartes />}
     {!!espace?.polices.length && <section className="el-carte"><h2>Mes contrats</h2>{espace.polices.map(p => <div key={p.id} className="el-ligne"><b className="code">{p.numero}</b><span>{p.produit}</span><span className="doux">échéance {date(p.echeance)}</span></div>)}</section>}
     <section className="el-carte"><h2>Formule</h2>
       <div className="el-formules">{offre.formules.map(f => <button key={f.id} className={`el-formule${choix === f.id ? ' choisie' : ''}`} onClick={() => setChoix(f.id)}>
@@ -265,3 +267,29 @@ function Suivi({ d, espace, nouveau }: { d: Dossier; espace: Espace | null; nouv
       {d.statut !== 'PAYE_A_EMETTRE' && <button className="bouton" onClick={nouveau}>Nouvelle souscription</button>}
     </section>);
 }
+
+/** AS-02 : cartes numériques (une par personne couverte), perte ou vol, carte physique sur demande. */
+function MesCartes() {
+  const session = lire();
+  const [cartes, setCartes] = useState<CarteNumerique[] | null>(null);
+  const [choisie, setChoisie] = useState(0);
+  const [message, setMessage] = useState<string | null>(null);
+  const charger = useCallback(() => api<CarteNumerique[]>('GET', '/public/en-ligne/cartes', undefined, session?.jeton).then(setCartes).catch(() => setCartes([])), [session?.jeton]);
+  useEffect(() => { void charger(); }, [charger]);
+  if (!cartes?.length) return null;
+  const c = cartes[Math.min(choisie, cartes.length - 1)]!;
+  const agir = async (chemin: string, corps: unknown, ok: string) => {
+    try { await api('POST', `/public/en-ligne/cartes/${c.id}/${chemin}`, corps, session?.jeton); setMessage(ok); await charger(); } catch (e) { setMessage((e as Error).message); }
+  };
+  return (
+    <section className="el-carte"><h2>Mes cartes</h2>
+      <CarteNumeriqueVue c={c} />
+      <div className="el-ligne">{cartes.map((x, i) => <button key={x.id} className={`bouton ${i === choisie ? '' : 'secondaire'} petit`} onClick={() => setChoisie(i)}>{x.assure.split(' ')[0]} ({x.rang})</button>)}</div>
+      {message && <div className="message info">{message}</div>}
+      <div className="el-ligne">
+        <button className="bouton secondaire" onClick={() => { if (window.confirm('Révoquer cette carte et en émettre une nouvelle ?')) void agir('perte', { motif: 'PERTE' }, 'Carte révoquée : votre nouvelle carte numérique est affichée.'); }}>Déclarer une perte ou un vol</button>
+        {c.production === 'NUMERIQUE_SEULE' && <button className="bouton secondaire" onClick={() => void agir('physique', { lieu: 'SIEGE' }, 'Carte physique demandée : vous serez prévenu par SMS dès son impression (retrait au siège).')}>Demander une carte physique</button>}
+      </div>
+    </section>);
+}
+

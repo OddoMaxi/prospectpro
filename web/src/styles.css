@@ -350,3 +350,15 @@ label input[type=checkbox], label input[type=radio] { vertical-align: middle; ma
 .pp-titre { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .pp-titre h1 { margin: 0; color: var(--titre); font-size: 24px; }
 .pp-titre .bouton { margin-left: auto; }
+
+/* Carte d'assuré (AS-02) */
+.carte-assure { display: grid; gap: 14px; max-width: 420px; }
+.carte-assure-recto { background: linear-gradient(135deg, #1b3f8f, #2f6fd6); color: #fff; border-radius: 14px; padding: 16px 18px; display: grid; gap: 10px; }
+.carte-assure-recto.bloquee { filter: grayscale(.8); }
+.carte-assure-corps { display: flex; gap: 14px; align-items: center; }
+.carte-assure-corps span, .carte-assure-corps strong { display: block; font-size: 13px; }
+.carte-assure-corps strong { font-size: 15px; }
+.carte-assure-photo { width: 64px; height: 76px; border-radius: 8px; background: #ffffff33; display: grid; place-items: center; font-size: 32px; }
+.carte-assure-recto small { opacity: .85; font-size: 11px; }
+.carte-assure-qr { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 14px; display: grid; justify-items: center; gap: 8px; text-align: center; }
+.carte-assure-qr small { color: var(--texte-doux); }

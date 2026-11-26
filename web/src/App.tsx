@@ -34,6 +34,7 @@ import { PageCanalDigital } from './pages/commercial/CanalDigital';
 import { PageAlertesConformite, PageImpayes } from './pages/production/Impayes';
 import { PageFichePrestataire, PageNomenclaturesSante, PagePrestataires, PageProfessionnels } from './pages/sante/Prestataires';
 import { PortailPrestataire } from './prestataire/Portail';
+import { PageCartes } from './pages/sante/Cartes';
 import { PageFicheImmobilisation, PageImmobilisations } from './pages/comptabilite/Immobilisations';
 import { ApplicationAgent, ROLES_RESEAU } from './agent/Agent';
 import { PageCartesPro, PageMouvementsPortefeuille, PagePrescripteurs, PageVerificationCarte } from './pages/commercial/Reseau';
@@ -82,6 +83,7 @@ export function App() {
         <Route path="sante/prestataires" element={<Protege droit="PRESTATAIRES:CONSULTER"><PagePrestataires /></Protege>} />
         <Route path="sante/prestataires/:id" element={<Protege droit="PRESTATAIRES:CONSULTER"><PageFichePrestataire /></Protege>} />
         <Route path="sante/professionnels" element={<Protege droit="PRESTATAIRES:CONSULTER"><PageProfessionnels /></Protege>} />
+        <Route path="sante/cartes" element={<Protege droit="CARTES_ASSURE:CONSULTER"><PageCartes /></Protege>} />
         <Route path="sante/nomenclatures" element={<Protege droit="NOMENCLATURES:CONSULTER"><PageNomenclaturesSante /></Protege>} />
         <Route path="production/impayes" element={<Protege droit="AVENANT:CONSULTER"><PageImpayes /></Protege>} />
         <Route path="conformite/alertes" element={<Protege droit="ALERTES_CONFORMITE:CONSULTER"><PageAlertesConformite /></Protege>} />

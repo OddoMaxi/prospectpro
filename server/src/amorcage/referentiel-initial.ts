@@ -57,6 +57,7 @@ export const FONCTIONS_SYSTEME: Record<string, string> = {
   PRESTATAIRES: 'Prestataires agréés, professionnels de santé, tarifs conventionnés',
   MA_STRUCTURE: 'Portail prestataire : professionnels et journal de la structure',
   SOINS: 'Portail prestataire : vérification des droits, prises en charge, actes, carnet',
+  CARTES_ASSURE: 'Cartes d\'assuré : production, remise, perte et vol',
   // Fonctions du socle (lot 1)
   AUDIT: 'Journal d\'audit',
   PARAMETRES: 'Paramètres et règles légales',
@@ -138,6 +139,7 @@ export const MATRICE: Record<string, Partial<Record<string, Code[]>>> = {
   ALERTES_CONFORMITE: { CONFORMITE: ['S', 'V1'] },
   PRESTATAIRES: { GEST_SANTE: ['S'], MEDECIN_CONSEIL: ['C', 'V1'], DAF: ['C', 'V2'], CONFORMITE: ['C'], DIRECTION_GENERALE: ['C'], COMPTABLE: ['C'] },
   MA_STRUCTURE: { ADMIN_PRESTATAIRE: ['S'] },
+  CARTES_ASSURE: { GEST_PRODUCTION: ['S'], AGENT_GENERAL: ['S'], COLLABORATEUR: ['S'], CANAL_DIGITAL: ['S'], GEST_SANTE: ['C'], CONFORMITE: ['C'], DIRECTION_GENERALE: ['C'] },
   SOINS: { MEDECIN_PRESCRIPTEUR: ['S'], BIOLOGISTE: ['S'], RADIOLOGUE: ['S'], PHARMACIEN: ['S'], EXECUTANT: ['S'] },
   AUDIT: { ADMIN_GENERAL: ['C', 'X'], CONFORMITE: ['C', 'X'], DIRECTION_GENERALE: ['C'] },
   PARAMETRES: { ADMIN_GENERAL: ['C', 'S'], COMITE_PARAMETRAGE: ['C', 'V1'], CONFORMITE: ['C', 'V2'], DIRECTION_GENERALE: ['C'] },
@@ -263,6 +265,8 @@ export const PARAMETRES: P[] = [
   // Santé (chapitre 9)
   ['SAN_VALIDITE_CARTE_ANS', 'Validité du support de carte (ans)', 'SAN', 'DUREE', '3'],
   ['SAN_CARTE_PHYSIQUE', 'Carte physique d\'assuré', 'SAN', 'LISTE', 'SUR_DEMANDE'],
+  ['SAN_FRAIS_REMPLACEMENT_CARTE', 'Frais de remplacement d\'une carte physique perdue ou volée (GNF)', 'SAN', 'MONTANT', '25000'],
+  ['SAN_FRAIS_LIVRAISON_CARTE', 'Frais de livraison d\'une carte physique (GNF, 0 = gratuit)', 'SAN', 'MONTANT', '0'],
   ['SAN_ACCES_CARNET_HEURES', 'Durée d\'accès au carnet de santé (heures)', 'SAN', 'DUREE', '24'],
   ['SAN_DELAI_PAIEMENT_PRESTATAIRES_JOURS', 'Délai de paiement des prestataires (jours)', 'SAN', 'DUREE', '30'],
   ['SAN_VALIDITE_ORDONNANCE_JOURS', 'Validité des ordonnances et bons d\'examens (jours)', 'SAN', 'DUREE', '7'],
@@ -328,6 +332,8 @@ export const MODELES_NOTIFICATION: { code: string; canal: string; contenu: strin
   { code: 'SUSPENSION_LEVEE', canal: 'SMS', contenu: 'Prospect Pro : paiement reçu pour votre police {{police}}. Vos garanties reprennent le {{reprise}}.' },
   { code: 'PRESTATAIRE_AGREE', canal: 'SMS', contenu: 'Prospect Pro : {{prestataire}} est agréé. Votre compte administrateur « {{identifiant}} » est actif sur le portail des prestataires.' },
   { code: 'PROFESSIONNEL_AGREE', canal: 'SMS', contenu: 'Prospect Pro : votre agrément de {{profession}} est accordé. Votre compte « {{identifiant}} » chez {{prestataire}} est actif.' },
+  { code: 'CARTE_REVOQUEE', canal: 'SMS', contenu: 'Prospect Pro : la carte {{carte}} de {{assure}} est révoquée ({{motif}}). Une nouvelle carte numérique est disponible dans votre espace.' },
+  { code: 'CARTE_A_RETIRER', canal: 'SMS', contenu: 'Prospect Pro : la carte de {{assure}} est imprimée. {{retrait}} Un code vous sera envoyé pour confirmer la remise.' },
   { code: 'POLICE_RESILIEE', canal: 'SMS', contenu: 'Prospect Pro : votre police {{police}} est résiliée à compter du {{date}} ({{motif}}). Les cartes de ses assurés ne sont plus valables.{{ristourne}}' },
   { code: 'POLICE_RESILIEE_AGENT', canal: 'SMS', contenu: 'Prospect Pro : la police {{police}} de {{souscripteur}} est résiliée à compter du {{date}} ({{motif}}).' },
   { code: 'POLICE_RENONCIATION', canal: 'SMS', contenu: 'Prospect Pro : votre renonciation à la police {{police}} est enregistrée. La police est annulée et {{montant}} vous seront remboursés.' },
@@ -627,6 +633,12 @@ export const MODELES_DOCUMENTS: { code: string; libelle: string; contenu: string
       'À défaut de paiement, les garanties de la police seront suspendues trente jours après l\'envoi de la présente lettre, soit le {{suspension}}, et la Compagnie pourra résilier la police dix jours plus tard, à compter du {{resiliation}}.',
       'Le paiement des sommes dues lève la suspension le lendemain à midi ; les soins reçus pendant la suspension ne sont pas couverts.', '',
       '## Article 30 du Code des assurances', '{{article_30}}', '---', 'Conakry, le {{date_document}}'].join('\n'),
+  },
+  {
+    code: 'CARTE_ASSURE', libelle: 'Carte d\'assuré (fiche d\'impression)',
+    contenu: ['# {{societe_raison_sociale}}', '## {{assure}}', 'Carte n° {{carte}}', 'Police n° {{police}}', 'Souscripteur : {{souscripteur}}', '{{groupe}}', 'Photo : depuis le dossier de souscription', '',
+      'N° de série : {{serie}} – support valable jusqu\'au {{validite}}', '---', '**Verso**', 'QR code de vérification : jeton {{jeton}}', 'QR code de l\'annuaire des partenaires : {{annuaire}}',
+      'Numéros utiles : {{telephone_compagnie}}', 'En cas de perte ou de vol, déclarez-le immédiatement dans votre espace assuré ou à votre bureau : la carte est révoquée et remplacée.'].join('\n'),
   },
   {
     code: 'ETAT_AMORTISSEMENTS', libelle: 'État justificatif des dotations aux amortissements',

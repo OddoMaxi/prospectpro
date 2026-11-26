@@ -72,6 +72,7 @@ export const MENU: Rubrique[] = [
     rubrique: 'Santé', entrees: [
       { libelle: 'Prestataires', chemin: '/sante/prestataires', droit: 'PRESTATAIRES:CONSULTER' },
       { libelle: 'Professionnels de santé', chemin: '/sante/professionnels', droit: 'PRESTATAIRES:CONSULTER' },
+      { libelle: 'Cartes d\'assurés', chemin: '/sante/cartes', droit: 'CARTES_ASSURE:CONSULTER' },
       { libelle: 'Actes et médicaments', chemin: '/sante/nomenclatures', droit: 'NOMENCLATURES:CONSULTER' },
     ],
   },

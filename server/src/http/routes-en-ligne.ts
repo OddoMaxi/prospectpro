@@ -21,6 +21,7 @@ import {
   canalDigital, confirmerIdentification, confirmerPaiement, controlerPersonnesDuDossier, corbeilleCellule, declarerPersonne, demanderPaiement, dossierDuClient,
   espaceClient, identifier, installerCanalDigital, offre, operateurs, ouvrirDossierEnLigne, rejeterDossierEnLigne,
 } from '../modules/production/enLigne.js';
+import { cartesDuClient, declarerGroupeSanguin, declarerPerte, demanderCartePhysique, exigerCarteDuClient } from '../modules/sante/cartes.js';
 import { droit, ecrire } from './socle.js';
 
 const uuid = z.string().uuid();
@@ -136,6 +137,24 @@ export function routesEnLignePubliques(ctx: ContexteAuth, config: Config): Route
   s.post(`/dossiers/:id/paiement`, async (req, res) => {
     const d = z.object({ operateur: z.string(), telephone: z.string().min(8).max(20) }).parse(req.body);
     res.json(await demanderPaiement(getPool(), req.clientEnLigne!, uuid.parse(req.params.id), d));
+  });
+  // Cartes numériques (AS-02) : perte ou vol, carte physique sur demande (frais éventuels réglés au bureau), groupe sanguin
+  s.get('/cartes', async (req, res) => { res.json(await cartesDuClient(getPool(), req.clientEnLigne!)); });
+  s.post('/cartes/:id/perte', async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    const { motif } = z.object({ motif: z.enum(['PERTE', 'VOL']) }).parse(req.body);
+    res.json(await ecrire(req, async q => { await exigerCarteDuClient(q, req.clientEnLigne!, id); return declarerPerte(q, req.acteur, id, motif); }));
+  });
+  s.post('/cartes/:id/physique', async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    const d = z.object({ lieu: z.enum(['BUREAU', 'SIEGE', 'LIVRAISON']), bureauId: uuid.optional(), adresse: z.string().max(300).optional() }).parse(req.body);
+    res.json(await ecrire(req, async q => { await exigerCarteDuClient(q, req.clientEnLigne!, id); return demanderCartePhysique(q, req.acteur, id, d); }));
+  });
+  s.post('/cartes/:id/groupe-sanguin', async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    const d = z.object({ groupe: z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']).nullable(), consentementImpression: z.boolean() }).parse(req.body);
+    await ecrire(req, async q => { await exigerCarteDuClient(q, req.clientEnLigne!, id); await declarerGroupeSanguin(q, req.acteur, id, d); });
+    res.status(204).end();
   });
   // Paiement simulé (hors production) : tient lieu de confirmation de l'opérateur pour les essais
   if (config.NODE_ENV !== 'production') {
