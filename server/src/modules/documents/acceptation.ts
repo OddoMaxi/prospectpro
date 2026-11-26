@@ -110,11 +110,12 @@ export async function preuvesDuDocument(q: Executant, documentId: string) {
 const OBJET_TELEPHONE = 'VERIFICATION_TELEPHONE';
 
 /** Envoie un code au numéro de la fiche ; le client le communique à la personne qui l'assiste (agent, gestionnaire). */
-export async function demanderVerificationTelephone(q: Executant, acteur: Acteur, tiersId: string) {
+export async function demanderVerificationTelephone(q: Executant, acteur: Acteur, tiersId: string, options: { connexion?: boolean } = {}) {
   const t = (await q.query<{ telephone: string | null; telephone_verifie: boolean | null }>('SELECT telephone, telephone_verifie FROM tiers WHERE id = $1 AND supprime_le IS NULL', [tiersId])).rows[0];
   if (!t) throw nonTrouve('Tiers');
   exiger(t.telephone, 'TELEPHONE_ABSENT', 'Aucun numéro de téléphone sur la fiche');
-  exiger(!t.telephone_verifie, 'DEJA_VERIFIE', 'Ce numéro est déjà vérifié', 409);
+  // Un numéro vérifié reçoit encore un code pour se connecter à la souscription en ligne (possession du téléphone)
+  exiger(!t.telephone_verifie || options.connexion, 'DEJA_VERIFIE', 'Ce numéro est déjà vérifié', 409);
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
   const sel = randomBytes(8).toString('hex');
   await q.query(`UPDATE code_usage_unique SET expire_le = now() WHERE tiers_id = $1 AND objet = $2 AND utilise_le IS NULL`, [tiersId, OBJET_TELEPHONE]);

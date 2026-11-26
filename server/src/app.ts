@@ -18,6 +18,7 @@ import { routesRemuneration } from './http/routes-remuneration.js';
 import { routesFinances } from './http/routes-finances.js';
 import { routesAgent } from './http/routes-agent.js';
 import { routesPubliques, routesReseau } from './http/routes-reseau.js';
+import { routesCanalDigital, routesEnLignePubliques } from './http/routes-en-ligne.js';
 import { configurerStockage, StockageLocal } from './moteurs/documents.js';
 // Enregistrement des opérations soumises à validation
 import './modules/parametrage/service.js';
@@ -55,8 +56,9 @@ export function creerApplication(config: Config) {
   app.get('/api/sante', (_req, res) => { res.json({ statut: 'ok', version: '3.0.0-lot1' }); });
   app.use('/api/auth', routesAuth(ctx));
   app.use('/api', routesPubliques());
+  app.use('/api', routesEnLignePubliques(ctx, config));
   app.use('/api/admin', authentifier(ctx), routesAdministration());
-  app.use('/api', authentifier(ctx), routesReferentiels(ctx), routesCatalogue(), routesSocle(), routesComptabilite(), routesCommercial(), routesProduction(), routesRemuneration(), routesFinances(), routesAgent(), routesReseau());
+  app.use('/api', authentifier(ctx), routesReferentiels(ctx), routesCatalogue(), routesSocle(), routesComptabilite(), routesCommercial(), routesProduction(), routesRemuneration(), routesFinances(), routesAgent(), routesReseau(), routesCanalDigital());
   app.use('/api', (_req, res) => { res.status(404).json({ code: 'NON_TROUVE', message: 'Route inconnue' }); });
   // Interface (application monopage) : fichiers statiques, puis page d'entrée pour toute autre adresse hors /api
   const web = resolve(config.WEB_DIR);

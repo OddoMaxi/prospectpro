@@ -153,6 +153,25 @@ const fmt = (d: string) => d.split('-').reverse().join('/');
 await transaction(c.tresorier.utilisateurId, q => importerReleve(q, c.tresorier, 'BICI', lireReleve([
   `${fmt(jour(4))};Virement reçu;25000000;VIR-DOT-2026`, `${fmt(jour(2))};Chèque 0007;-1770000;`, `${fmt(jour(1))};Frais de tenue de compte;-25000;FR-NOV`].join('\n'))));
 
+console.log('Canal digital : bureau 90, cellule, un dossier payé en ligne à émettre…');
+const ligne = await import('../src/modules/production/enLigne.js');
+const dossiersMod = await import('../src/modules/production/dossiers.js');
+await utilisateur(c.admin, 'canal.digital', [{ code: 'CANAL_DIGITAL' }], c.dg);
+await transaction(c.resp1.utilisateurId, q => ligne.installerCanalDigital(q, c.resp1, { code: '90', nom: 'Canal digital', adresse: 'Siège, Kaloum' }));
+{
+  const client = new Acteur(null);
+  const tel = '+224661234567';
+  const codeSms = () => sms.dernier(tel)!.texte.match(/(\d{6})/)![1]!;
+  const id = await transaction(null, q => ligne.identifier(q, client, { nom: 'SYLLA', prenoms: 'Mariama', dateNaissance: '1992-08-14', telephone: tel, sexe: 'F' }));
+  await transaction(null, q => ligne.confirmerIdentification(q, client, id.tiersId, codeSms()));
+  const d = await transaction(null, q => ligne.ouvrirDossierEnLigne(q, client, id.tiersId, { formuleId: c.formuleId, codePrescripteur: 'KARAMOKO' }));
+  await transaction(null, q => dossiersMod.tarifierDossier(q, client, d.id));
+  const r = await transaction(null, q => dossiersMod.presenterRecapitulatif(q, client, d.id));
+  await transaction(null, q => dossiersMod.accepterRecapitulatif(q, client, d.id, r.documentId, codeSms()));
+  const p = await ligne.demanderPaiement(getPool(), id.tiersId, d.id, { operateur: 'OM', telephone: tel });
+  await transaction(null, q => ligne.confirmerPaiement(q, client, { reference: p.reference, operateur: 'OM', montant: p.montant!, referenceExterne: 'OM-778812' }));
+}
+
 // Comptes utilisables sans activation ni second facteur en développement (voir SECOND_FACTEUR_DISPENSE)
 await getPool().query(`UPDATE utilisateur SET statut = 'ACTIF' WHERE statut <> 'ACTIF'`);
 const comptes = (await getPool().query(`SELECT identifiant FROM utilisateur ORDER BY identifiant`)).rows.map(r => r.identifiant);

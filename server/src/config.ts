@@ -28,6 +28,8 @@ const schema = z.object({
   /** Interface compilée (web/dist) servie par le même serveur ; absente en développement (serveur Vite). */
   WEB_DIR: z.string().default('../web/dist'),
   /** Identifiants dispensés du second facteur, séparés par des virgules : essais uniquement, interdit en production. */
+  /** Secret partagé avec l'opérateur de monnaie électronique : signature HMAC-SHA256 de ses confirmations de paiement. */
+  PAIEMENT_OPERATEUR_SECRET: z.string().min(16).optional(),
   SECOND_FACTEUR_DISPENSE: z.string().default('').transform(v => v.split(',').map(x => x.trim().toLowerCase()).filter(Boolean)),
 });
 

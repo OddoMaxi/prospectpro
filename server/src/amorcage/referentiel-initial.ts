@@ -302,6 +302,8 @@ export const MODELES_NOTIFICATION: { code: string; canal: string; contenu: strin
   { code: 'APPROVISIONNEMENT_CONFIRME', canal: 'SMS', contenu: 'Prospect Pro : approvisionnement {{numero}} de {{montant}} confirmé sur le compte de production du bureau {{bureau}}. Nouveau solde : {{solde}}.' },
   { code: 'COMPTE_PRODUCTION_SEUIL', canal: 'SMS', contenu: 'Prospect Pro : le solde du compte de production du bureau {{bureau}} est passé sous votre seuil d\'alerte : {{solde}}. Pensez à l\'approvisionner.' },
   { code: 'CHANGEMENT_INTERLOCUTEUR', canal: 'SMS', contenu: 'Prospect Pro : pour votre police {{police}}, votre interlocuteur commercial est désormais {{interlocuteur}} ({{telephone}}). Vos garanties ne changent pas.' },
+  { code: 'PAIEMENT_EN_LIGNE_RECU', canal: 'SMS', contenu: 'Prospect Pro : paiement de {{montant}} reçu pour votre dossier {{dossier}}. La cellule Canal digital le vérifie ; votre carte numérique sera disponible dès l\'émission.' },
+  { code: 'DOSSIER_EN_LIGNE_REJETE', canal: 'SMS', contenu: 'Prospect Pro : votre dossier {{dossier}} n\'a pas pu être accepté ({{motif}}).{{remboursement}}' },
   { code: 'POLICE_RESILIEE', canal: 'SMS', contenu: 'Prospect Pro : votre police {{police}} est résiliée à compter du {{date}} ({{motif}}). Les cartes de ses assurés ne sont plus valables.{{ristourne}}' },
   { code: 'POLICE_RESILIEE_AGENT', canal: 'SMS', contenu: 'Prospect Pro : la police {{police}} de {{souscripteur}} est résiliée à compter du {{date}} ({{motif}}).' },
   { code: 'POLICE_RENONCIATION', canal: 'SMS', contenu: 'Prospect Pro : votre renonciation à la police {{police}} est enregistrée. La police est annulée et {{montant}} vous seront remboursés.' },

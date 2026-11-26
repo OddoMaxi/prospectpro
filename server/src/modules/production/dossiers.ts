@@ -42,7 +42,7 @@ export interface Dossier {
   id: string; numero_dossier: string; canal: 'BUREAU' | 'JUNIOR' | 'EN_LIGNE' | 'COLLECTIF'; souscripteur_id: string; produit_id: string; formule_id: string;
   bureau_id: string; prepare_par_id: string; etape_courante: number; donnees: DonneesDossier; prime_nette: number | null; accessoires: number | null;
   taxes: number | null; prime_totale: number | null; acceptation_preuve_id: string | null; statut: string; expire_le: string; motif_rejet: string | null; police_id: string | null;
-  code_prescripteur_id: string | null;
+  code_prescripteur_id: string | null; encaissement_attente_id: string | null;
 }
 
 export async function lireDossier(q: Executant, id: string, verrou = false): Promise<Dossier> {

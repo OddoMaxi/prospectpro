@@ -293,3 +293,41 @@ label input[type=checkbox], label input[type=radio] { vertical-align: middle; ma
 /* Facture d'achat : une ligne par bloc */
 .ligne-achat { border: 1px solid var(--bord); border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
 .tableau tr.selection td { background: #eaf1fd; }
+
+/* Espace assuré – souscription en ligne (AS-07) */
+.el-app { min-height: 100vh; background: var(--fond); }
+.el-entete { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 24px; background: var(--carte); border-bottom: 1px solid var(--bord); }
+.el-entete b { display: block; color: var(--titre); font-size: 18px; }
+.el-entete small { color: var(--texte-doux); }
+.el-moi { display: flex; gap: 12px; align-items: center; }
+.el-contenu { max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
+.el-contenu h1 { color: var(--titre); font-size: 24px; margin: 0 0 18px; }
+.el-etapes { display: grid; grid-template-columns: repeat(8, 1fr); list-style: none; padding: 0; margin: 0 0 22px; gap: 4px; }
+.el-etapes li { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--texte-doux); text-align: center; }
+.el-etapes li span { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--bord); color: var(--texte); font-weight: 600; }
+.el-etapes li.fait span { background: var(--vert); color: #fff; }
+.el-etapes li.actif { color: var(--bleu); font-weight: 600; }
+.el-etapes li.actif span { background: var(--bleu); color: #fff; }
+.el-carte { background: var(--carte); border: 1px solid var(--bord); border-radius: var(--rayon); padding: 20px; margin-bottom: 16px; }
+.el-carte h2 { margin: 0 0 12px; color: var(--titre); font-size: 18px; }
+.el-carte .formulaire { margin: 12px 0; }
+.el-ligne { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.el-ligne input { max-width: 160px; }
+.el-formules { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.el-formule { display: grid; gap: 4px; text-align: left; padding: 14px; border: 1px solid var(--bord); border-radius: 8px; background: var(--carte); cursor: pointer; font: inherit; color: var(--texte); }
+.el-formule.choisie { border-color: var(--bleu); box-shadow: 0 0 0 2px #2f6fd633; }
+.el-formule small { color: var(--texte-doux); }
+.el-liste { list-style: none; padding: 0; margin: 0 0 12px; }
+.el-liste li { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--bord); }
+.el-choix { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.el-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+.el-actions:has(> :only-child) { justify-content: flex-end; }
+.el-ok { color: var(--vert); font-weight: 600; }
+.el-deux { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.el-payer { width: 100%; padding: 12px; font-size: 16px; }
+@media (max-width: 760px) {
+  .el-etapes { grid-template-columns: repeat(4, 1fr); row-gap: 10px; }
+  .el-deux { grid-template-columns: 1fr; }
+  .el-carte .formulaire { --colonnes: 1; }
+  .el-entete { padding: 12px 16px; }
+}
