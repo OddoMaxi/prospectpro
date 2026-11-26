@@ -279,6 +279,7 @@ export const PARAMETRES: P[] = [
   ['FIN_FAIBLE_VALEUR_ACTIVE', 'Passage en charge des biens de faible valeur (CGI art. 101-VIII) pour l\'exercice', 'FIN', 'BOOLEEN', 'OUI'],
   ['FIN_BENEFICIAIRE_TAXES', 'Code tiers de l\'administration fiscale (ordre de paiement automatique des déclarations ; AUCUN = à ordonner)', 'FIN', 'TEXTE', 'AUCUN'],
   ['FIN_ECHEANCE_DECLARATION_JOUR', 'Jour du mois suivant où la déclaration et son paiement sont dus', 'FIN', 'ENTIER', '15'],
+  ['FIN_RAPPROCHEMENT_ECART_JOURS', 'Écart maximal de dates pour le rapprochement automatique (jours)', 'FIN', 'DUREE', '5'],
   ['FIN_SCELLEMENT_MINUTES', 'Scellement des écritures par lots (minutes)', 'FIN', 'DUREE', '5'],
   // États (chapitre 14)
   ['ETA_AGREGAT_MIN', 'Taille minimale d\'un agrégat du rapport anonyme', 'ETA', 'ENTIER', '10'],
@@ -581,6 +582,14 @@ export const MODELES_DOCUMENTS: { code: string; libelle: string; contenu: string
     code: 'ETAT_AMORTISSEMENTS', libelle: 'État justificatif des dotations aux amortissements',
     contenu: ['# Dotations aux amortissements – {{periode}}', '| Bien | Catégorie | Mise en service | Valeur d\'origine | Dotation | Cumul | Valeur nette |',
       '{{#lignes}}| {{numero}} {{designation}} | {{categorie}} | {{mise_en_service}} | {{valeur}} | {{dotation}} | {{cumul}} | {{vnc}} |', '{{/lignes}}', 'Total des dotations : {{total}}.', '---', 'Conakry, le {{date_document}}'].join('\n'),
+  },
+  {
+    code: 'ETAT_RAPPROCHEMENT', libelle: 'État de rapprochement bancaire',
+    contenu: ['# État de rapprochement – {{banque}} au {{date}}', 'Compte {{compte}}', '| Libellé | Montant |',
+      '| Solde comptable | {{solde_comptable}} |', '| Écritures non présentes sur le relevé (à déduire) | {{ecritures_non_rapprochees}} |', '| Opérations du relevé non comptabilisées (à ajouter) | {{releve_non_comptabilise}} |',
+      '| Solde du relevé reconstitué | {{solde_reconstitue}} |', '| Solde du relevé déclaré | {{solde_releve}} |', '| Écart | {{ecart}} |', '',
+      '## Écritures non rapprochées', '| Date | Pièce | Libellé | Montant |', '{{#ecritures}}| {{date}} | {{piece}} | {{libelle}} | {{montant}} |', '{{/ecritures}}',
+      '## Opérations du relevé non comptabilisées', '| Date | Libellé | Référence | Montant |', '{{#releve}}| {{date}} | {{libelle}} | {{reference}} | {{montant}} |', '{{/releve}}', '---', 'Conakry, le {{date_document}}'].join('\n'),
   },
   {
     code: 'SORTIE_IMMOBILISATION', libelle: 'Sortie d\'immobilisation',

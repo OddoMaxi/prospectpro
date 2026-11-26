@@ -138,6 +138,21 @@ await transaction(comptable.utilisateurId, q => completerBien(q, comptable, srv,
 await transaction(comptable.utilisateurId, async q => saisirFactureAchat(q, comptable, { fournisseurTiersId: fournisseur, numeroFacture: 'IT-2026-131', dateFacture: aujourdhui(),
   pieceDocumentId: await pieceFictive('piece_comptable'), modeleReglement: '30J', lignes: [{ modele: 'FOURNITURES', libelle: 'Papier et toner', montantHT: 1_500_000, codeTaxe: 'TVA' }] }));
 
+console.log('Relevé BICIGUI importé : deux opérations rapprochées, des frais à comptabiliser…');
+const { importerReleve, lireReleve } = await import('../src/modules/finances/rapprochement.js');
+const { creerFicheImputation: fiche } = await import('../src/modules/finances/saisie.js');
+const jour = (n: number) => ajouterJours(aujourdhui(), -n);
+for (const [montant, reference, n] of [[25_000_000, 'VIR-DOT-2026', 5], [-1_770_000, 'CHQ-0007', 3], [-400_000, 'LOYER-NOV', 2]] as const) {
+  const f = await transaction(comptable.utilisateurId, async q => fiche(q, comptable, { journal: 'OD', date: jour(n), reference, libelle: `Mouvement ${reference}`, pieceDocumentId: await pieceFictive('piece_comptable'),
+    lignes: montant > 0 ? [{ compte: '5621', libelle: reference, debit: montant, credit: 0 }, { compte: '471', libelle: reference, debit: 0, credit: montant }]
+      : [{ compte: '6321', libelle: reference, debit: -montant, credit: 0 }, { compte: '5621', libelle: reference, debit: 0, credit: -montant }] }));
+  await valider(chef, f.demandeValidation);
+  await valider(c.daf, f.demandeValidation);
+}
+const fmt = (d: string) => d.split('-').reverse().join('/');
+await transaction(c.tresorier.utilisateurId, q => importerReleve(q, c.tresorier, 'BICI', lireReleve([
+  `${fmt(jour(4))};Virement reçu;25000000;VIR-DOT-2026`, `${fmt(jour(2))};Chèque 0007;-1770000;`, `${fmt(jour(1))};Frais de tenue de compte;-25000;FR-NOV`].join('\n'))));
+
 // Comptes utilisables sans activation ni second facteur en développement (voir SECOND_FACTEUR_DISPENSE)
 await getPool().query(`UPDATE utilisateur SET statut = 'ACTIF' WHERE statut <> 'ACTIF'`);
 const comptes = (await getPool().query(`SELECT identifiant FROM utilisateur ORDER BY identifiant`)).rows.map(r => r.identifiant);

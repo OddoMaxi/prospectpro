@@ -50,6 +50,7 @@ export const MENU: Rubrique[] = [
       { libelle: 'Approvisionnements à confirmer', chemin: '/finances/approvisionnements', droit: 'COMPTE_PRODUCTION:CREER' },
       { libelle: 'Journée comptable', chemin: '/finances/journee', droit: 'PAIEMENT:CONSULTER' },
       { libelle: 'Ordres de paiement', chemin: '/finances/paiements', droit: 'PAIEMENT:CONSULTER' },
+      { libelle: 'Rapprochement bancaire', chemin: '/finances/rapprochement', droit: 'PAIEMENT:CONSULTER' },
     ],
   },
   {

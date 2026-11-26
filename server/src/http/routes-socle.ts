@@ -31,7 +31,7 @@ const FONCTION_DE_L_OBJET: Record<string, string> = {
   // Lot 2
   intervenant: 'AGREMENT', police: 'SOUSCRIPTION', dossier_souscription: 'SOUSCRIPTION', compte_production: 'COMPTE_PRODUCTION', approvisionnement: 'COMPTE_PRODUCTION',
   mandat_affectation: 'COMPTE_PRODUCTION', facture_commission: 'FACTURE_COMMISSION', ordre_paiement: 'PAIEMENT', piece_comptable: 'ECRITURE_MANUELLE',
-  fiche_imputation: 'ECRITURE_MANUELLE', periode: 'ECRITURE_MANUELLE', declaration_taxe: 'DECLARATION_TAXE', demande_restitution: 'RESTITUTION', immobilisation: 'IMMOBILISATION',
+  fiche_imputation: 'ECRITURE_MANUELLE', periode: 'ECRITURE_MANUELLE', declaration_taxe: 'DECLARATION_TAXE', demande_restitution: 'RESTITUTION', immobilisation: 'IMMOBILISATION', banque_operateur: 'PAIEMENT',
 };
 async function droitSurObjet(req: Request, objetType: string, action: Action) {
   const f = FONCTION_DE_L_OBJET[objetType];

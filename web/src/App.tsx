@@ -28,6 +28,7 @@ import { PageFichesImputation } from './pages/comptabilite/Saisie';
 import { PageEditions, PageInterrogation, PageSchemas } from './pages/comptabilite/Etats';
 import { PageClotures, PageDeclarations } from './pages/comptabilite/Cloture';
 import { PageFacturesAchat } from './pages/comptabilite/Achats';
+import { PageRapprochement } from './pages/finances/Rapprochement';
 import { PageFicheImmobilisation, PageImmobilisations } from './pages/comptabilite/Immobilisations';
 import { ApplicationAgent, ROLES_RESEAU } from './agent/Agent';
 import { PageCartesPro, PageMouvementsPortefeuille, PagePrescripteurs, PageVerificationCarte } from './pages/commercial/Reseau';
@@ -79,6 +80,7 @@ export function App() {
         <Route path="production/renouvellements" element={<Protege droit="SOUSCRIPTION:CONSULTER"><PageRenouvellements /></Protege>} />
         <Route path="finances/approvisionnements" element={<Protege droit="COMPTE_PRODUCTION:CREER"><PageApprovisionnements /></Protege>} />
         <Route path="finances/journee" element={<Protege droit="PAIEMENT:CONSULTER"><PageJourneeComptable /></Protege>} />
+        <Route path="finances/rapprochement" element={<Protege droit="PAIEMENT:CONSULTER"><PageRapprochement /></Protege>} />
         <Route path="finances/paiements" element={<Protege droit="PAIEMENT:CONSULTER"><PagePaiements /></Protege>} />
         <Route path="comptabilite/schemas" element={<Protege droit="JOURNAUX_TIERS:CONSULTER"><PageSchemas /></Protege>} />
         <Route path="comptabilite/fiches" element={<Protege droit="ECRITURE_MANUELLE:CONSULTER"><PageFichesImputation /></Protege>} />

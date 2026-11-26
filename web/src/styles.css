@@ -292,3 +292,4 @@ label input[type=checkbox], label input[type=radio] { vertical-align: middle; ma
 
 /* Facture d'achat : une ligne par bloc */
 .ligne-achat { border: 1px solid var(--bord); border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
+.tableau tr.selection td { background: #eaf1fd; }

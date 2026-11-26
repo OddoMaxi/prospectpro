@@ -5,6 +5,7 @@ import { getPool } from '../db/pool.js';
 import { creerFicheImputation, creerJournal, fermerJournal, listerFiches, supprimerJournal } from '../modules/finances/saisie.js';
 import { anomalies, cloturerPeriode, enregistrerDepot, listerDeclarations, listerPeriodes, ordonnerPaiementDeclaration, preparerDeclaration } from '../modules/finances/cloture.js';
 import { calculerFactureAchat, listerFacturesAchat, modelesAchat, ordonnerPaiementFacture, saisirFactureAchat } from '../modules/finances/achats.js';
+import { annulerRapprochement, comptabiliserOperationBanque, editerEtat, etatRapprochement, importerReleve, lireReleve, rapprocher, rapprocherAutomatiquement, releve } from '../modules/finances/rapprochement.js';
 import { categories, completerBien, etatFiscal, ficheBien, proposerSortie, registre } from '../modules/finances/immobilisations.js';
 import { soldesTresorerie } from '../modules/finances/tresorerie.js';
 import { controlerCollectif } from '../modules/commercial/comptesProduction.js';
@@ -105,6 +106,41 @@ export function routesFinances(): Router {
   r.post('/immobilisations/:id/sortie', droit('IMMOBILISATION', 'CREER'), async (req, res) => {
     const d = z.object({ type: z.enum(['CESSION', 'REBUT']), date, prix: z.number().int().min(0).optional(), banque: z.string().optional(), motif: z.string().min(1).max(300) }).parse(req.body);
     res.status(201).json(await ecrire(req, q => proposerSortie(q, req.acteur, uuid.parse(req.params.id), d)));
+  });
+  // ---------------------------------------------------------------- Rapprochement bancaire (FIN-RG-042, 043)
+  const banque = z.string().regex(/^[A-Z0-9]{2,6}$/);
+  r.get('/rapprochement/:banque', droit('PAIEMENT', 'CONSULTER'), async (req, res) => {
+    const f = z.object({ statut: z.string().optional(), du: date.optional(), au: date.optional() }).parse(req.query);
+    res.json(await releve(getPool(), banque.parse(req.params.banque), f));
+  });
+  r.post('/rapprochement/:banque/releve', droit('PAIEMENT', 'CREER'), async (req, res) => {
+    const d = z.object({ contenu: z.string().min(1).max(2_000_000) }).parse(req.body);
+    const lignes = lireReleve(d.contenu);
+    res.status(201).json(await ecrire(req, q => importerReleve(q, req.acteur, banque.parse(req.params.banque), lignes)));
+  });
+  r.post('/rapprochement/:banque/automatique', droit('PAIEMENT', 'CREER'), async (req, res) => {
+    res.json(await ecrire(req, q => rapprocherAutomatiquement(q, req.acteur, banque.parse(req.params.banque))));
+  });
+  r.post('/releve-lignes/:id/rapprochement', droit('PAIEMENT', 'CREER'), async (req, res) => {
+    const { ligneEcritureId } = z.object({ ligneEcritureId: uuid }).parse(req.body);
+    await ecrire(req, q => rapprocher(q, req.acteur, uuid.parse(req.params.id), ligneEcritureId));
+    res.status(204).end();
+  });
+  r.delete('/releve-lignes/:id/rapprochement', droit('PAIEMENT', 'CREER'), async (req, res) => {
+    await ecrire(req, q => annulerRapprochement(q, req.acteur, uuid.parse(req.params.id)));
+    res.status(204).end();
+  });
+  r.post('/releve-lignes/:id/comptabilisation', droit('PAIEMENT', 'CREER'), async (req, res) => {
+    const d = z.object({ modele: z.string().optional(), compte: z.string().optional(), pieceDocumentId: uuid }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => comptabiliserOperationBanque(q, req.acteur, uuid.parse(req.params.id), d)));
+  });
+  r.get('/rapprochement/:banque/etat', droit('PAIEMENT', 'CONSULTER'), async (req, res) => {
+    const f = z.object({ date, soldeReleve: z.coerce.number().int().optional() }).parse(req.query);
+    res.json(await etatRapprochement(getPool(), banque.parse(req.params.banque), f.date, f.soldeReleve));
+  });
+  r.post('/rapprochement/:banque/etat', droit('PAIEMENT', 'CONSULTER'), async (req, res) => {
+    const f = z.object({ date, soldeReleve: z.number().int().optional() }).parse(req.body);
+    res.status(201).json(await ecrire(req, q => editerEtat(q, req.acteur, banque.parse(req.params.banque), f.date, f.soldeReleve)));
   });
   r.get('/declarations-taxes', droit('DECLARATION_TAXE', 'CONSULTER'), async (_req, res) => { res.json(await listerDeclarations(getPool())); });
   r.post('/declarations-taxes', droit('DECLARATION_TAXE', 'CREER'), async (req, res) => {
