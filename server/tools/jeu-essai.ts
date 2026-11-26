@@ -123,6 +123,21 @@ await transaction(comptable.utilisateurId, async q => creerFicheImputation(q, co
   lignes: [{ compte: '6026', libelle: 'Frais d\'expertise', debit: 250_000, credit: 0 }, { compte: '571', libelle: 'Caisse du siège', debit: 0, credit: 250_000 }],
 }));
 
+console.log('Achats : serveurs immobilisés et mis en service, facture de fournitures à valider…');
+const { saisirFactureAchat } = await import('../src/modules/finances/achats.js');
+const { completerBien } = await import('../src/modules/finances/immobilisations.js');
+await transaction(c.admin.utilisateurId, q => creerCodeTaxe(q, c.admin, { code: 'TVA', libelle: 'Taxe sur les achats (non récupérable)', type: 'DEDUCTIBLE', taux: 0.18, assiette: 'HT', compteNumero: '4351', exigibilite: 'EMISSION', dateEffet: '2020-01-01' }));
+const fournisseur = await personne(c.admin, 'INFOTECH GUINEE', '1980-01-01');
+const annee = aujourdhui().slice(0, 4);
+const serveurs = await transaction(comptable.utilisateurId, async q => saisirFactureAchat(q, comptable, { fournisseurTiersId: fournisseur, numeroFacture: 'IT-2026-118', dateFacture: `${annee}-09-20`,
+  pieceDocumentId: await pieceFictive('piece_comptable'), modeleReglement: '30JFM', lignes: [{ modele: 'INFORMATIQUE', libelle: 'Serveurs', montantHT: 9_000_000, codeTaxe: 'TVA' }] }));
+await valider(chef, serveurs.demandeValidation);
+await valider(c.daf, serveurs.demandeValidation);
+const srv = (await getPool().query('SELECT id FROM immobilisation WHERE fiche_imputation_id = $1', [serveurs.ficheId])).rows[0].id;
+await transaction(comptable.utilisateurId, q => completerBien(q, comptable, srv, { dateMiseEnService: `${annee}-10-01`, localisation: { lieu: 'Salle serveurs, siège' } }));
+await transaction(comptable.utilisateurId, async q => saisirFactureAchat(q, comptable, { fournisseurTiersId: fournisseur, numeroFacture: 'IT-2026-131', dateFacture: aujourdhui(),
+  pieceDocumentId: await pieceFictive('piece_comptable'), modeleReglement: '30J', lignes: [{ modele: 'FOURNITURES', libelle: 'Papier et toner', montantHT: 1_500_000, codeTaxe: 'TVA' }] }));
+
 // Comptes utilisables sans activation ni second facteur en développement (voir SECOND_FACTEUR_DISPENSE)
 await getPool().query(`UPDATE utilisateur SET statut = 'ACTIF' WHERE statut <> 'ACTIF'`);
 const comptes = (await getPool().query(`SELECT identifiant FROM utilisateur ORDER BY identifiant`)).rows.map(r => r.identifiant);

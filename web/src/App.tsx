@@ -27,6 +27,8 @@ import { PageApprovisionnements, PageJourneeComptable, PagePaiements } from './p
 import { PageFichesImputation } from './pages/comptabilite/Saisie';
 import { PageEditions, PageInterrogation, PageSchemas } from './pages/comptabilite/Etats';
 import { PageClotures, PageDeclarations } from './pages/comptabilite/Cloture';
+import { PageFacturesAchat } from './pages/comptabilite/Achats';
+import { PageFicheImmobilisation, PageImmobilisations } from './pages/comptabilite/Immobilisations';
 import { ApplicationAgent, ROLES_RESEAU } from './agent/Agent';
 import { PageCartesPro, PageMouvementsPortefeuille, PagePrescripteurs, PageVerificationCarte } from './pages/commercial/Reseau';
 
@@ -81,6 +83,9 @@ export function App() {
         <Route path="comptabilite/schemas" element={<Protege droit="JOURNAUX_TIERS:CONSULTER"><PageSchemas /></Protege>} />
         <Route path="comptabilite/fiches" element={<Protege droit="ECRITURE_MANUELLE:CONSULTER"><PageFichesImputation /></Protege>} />
         <Route path="comptabilite/interrogation" element={<Protege droit="JOURNAUX_TIERS:CONSULTER"><PageInterrogation /></Protege>} />
+        <Route path="comptabilite/achats" element={<Protege droit="FACTURE_ACHAT:CONSULTER"><PageFacturesAchat /></Protege>} />
+        <Route path="comptabilite/immobilisations" element={<Protege droit="IMMOBILISATION:CONSULTER"><PageImmobilisations /></Protege>} />
+        <Route path="comptabilite/immobilisations/:id" element={<Protege droit="IMMOBILISATION:CONSULTER"><PageFicheImmobilisation /></Protege>} />
         <Route path="comptabilite/declarations" element={<Protege droit="DECLARATION_TAXE:CONSULTER"><PageDeclarations /></Protege>} />
         <Route path="comptabilite/clotures" element={<Protege droit="ECRITURE_MANUELLE:CONSULTER"><PageClotures /></Protege>} />
         <Route path="comptabilite/editions" element={<Protege droit="JOURNAUX_TIERS:CONSULTER"><PageEditions /></Protege>} />

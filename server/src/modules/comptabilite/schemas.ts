@@ -26,6 +26,10 @@ export const REGLES = {
   VERSEMENTS_AVANCE: 'Auxiliaire de l\'assuré (versements reçus d\'avance)',
   REMBOURSEMENT: 'Compte de production ou compte de paiement remboursé',
   COMPTE_TAXE: 'Compte de la taxe déclarée',
+  FOURNISSEUR: 'Auxiliaire du fournisseur (dettes fournisseurs)',
+  DOTATIONS: 'Comptes de dotation des catégories d\'immobilisations',
+  AMORTISSEMENTS: 'Comptes d\'amortissement des catégories d\'immobilisations',
+  IMMOBILISATIONS: 'Compte d\'immobilisation de la catégorie du bien',
 } as const;
 
 export const schemaDefinition = z.object({

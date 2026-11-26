@@ -167,7 +167,7 @@ export async function comptabiliser(q: Executant, acteur: Acteur, ev: Evenement)
   return generees;
 }
 
-async function lettrer(q: Executant, auxiliaireId: string, lignes: string[], type: 'AUTOMATIQUE' | 'MANUEL', auteurId: string | null) {
+export async function lettrer(q: Executant, auxiliaireId: string, lignes: string[], type: 'AUTOMATIQUE' | 'MANUEL', auteurId: string | null) {
   const { valeur } = await prochaineValeur(q, 'LETTRAGE', 'GLOBAL', 2_147_483_647);
   const code = `L${valeur.toString(36).toUpperCase().padStart(9, '0')}`;
   const r = await q.query<{ id: string }>('INSERT INTO lettrage (code, compte_auxiliaire_id, type, partiel, auteur_id) VALUES ($1,$2,$3,false,$4) RETURNING id', [code, auxiliaireId, type, auteurId]);

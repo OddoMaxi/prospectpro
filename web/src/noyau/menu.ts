@@ -58,6 +58,8 @@ export const MENU: Rubrique[] = [
       { libelle: 'Schémas comptables', chemin: '/comptabilite/schemas', droit: 'JOURNAUX_TIERS:CONSULTER' },
       { libelle: 'Fiches d\'imputation', chemin: '/comptabilite/fiches', droit: 'ECRITURE_MANUELLE:CONSULTER' },
       { libelle: 'Interrogation', chemin: '/comptabilite/interrogation', droit: 'JOURNAUX_TIERS:CONSULTER' },
+      { libelle: 'Factures d\'achat', chemin: '/comptabilite/achats', droit: 'FACTURE_ACHAT:CONSULTER' },
+      { libelle: 'Immobilisations', chemin: '/comptabilite/immobilisations', droit: 'IMMOBILISATION:CONSULTER' },
       { libelle: 'Déclarations', chemin: '/comptabilite/declarations', droit: 'DECLARATION_TAXE:CONSULTER' },
       { libelle: 'Clôtures', chemin: '/comptabilite/clotures', droit: 'ECRITURE_MANUELLE:CONSULTER' },
       { libelle: 'Journaux et éditions', chemin: '/comptabilite/editions', droit: 'JOURNAUX_TIERS:CONSULTER' },

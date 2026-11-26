@@ -6,8 +6,11 @@
  *   écart entre les comptes de production et leur collectif. Elles bloquent la clôture de la période.
  * - Clôture mensuelle : PPNA police par police, au prorata au jour près sur la prime nette (EVT-13), état justificatif,
  *   reprise automatique au premier jour de la période suivante ; la période passe CLÔTURÉE.
+ * - Dotations aux amortissements de tous les biens en service à chaque clôture (EVT-17, FIN-RG-143).
  * - Déclaration de taxe : montant égal au solde du compte de taxe de la période ; validation comptable puis DAF ;
- *   écriture de liquidation (EVT-14) ; une seule déclaration par taxe et par période.
+ *   écriture de liquidation (EVT-14) et ordre de paiement à l'administration fiscale (automatique si son code tiers
+ *   est paramétré, sinon ordonné par le comptable) ; dépôt daté et référencé (FIN-RG-094) ; paiement EVT-14 au journal
+ *   de trésorerie ; une seule déclaration par taxe et par période.
  */
 import type { Executant } from '../../db/pool.js';
 import type { Acteur } from '../../noyau/acteur.js';
@@ -19,6 +22,9 @@ import { enregistrerOperation, soumettre } from '../../moteurs/validation.js';
 import { genererDocument } from '../../moteurs/documents.js';
 import { comptabiliser, extourner } from '../comptabilite/moteur.js';
 import { controlerCollectif } from '../commercial/comptesProduction.js';
+import { entier, valeurParametre } from '../../moteurs/parametres.js';
+import { doterAmortissements } from './immobilisations.js';
+import { enregistrerExecution, ordonnerPaiement } from './paiements.js';
 
 export const OPERATION_DECLARATION = 'DECLARATION_TAXE';
 const gnf = (n: number) => `${n.toLocaleString('fr-FR').replace(/ /g, ' ')} GNF`;
@@ -59,6 +65,8 @@ export async function cloturerPeriode(q: Executant, acteur: Acteur, mois: string
   const fin = finDuMois(mois);
   const a = await anomalies(q, fin);
   if (a.length) throw new ErreurMetier('ANOMALIES_BLOQUANTES', `Clôture impossible : ${a.join(' ; ')}`, 422, { anomalies: a });
+  // FIN-RG-143 : dotations aux amortissements de la période
+  const amortissements = await doterAmortissements(q, acteur, mois, fin);
   // PPNA police par police (périodes en cours à la fin du mois)
   const periodes = (await q.query<{ police_id: string; numero: string; date_debut: string; date_fin: string; prime_nette: number }>(
     `SELECT pp.police_id, po.numero, pp.date_debut::text, pp.date_fin::text, pp.prime_nette FROM police_periode pp JOIN police po ON po.id = pp.police_id
@@ -80,9 +88,9 @@ export async function cloturerPeriode(q: Executant, acteur: Acteur, mois: string
     reprise = (await extourner(q, acteur, ecritureId, `Reprise de la PPNA de ${mois}`, ajouterJours(fin, 1))).numero;
   }
   await q.query(`UPDATE periode SET statut = 'CLOTUREE', cloturee_par = $2, anomalies = '[]' WHERE id = $1`, [p.id, acteur.utilisateurId]);
-  await journaliser(q, { ...acteur.trace(), action: 'PARAMETRAGE', objetType: 'periode', objetId: p.id, apres: { mois, statut: 'CLOTUREE', ppna: total, polices: lignes.length, reprise } });
+  await journaliser(q, { ...acteur.trace(), action: 'PARAMETRAGE', objetType: 'periode', objetId: p.id, apres: { mois, statut: 'CLOTUREE', ppna: total, polices: lignes.length, reprise, amortissements: amortissements.total } });
   await publier(q, acteur, { type: 'CLOTURE_PERIODE', objet: { type: 'periode', id: p.id }, charge: { mois, ppna: total }, cleIdempotence: `cloture:${mois}` });
-  return { mois, ppna: total, polices: lignes.length, reprise };
+  return { mois, ppna: total, polices: lignes.length, reprise, amortissements: amortissements.total };
 }
 
 // ---------------------------------------------------------------- déclarations de taxes (FIN-RG-092, 093)
@@ -127,20 +135,66 @@ enregistrerOperation(OPERATION_DECLARATION, {
       `SELECT dt.numero, dt.solde, ct.compte_id, dt.document_id FROM declaration_taxe dt JOIN code_taxe ct ON ct.id = dt.code_taxe_id WHERE dt.id = $1 FOR UPDATE OF dt`, [demande.objet_id])).rows[0]!;
     let ecritureId: string | null = null;
     if (Number(d.solde) > 0) {
-      const [e] = await comptabiliser(q, acteur, { codeEvt: 'EVT-14', reference: `DECL ${d.numero}`, pieceDocumentId: d.document_id, montants: { MONTANT: Number(d.solde) },
+      const [e] = await comptabiliser(q, acteur, { codeEvt: 'EVT-14', reference: `DECL ${d.numero}`, pieceDocumentId: d.document_id, montants: { MONTANT: Number(d.solde), PAIEMENT: 0 },
         comptes: { COMPTE_TAXE: { compteId: d.compte_id } } });
       ecritureId = e!.id;
     }
     await q.query(`UPDATE declaration_taxe SET statut = 'VALIDEE', ecriture_id = $2 WHERE id = $1`, [demande.objet_id, ecritureId]);
+    // FIN-RG-093 : ordre de paiement généré avec la validation quand l'administration fiscale est paramétrée
+    const code = await valeurParametre(q, 'FIN_BENEFICIAIRE_TAXES').catch(() => 'AUCUN');
+    if (Number(d.solde) > 0 && code && code !== 'AUCUN') {
+      const c = (await q.query<{ tiers_id: string; coordonnee_id: string | null }>(
+        `SELECT t.id AS tiers_id, (SELECT cp.id FROM coordonnee_paiement cp WHERE cp.tiers_id = t.id AND cp.statut = 'VERIFIEE' AND cp.supprime_le IS NULL ORDER BY cp.principale DESC LIMIT 1) AS coordonnee_id
+           FROM tiers t WHERE t.code_tiers = $1`, [code])).rows[0];
+      if (c?.coordonnee_id) await ordonnerPaiementDeclaration(q, acteur, demande.objet_id, { beneficiaireTiersId: c.tiers_id, coordonneeId: c.coordonnee_id });
+    }
     await journaliser(q, { ...acteur.trace(), action: 'VALIDATION', objetType: 'declaration_taxe', objetId: demande.objet_id, apres: { liquidation: ecritureId } });
     await publier(q, acteur, { type: 'DECLARATION_TAXE_VALIDEE', objet: { type: 'declaration_taxe', id: demande.objet_id }, charge: { numero: d.numero, montant: Number(d.solde) }, cleIdempotence: `declaration:${demande.objet_id}` });
   },
 });
 
+/** Ordre de paiement de la déclaration validée à l'administration fiscale (chaîne de paiement, type TAXE). */
+export async function ordonnerPaiementDeclaration(q: Executant, acteur: Acteur, id: string, d: { beneficiaireTiersId: string; coordonneeId: string }) {
+  const x = (await q.query<{ numero: string; solde: string; statut: string }>('SELECT numero, solde, statut FROM declaration_taxe WHERE id = $1 FOR UPDATE', [id])).rows[0];
+  if (!x) throw nonTrouve('Déclaration');
+  exiger(['VALIDEE', 'DEPOSEE'].includes(x.statut), 'DECLARATION_NON_VALIDEE', 'Seule une déclaration validée et non payée se paie');
+  exiger(Number(x.solde) > 0, 'RIEN_A_PAYER', 'Déclaration sans montant à payer');
+  const encours = await q.query(`SELECT 1 FROM ordre_paiement WHERE objet_type = 'declaration_taxe' AND objet_id = $1 AND statut <> 'REJETE'`, [id]);
+  exiger(!encours.rowCount, 'ORDRE_EXISTANT', 'Un ordre de paiement existe déjà pour cette déclaration', 409);
+  return ordonnerPaiement(q, acteur, { type: 'TAXE', beneficiaireTiersId: d.beneficiaireTiersId, coordonneeId: d.coordonneeId, montant: Number(x.solde), objet: { type: 'declaration_taxe', id },
+    donnees: { libelle: `Déclaration ${x.numero}`, reference: x.numero } });
+}
+
+/** FIN-RG-094 : dépôt de la déclaration, daté et référencé. */
+export async function enregistrerDepot(q: Executant, acteur: Acteur, id: string, d: { date: string; reference: string }) {
+  exiger(/^\d{4}-\d{2}-\d{2}$/.test(d.date) && d.date <= aujourdhui() && d.reference?.trim(), 'DEPOT_INVALIDE', 'Date (passée) et référence du dépôt obligatoires');
+  const x = (await q.query<{ statut: string }>('SELECT statut FROM declaration_taxe WHERE id = $1 FOR UPDATE', [id])).rows[0];
+  if (!x) throw nonTrouve('Déclaration');
+  exiger(['VALIDEE', 'PAYEE', 'DEPOSEE'].includes(x.statut), 'DECLARATION_NON_VALIDEE', 'Une déclaration est déposée après sa validation');
+  await q.query(`UPDATE declaration_taxe SET date_depot = $2, reference_depot = $3, statut = CASE WHEN statut = 'VALIDEE' THEN 'DEPOSEE' ELSE statut END WHERE id = $1`, [id, d.date, d.reference.trim()]);
+  await journaliser(q, { ...acteur.trace(), action: 'MODIFICATION', objetType: 'declaration_taxe', objetId: id, apres: { depot: d } });
+}
+
+// Paiement de la déclaration : « État, taxes déclarées à payer » soldé par la banque (EVT-14, journal de trésorerie)
+enregistrerExecution('TAXE', async (q, acteur, ordre, tresorerie, avisDocumentId) => {
+  const x = (await q.query<{ numero: string }>('SELECT numero FROM declaration_taxe WHERE id = $1', [ordre.objet_id])).rows[0]!;
+  const [e] = await comptabiliser(q, acteur, { codeEvt: 'EVT-14', reference: `PAIE ${x.numero}`, pieceDocumentId: avisDocumentId, journalTresorerie: tresorerie.journal,
+    montants: { MONTANT: 0, PAIEMENT: ordre.montant }, comptes: { TRESORERIE: { compteId: tresorerie.compteId } } });
+  await q.query(`UPDATE declaration_taxe SET statut = 'PAYEE' WHERE id = $1`, [ordre.objet_id]);
+  return { ecritureId: e!.id, libelle: `Déclaration ${x.numero}` };
+});
+
 export async function listerDeclarations(q: Executant) {
-  return (await q.query(
-    `SELECT dt.id, dt.numero, ct.code, ct.libelle, dt.periode, dt.assiette, dt.montant_collecte, dt.solde, dt.statut, dt.reference_depot, e.numero_piece
+  const jour = await entier(q, 'FIN_ECHEANCE_DECLARATION_JOUR').catch(() => 15);
+  const r = (await q.query<{ periode: string; statut: string }>(
+    `SELECT dt.id, dt.numero, ct.code, ct.libelle, dt.periode, dt.assiette, dt.montant_collecte, dt.solde, dt.statut, dt.reference_depot, dt.date_depot, e.numero_piece,
+            (SELECT o.numero || ' ' || o.statut FROM ordre_paiement o WHERE o.objet_type = 'declaration_taxe' AND o.objet_id = dt.id ORDER BY o.cree_le DESC LIMIT 1) AS ordre
        FROM declaration_taxe dt JOIN code_taxe ct ON ct.id = dt.code_taxe_id LEFT JOIN ecriture e ON e.id = dt.ecriture_id ORDER BY dt.periode DESC, ct.code`)).rows;
+  // FIN-RG-094 : échéance de dépôt et de paiement, retard signalé
+  return r.map(x => {
+    const echeance = `${ajouterJours(finDuMois(x.periode), 1).slice(0, 8)}${String(jour).padStart(2, '0')}`;
+    return { ...x, echeance, enRetard: x.statut !== 'PAYEE' && echeance < aujourdhui() };
+  });
 }
 
 export async function listerPeriodes(q: Executant) {

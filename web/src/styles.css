@@ -289,3 +289,6 @@ label input[type=checkbox], label input[type=radio] { vertical-align: middle; ma
 .avenant-choix button { display: grid; gap: 2px; text-align: left; padding: 12px 14px; border: 1px solid var(--bord); border-radius: 8px; background: var(--carte); cursor: pointer; font: inherit; color: var(--texte); }
 .avenant-choix button:hover { border-color: var(--bleu); background: #f6f9fd; }
 .avenant-choix small { color: var(--texte-doux); }
+
+/* Facture d'achat : une ligne par bloc */
+.ligne-achat { border: 1px solid var(--bord); border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
