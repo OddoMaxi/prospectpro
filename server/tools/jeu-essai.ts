@@ -172,6 +172,19 @@ await transaction(c.resp1.utilisateurId, q => ligne.installerCanalDigital(q, c.r
   await transaction(null, q => ligne.confirmerPaiement(q, client, { reference: p.reference, operateur: 'OM', montant: p.montant!, referenceExterne: 'OM-778812' }));
 }
 
+console.log('Impayé : prime supplémentaire d\'un avenant de correction, mise en demeure à valider…');
+{
+  const { proposerCorrection } = await import('../src/modules/production/vieContrat.js');
+  const { traiterImpayes } = await import('../src/modules/production/nonPaiement.js');
+  // Deuxième tranche de tarif (46-65 ans) pour qu'une correction de date de naissance change la prime
+  await getPool().query(`UPDATE tarif SET age_max = 45 WHERE formule_id = $1 AND qualite = 'ASSURE_PRINCIPAL'`, [c.formuleId]);
+  await getPool().query(`INSERT INTO tarif (formule_id, qualite, age_min, age_max, prime_nette, date_effet) SELECT formule_id, qualite, 46, 65, 6290000, date_effet FROM tarif WHERE formule_id = $1 AND qualite = 'ASSURE_PRINCIPAL'`, [c.formuleId]);
+  const keita = (await getPool().query(`SELECT id FROM police_assure WHERE police_id = $1 AND qualite = 'ASSURE_PRINCIPAL'`, [polices[1]!.policeId])).rows[0].id;
+  const prop = await transaction(c.agentU.utilisateurId, q => proposerCorrection(q, c.agentU, polices[1]!.policeId, { policeAssureId: keita, dateNaissance: '1970-03-03', motif: 'Erreur sur l\'année de naissance' }));
+  await valider(c.gest, prop.demandeValidation);
+  await transaction(null, q => traiterImpayes(q, new Acteur(null), ajouterJours(aujourdhui(), 10)));
+}
+
 // Comptes utilisables sans activation ni second facteur en développement (voir SECOND_FACTEUR_DISPENSE)
 await getPool().query(`UPDATE utilisateur SET statut = 'ACTIF' WHERE statut <> 'ACTIF'`);
 const comptes = (await getPool().query(`SELECT identifiant FROM utilisateur ORDER BY identifiant`)).rows.map(r => r.identifiant);

@@ -331,3 +331,7 @@ label input[type=checkbox], label input[type=radio] { vertical-align: middle; ma
   .el-carte .formulaire { --colonnes: 1; }
   .el-entete { padding: 12px 16px; }
 }
+
+/* Calendrier d'une mise en demeure (PR-06) */
+.jalons { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.jalons li { display: flex; gap: 10px; align-items: baseline; }

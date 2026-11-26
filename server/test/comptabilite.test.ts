@@ -22,7 +22,7 @@ let tpa: string;
 /** Émission de 430 500 GNF par débit du compte de production (cas 1 du § 11.14, montants de la maquette). */
 const emission = (reference: string): Evenement => ({
   codeEvt: 'EVT-02', reference, pieceDocumentId: piece, libelle: { police: '1011000001234', bureau: '01' },
-  montants: { PRIME_NETTE: 400_000, ACCESSOIRES: 10_000, PRIME_TOTALE: 430_500, COMMISSION: 40_000 },
+  montants: { PRIME_NETTE: 400_000, ACCESSOIRES: 10_000, PRIME_TOTALE: 430_500, ENCAISSE: 430_500, COMMISSION: 40_000 },
   comptes: {
     CLIENT: client, PRIMES_BRANCHE: { compteId: '' }, TAXES: [{ compteId: '', montant: 20_500, codeTaxeId: tpa }],
     COMPTE_PRODUCTION: production, COMMISSIONS_A_PAYER: [{ ...agent, montant: 40_000 }],

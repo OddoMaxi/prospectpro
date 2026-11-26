@@ -31,6 +31,7 @@ import { PageFacturesAchat } from './pages/comptabilite/Achats';
 import { PageRapprochement } from './pages/finances/Rapprochement';
 import { SouscriptionEnLigne } from './enligne/SouscriptionEnLigne';
 import { PageCanalDigital } from './pages/commercial/CanalDigital';
+import { PageAlertesConformite, PageImpayes } from './pages/production/Impayes';
 import { PageFicheImmobilisation, PageImmobilisations } from './pages/comptabilite/Immobilisations';
 import { ApplicationAgent, ROLES_RESEAU } from './agent/Agent';
 import { PageCartesPro, PageMouvementsPortefeuille, PagePrescripteurs, PageVerificationCarte } from './pages/commercial/Reseau';
@@ -75,6 +76,8 @@ export function App() {
         <Route path="commercial/intervenants" element={<Protege droit="AGREMENT:CONSULTER"><PageIntervenants /></Protege>} />
         <Route path="commercial/prescripteurs" element={<Protege droit="AGREMENT:CONSULTER"><PagePrescripteurs /></Protege>} />
         <Route path="commercial/cartes" element={<Protege droit="CARTE_PRO:CONSULTER"><PageCartesPro /></Protege>} />
+        <Route path="production/impayes" element={<Protege droit="AVENANT:CONSULTER"><PageImpayes /></Protege>} />
+        <Route path="conformite/alertes" element={<Protege droit="ALERTES_CONFORMITE:CONSULTER"><PageAlertesConformite /></Protege>} />
         <Route path="commercial/canal-digital" element={<Protege droit="SOUSCRIPTION_EN_LIGNE:CONSULTER"><PageCanalDigital /></Protege>} />
         <Route path="commercial/mouvements" element={<Protege droit="MOUVEMENT_PORTEFEUILLE:CONSULTER"><PageMouvementsPortefeuille /></Protege>} />
         <Route path="commercial/factures" element={<Protege droit="FACTURE_COMMISSION:CONSULTER"><PageFacturesCommissions /></Protege>} />

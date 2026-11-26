@@ -65,7 +65,8 @@ describe('Avenant de correction (PROD-RG-045)', () => {
     const a = await avenant(p.policeId, 'CORRECTION');
     expect(a.numero).toBe(`${p.numero}A01`);
     expect(Number(a.difference_prime)).toBe(prop.totale);
-    expect(a.quittance_id).toBeNull();
+    // Prime supplémentaire : quittance à terme légal constatée, encaissée au règlement
+    expect((await getPool().query('SELECT statut, prime_totale::bigint AS t FROM quittance WHERE id = $1', [a.quittance_id])).rows[0]).toEqual({ statut: 'A_TERME_LEGAL', t: prop.totale });
     // Une seule correction à régler à la fois ; règlement par le compte de production (EVT-02)
     await expect(transaction(c.agentU.utilisateurId, q => proposerCorrection(q, c.agentU, p.policeId, { policeAssureId: pa.id, dateNaissance: '1974-06-01', motif: 'x' })))
       .rejects.toMatchObject({ code: 'AVENANT_A_REGLER' });

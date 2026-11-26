@@ -43,6 +43,7 @@ export const MENU: Rubrique[] = [
       { libelle: 'Catalogue des produits', chemin: '/production/catalogue', droit: 'CATALOGUE:CONSULTER' },
       { libelle: 'Polices', chemin: '/production/polices', droit: 'SOUSCRIPTION:CONSULTER' },
       { libelle: 'Polices à renouveler', chemin: '/production/renouvellements', droit: 'SOUSCRIPTION:CONSULTER' },
+      { libelle: 'Impayés', chemin: '/production/impayes', droit: 'AVENANT:CONSULTER' },
       { libelle: 'Réclamations', chemin: '/production/reclamations', droit: 'RECLAMATIONS:CONSULTER' },
     ],
   },
@@ -65,6 +66,11 @@ export const MENU: Rubrique[] = [
       { libelle: 'Déclarations', chemin: '/comptabilite/declarations', droit: 'DECLARATION_TAXE:CONSULTER' },
       { libelle: 'Clôtures', chemin: '/comptabilite/clotures', droit: 'ECRITURE_MANUELLE:CONSULTER' },
       { libelle: 'Journaux et éditions', chemin: '/comptabilite/editions', droit: 'JOURNAUX_TIERS:CONSULTER' },
+    ],
+  },
+  {
+    rubrique: 'Conformité', entrees: [
+      { libelle: 'Alertes', chemin: '/conformite/alertes', droit: 'ALERTES_CONFORMITE:CONSULTER' },
     ],
   },
 ];

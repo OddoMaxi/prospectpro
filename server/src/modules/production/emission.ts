@@ -6,6 +6,7 @@
  * (constatation, perception, commission), débit du compte de production. En cas d'échec d'une étape, rien n'est enregistré.
  */
 import { agentDe, convertirProspect, relationExistante } from '../commercial/prospects.js';
+import { controlerConcentrationCode } from '../conformite/alertes.js';
 import type { Executant } from '../../db/pool.js';
 import type { Acteur } from '../../noyau/acteur.js';
 import { ErreurMetier, exiger, interdit, nonTrouve } from '../../noyau/erreurs.js';
@@ -236,7 +237,7 @@ export async function emettre(q: Executant, acteur: Acteur, dossierId: string) {
   if (!branche) throw new ErreurMetier('BRANCHE_INCONNUE', `Branche ${produit.branche_bcrg} sans comptes paramétrés`, 422);
   const ecritures = await comptabiliser(q, acteur, {
     codeEvt: enLigne ? 'EVT-03' : 'EVT-02', reference: numeroQuittance, pieceDocumentId: docQuittance.id, libelle: { police: numero, bureau: codeBureau },
-    montants: { PRIME_NETTE: tarif.primeNette, ACCESSOIRES: tarif.accessoires, PRIME_TOTALE: tarif.primeTotale, COMMISSION: totalCommission },
+    montants: { PRIME_NETTE: tarif.primeNette, ACCESSOIRES: tarif.accessoires, PRIME_TOTALE: tarif.primeTotale, ENCAISSE: tarif.primeTotale, COMMISSION: totalCommission },
     comptes: {
       CLIENT: client, PRIMES_BRANCHE: { compteId: branche.compte_primes_id }, ...(cp ? { COMPTE_PRODUCTION: compteComptable(cp) } : { TRESORERIE: { compteId: encaissement!.compte_id } }),
       TAXES: tarif.taxes.map(t => ({ compteId: t.compteId, montant: t.montant, codeTaxeId: t.codeTaxeId })),
@@ -262,6 +263,8 @@ export async function emettre(q: Executant, acteur: Acteur, dossierId: string) {
   else await q.query(`UPDATE encaissement_attente SET statut = 'AFFECTE', affecte_a = $2 WHERE id = $1`, [encaissement!.id, policeId]);
   await q.query(`UPDATE dossier_souscription SET statut = 'EMIS', police_id = $2, etape_courante = 8 WHERE id = $1`, [dossierId, policeId]);
   await journaliser(q, { ...acteur.trace(), action: 'CREATION', objetType: 'police', objetId: policeId, apres: { numero, quittance: numeroQuittance, primeTotale: tarif.primeTotale, pieces: ecritures.map(e => e.numero) } });
+  // COM-RG-084 : concentration anormale de souscriptions sur le code prescripteur, signalée à la Conformité
+  if (d.code_prescripteur_id) await controlerConcentrationCode(q, acteur, d.code_prescripteur_id);
   await publier(q, acteur, { type: 'POLICE_EMISE', objet: { type: 'police', id: policeId }, charge: { numero, assures: x.assures.length, dateEffet: x.dateEffet }, cleIdempotence: `police:${policeId}:emise` });
   if (souscripteur.telephone) {
     await notifier(q, { tiersId: d.souscripteur_id, code: 'POLICE_EMISE', canal: 'SMS', adresse: souscripteur.telephone, objet: { type: 'police', id: policeId },

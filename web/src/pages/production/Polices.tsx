@@ -145,7 +145,7 @@ function Avenants({ v, peutRegler, apres }: { v: VieContrat | null; peutRegler: 
           <tbody>{v.avenants.map(a => <tr key={a.id}><td className="code">{a.numero}</td><td>{TYPES_AVENANT[a.type] ?? libelle(a.type)}</td><td>{date(a.date_effet)}</td>
             <td>{a.type === 'CHANGEMENT_SOUSCRIPTEUR' || a.type === 'BENEFICIAIRES' ? (a.confirme ? 'Accepté par code' : <Statut couleur="orange">En attente du code</Statut>) : a.description}</td>
             <td className="nombre">{Number(a.difference_prime) === 0 ? '—' : <span style={{ color: Number(a.difference_prime) < 0 ? 'var(--vert)' : undefined }}>{Number(a.difference_prime) > 0 ? '+' : '−'}{montant(Math.abs(Number(a.difference_prime)))}</span>}</td>
-            <td className="code">{a.quittance ?? (a.a_regler ? <Statut couleur="orange">À régler</Statut> : '—')}</td>
+            <td className="code">{a.quittance ?? '—'}{a.a_regler && <> <Statut couleur="orange">À régler</Statut></>}</td>
             <td>{a.a_regler && peutRegler && <button className="lien" onClick={() => setRegler(a)}>Régler</button>}</td></tr>)}</tbody></table>}
       {regler && <ReglementAvenant a={regler} fermer={() => setRegler(null)} apres={m => { setRegler(null); apres(m); }} />}
     </Carte>

@@ -146,7 +146,7 @@ export async function encaisserPrimeAvenant(q: Executant, acteur: Acteur, p: Pol
   const ecritures = await comptabiliser(q, acteur, {
     codeEvt: d.paiement.type === 'COMPTE_PRODUCTION' ? 'EVT-02' : 'EVT-03', reference: numeroQuittance, pieceDocumentId: docQuittance.id, journalTresorerie,
     libelle: { police: p.numero, bureau: p.bureau },
-    montants: { PRIME_NETTE: d.nette, ACCESSOIRES: 0, PRIME_TOTALE: totale, COMMISSION: totalCom },
+    montants: { PRIME_NETTE: d.nette, ACCESSOIRES: 0, PRIME_TOTALE: totale, ENCAISSE: totale, COMMISSION: totalCom },
     comptes: { CLIENT: client, PRIMES_BRANCHE: { compteId: branche.compte_primes_id },
       TAXES: d.taxes.map(x => ({ compteId: x.compteId, montant: x.montant, codeTaxeId: x.codeTaxeId })), COMPTE_PRODUCTION: perception, TRESORERIE: perception,
       COMMISSIONS_A_PAYER: await Promise.all(commissions.filter(x => x.montant > 0).map(async x => ({ ...(await compteCommissions(q, x.intervenantId)), montant: x.montant }))) },

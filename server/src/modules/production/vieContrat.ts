@@ -36,6 +36,10 @@ import { confirmerAcceptation, demanderAcceptation } from '../documents/acceptat
 import { attribuerRole } from '../referentiels/roles.js';
 import { Refus } from '../auth/service.js';
 import { lirePoliceVie, type PoliceVie } from './renouvellement.js';
+import { leverMiseEnDemeure, miseEnDemeureResiliable } from './nonPaiement.js';
+import { lettrer } from '../comptabilite/moteur.js';
+import { tresorerieDe } from '../finances/tresorerie.js';
+import { compteProductionDuBureau } from '../commercial/comptesProduction.js';
 import { compteClient, compteCommissions, encaisserPrimeAvenant, periodeCourante, prorata, type PaiementAvenant, type TaxeCalculee } from './avenants.js';
 
 export const OPERATION_CORRECTION = 'AVENANT_CORRECTION';
@@ -46,7 +50,7 @@ const gnf = (n: number) => `${n.toLocaleString('fr-FR').replace(/ /g, ' ')} GNF`
 const fr = (d: string) => d.split('-').reverse().join('/');
 const jours = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000) + 1;
 const nomTiers = async (q: Executant, id: string) => (await q.query<{ n: string }>(`SELECT trim(nom || ' ' || COALESCE(prenoms, '')) AS n FROM tiers WHERE id = $1`, [id])).rows[0]?.n ?? '';
-const MOTIFS_RESILIATION = { FRAUDE: 'fraude avérée', USURPATION_IDENTITE: 'usurpation d\'identité' } as const;
+const MOTIFS_RESILIATION = { FRAUDE: 'fraude avérée', USURPATION_IDENTITE: 'usurpation d\'identité', NON_PAIEMENT: 'non-paiement de la prime après mise en demeure (art. 30)' } as const;
 export type MotifResiliation = keyof typeof MOTIFS_RESILIATION;
 
 // ---------------------------------------------------------------- ristourne (EVT-04)
@@ -262,7 +266,7 @@ export async function proposerCorrection(q: Executant, acteur: Acteur, policeId:
   const p = await lirePoliceVie(q, policeId, true);
   exiger(p.statut === 'ACTIVE', 'STATUT_INVALIDE', 'Une correction porte sur une police active');
   await demandeEnCours(q, OPERATION_CORRECTION, policeId);
-  const nonRegle = await q.query(`SELECT numero FROM avenant WHERE police_id = $1 AND type = 'CORRECTION' AND difference_prime > 0 AND quittance_id IS NULL AND supprime_le IS NULL`, [policeId]);
+  const nonRegle = await q.query(`SELECT a.numero FROM avenant a JOIN quittance qt ON qt.id = a.quittance_id WHERE a.police_id = $1 AND a.type = 'CORRECTION' AND qt.statut = 'A_TERME_LEGAL' AND a.supprime_le IS NULL`, [policeId]);
   exiger(!nonRegle.rowCount, 'AVENANT_A_REGLER', `L'avenant ${nonRegle.rows[0]?.numero} est à régler avant toute nouvelle correction`, 409);
   const c = await calculerCorrection(q, p, d, jour);
   // Ristourne versée au client : ses coordonnées vérifiées sont exigées dès la proposition
@@ -300,7 +304,11 @@ enregistrerOperation(OPERATION_CORRECTION, {
     await q.query(`INSERT INTO avenant (id, numero, police_id, type, date_effet, description, difference_prime, demande_validation_id) VALUES ($1,$2,$3,'CORRECTION',$4,$5,$6,$7)`,
       [av.id, av.numero, p.id, c.dateEffet, `Correction (${c.cible.nom}) : ${c.corrections.map(x => `${x.donnee.toLowerCase()} ${x.avant} → ${x.apres}`).join(', ')} – ${saisie.motif}`, signe * c.totale, demande.id]);
     if (c.sens > 0) {
+      // Prime supplémentaire : quittance à terme légal constatée à la validation, due le jour même ; impayée, elle suit l'article 30
       await q.query(`UPDATE demande_validation SET donnees = donnees || $2::jsonb WHERE id = $1`, [demande.id, JSON.stringify({ regle: { nette: c.nette, taxes: c.taxes, totale: c.totale } })]);
+      const qt = await constaterPrimeATerme(q, acteur, p, { reference: av.numero, libelle: `Avenant ${av.numero} : correction, prime supplémentaire au prorata (${c.joursRestants} jours)`,
+        nette: c.nette, taxes: c.taxes, debut: c.dateEffet, fin: c.periode.date_fin, echeance: jour });
+      await q.query('UPDATE avenant SET quittance_id = $2 WHERE id = $1', [av.id, qt.quittanceId]);
     }
     if (c.sens < 0 && c.totale > 0) {
       await contrePasser(q, acteur, p, await ristourneTarif(q, p, c.nette, c.taxes, jour), { reference: av.numero, pieceDocumentId: doc.id, libelle: `Ristourne de l'avenant ${av.numero}`, coordonneeId: saisie.coordonneeId });
@@ -310,24 +318,90 @@ enregistrerOperation(OPERATION_CORRECTION, {
   },
 });
 
-/** Règlement de la prime supplémentaire d'un avenant de correction (EVT-02 ou EVT-03), au prorata déjà validé. */
+/** Quittance à terme légal : prime constatée (journal EMI) sans encaissement, échéance portée sur la ligne du client. */
+async function constaterPrimeATerme(q: Executant, acteur: Acteur, p: PoliceVie, d: { reference: string; libelle: string; nette: number; taxes: TaxeCalculee[]; debut: string; fin: string; echeance: string }) {
+  const totale = d.nette + d.taxes.reduce((s, t) => s + t.montant, 0);
+  const quittanceId = crypto.randomUUID();
+  const numero = await attribuer(q, acteur, { type: 'QUITTANCE', codeBureau: p.bureau, annee: Number(d.echeance.slice(0, 4)) }, { type: 'quittance', id: quittanceId });
+  const doc = await genererDocument(q, acteur, { modeleCode: 'QUITTANCE', typeDocument: 'QUITTANCE', objet: { type: 'police', id: p.id }, variables: {
+    quittance: numero, police: p.numero, souscripteur: await nomTiers(q, p.souscripteur_id), date_effet: fr(d.debut), date_fin: fr(d.fin), mode_paiement: `à régler, prime due le ${fr(d.echeance)}`,
+    lignes: [{ libelle: d.libelle, montant: gnf(d.nette) }, ...d.taxes.map(t => ({ libelle: t.libelle, montant: gnf(t.montant) })), { libelle: 'Total à payer', montant: gnf(totale) }],
+  } });
+  const branche = (await q.query<{ compte_primes_id: string }>('SELECT compte_primes_id FROM branche_comptable WHERE code = $1', [p.branche])).rows[0]!;
+  const [e] = await comptabiliser(q, acteur, { codeEvt: 'EVT-02', reference: numero, pieceDocumentId: doc.id, libelle: { police: p.numero, bureau: p.bureau },
+    montants: { PRIME_NETTE: d.nette, ACCESSOIRES: 0, PRIME_TOTALE: totale, ENCAISSE: 0, COMMISSION: 0 },
+    comptes: { CLIENT: { ...(await compteClient(q, p.souscripteur_id)), echeance: d.echeance }, PRIMES_BRANCHE: { compteId: branche.compte_primes_id },
+      TAXES: d.taxes.map(t => ({ compteId: t.compteId, montant: t.montant, codeTaxeId: t.codeTaxeId })), COMMISSIONS_A_PAYER: [] } });
+  await q.query(
+    `INSERT INTO quittance (id, numero, police_id, type, periode_debut, periode_fin, prime_nette, accessoires, taxes, prime_totale, mode_paiement, statut, ecriture_constatation_id)
+     VALUES ($1,$2,$3,'AVENANT',$4,$5,$6,0,$7,$8,'A_REGLER','A_TERME_LEGAL',$9)`, [quittanceId, numero, p.id, d.debut, d.fin, d.nette, totale - d.nette, totale, e!.id]);
+  return { quittanceId, numero, totale };
+}
+
+/**
+ * Règlement de la prime supplémentaire d'un avenant de correction : perception de la quittance à terme légal
+ * (EVT-02 par le compte de production, EVT-03 en paiement direct), commission acquise à l'encaissement (COM-RG-041),
+ * lettrage avec la constatation, levée de la mise en demeure éventuelle.
+ */
 export async function reglerAvenant(q: Executant, acteur: Acteur, avenantId: string, paiement: PaiementAvenant, jour = aujourdhui()) {
-  const a = (await q.query<{ numero: string; police_id: string; type: string; difference_prime: string; quittance_id: string | null; date_effet: string; demande_validation_id: string | null }>(
-    'SELECT numero, police_id, type, difference_prime, quittance_id, date_effet::text, demande_validation_id FROM avenant WHERE id = $1 FOR UPDATE', [avenantId])).rows[0];
+  const a = (await q.query<{ numero: string; police_id: string; type: string; difference_prime: string; quittance_id: string | null }>(
+    'SELECT numero, police_id, type, difference_prime, quittance_id FROM avenant WHERE id = $1 FOR UPDATE', [avenantId])).rows[0];
   if (!a) throw nonTrouve('Avenant');
-  exiger(a.type === 'CORRECTION' && Number(a.difference_prime) > 0, 'AVENANT_SANS_PRIME', 'Cet avenant n\'a pas de prime à régler');
-  exiger(!a.quittance_id, 'DEJA_REGLE', 'Avenant déjà réglé', 409);
+  exiger(a.type === 'CORRECTION' && Number(a.difference_prime) > 0 && a.quittance_id, 'AVENANT_SANS_PRIME', 'Cet avenant n\'a pas de prime à régler');
+  const qt = (await q.query<{ id: string; numero: string; statut: string; prime_nette: string; prime_totale: string; ecriture_constatation_id: string }>(
+    'SELECT id, numero, statut, prime_nette, prime_totale, ecriture_constatation_id FROM quittance WHERE id = $1 FOR UPDATE', [a.quittance_id])).rows[0]!;
+  exiger(qt.statut === 'A_TERME_LEGAL', 'DEJA_REGLE', 'Avenant déjà réglé', 409);
   const p = await lirePoliceVie(q, a.police_id, true);
-  exiger(p.statut === 'ACTIVE', 'STATUT_INVALIDE', 'La police n\'est plus active');
-  const periode = await periodeCourante(q, p.id);
-  // Montants figés à la validation (enregistrés avec la demande) : pas de recalcul sur des données déjà corrigées
-  const f = (await q.query<{ donnees: { regle?: { nette: number; taxes: TaxeCalculee[]; totale: number } } }>('SELECT donnees FROM demande_validation WHERE id = $1', [a.demande_validation_id])).rows[0]?.donnees.regle;
-  exiger(f && f.totale === Number(a.difference_prime), 'MONTANT_INCONNU', 'Montants de l\'avenant introuvables', 500);
-  const r = await encaisserPrimeAvenant(q, acteur, p, { numeroAvenant: a.numero, libelle: `Avenant ${a.numero} : correction, prime supplémentaire au prorata (${jours(a.date_effet, periode.date_fin)} jours)`,
-    nette: f!.nette, taxes: f!.taxes, debut: a.date_effet, fin: periode.date_fin, paiement }, jour);
-  await q.query('UPDATE avenant SET quittance_id = $2 WHERE id = $1', [avenantId, r.quittanceId]);
-  await journaliser(q, { ...acteur.trace(), action: 'MODIFICATION', objetType: 'avenant', objetId: avenantId, apres: { regle: r.numeroQuittance } });
-  return { quittance: r.numeroQuittance, primeTotale: r.totale };
+  exiger(['ACTIVE', 'SUSPENDUE'].includes(p.statut), 'STATUT_INVALIDE', 'La police n\'est plus en cours');
+  const totale = Number(qt.prime_totale), nette = Number(qt.prime_nette);
+  let perception: CompteResolu, journalTresorerie: string | undefined, cp: Awaited<ReturnType<typeof lireCompteProduction>> | null = null, mode: string;
+  if (paiement.type === 'COMPTE_PRODUCTION') {
+    cp = await lireCompteProduction(q, (await compteProductionDuBureau(q, p.bureau_gestion_id)).id, true);
+    exiger(cp.statut === 'ACTIF', 'COMPTE_PRODUCTION_GELE', 'Compte de production gelé ou clôturé');
+    if (cp.solde < totale) throw new ErreurMetier('SOLDE_INSUFFISANT', `Solde insuffisant : il manque ${gnf(totale - cp.solde)}`, 422, { manque: totale - cp.solde });
+    perception = compteComptable(cp); mode = 'DEPOT';
+  } else {
+    const t = await tresorerieDe(q, paiement.moyen, paiement.banque);
+    perception = { compteId: t.compteId }; journalTresorerie = t.journal; mode = paiement.moyen === 'BANQUE' ? 'VIREMENT' : paiement.moyen;
+  }
+  const commissions = await commissionsSur(q, p, nette, jour, qt.id);
+  const client = await compteClient(q, p.souscripteur_id);
+  const ecritures = await comptabiliser(q, acteur, { codeEvt: cp ? 'EVT-02' : 'EVT-03', reference: qt.numero, pieceDocumentId: (await q.query<{ piece_justificative_id: string }>('SELECT piece_justificative_id FROM ecriture WHERE id = $1', [qt.ecriture_constatation_id])).rows[0]!.piece_justificative_id,
+    journalTresorerie, libelle: { police: p.numero, bureau: p.bureau },
+    montants: { PRIME_NETTE: 0, ACCESSOIRES: 0, PRIME_TOTALE: 0, ENCAISSE: totale, COMMISSION: commissions.reduce((s, c) => s + c.montant, 0) },
+    comptes: { CLIENT: client, TAXES: [], ...(cp ? { COMPTE_PRODUCTION: perception } : { TRESORERIE: perception }),
+      COMMISSIONS_A_PAYER: await Promise.all(commissions.map(async c => ({ ...(await compteCommissions(q, c.intervenantId)), montant: c.montant }))) } });
+  const enc = ecritures.find(e => e.journal !== 'COM')!, com = ecritures.find(e => e.journal === 'COM');
+  for (const c of commissions) {
+    await q.query(`INSERT INTO commission (police_id, quittance_id, intervenant_id, type, assiette, taux, montant, statut, ecriture_id) VALUES ($1,$2,$3,'COMMISSION',$4,NULL,$5,'DUE',$6)`,
+      [p.id, qt.id, c.intervenantId, nette, c.montant, com!.id]);
+  }
+  // Lettrage de la créance (constatation) et de son règlement
+  const lignesClient = (await q.query<{ id: string }>('SELECT id FROM ligne_ecriture WHERE ecriture_id = ANY($1) AND compte_auxiliaire_id = $2 AND lettrage_id IS NULL', [[qt.ecriture_constatation_id, enc.id], client.auxiliaireId])).rows.map(r => r.id);
+  if (lignesClient.length === 2) await lettrer(q, client.auxiliaireId!, lignesClient, 'AUTOMATIQUE', null);
+  await q.query(`UPDATE quittance SET statut = 'SOLDEE', mode_paiement = $2, ecriture_perception_id = $3 WHERE id = $1`, [qt.id, mode, enc.id]);
+  if (cp) await mouvementer(q, acteur, { compteId: cp.id, nature: 'EMISSION', montant: totale, reference: a.numero, ecritureId: enc.id });
+  const levee = await leverMiseEnDemeure(q, acteur, qt.id, jour);
+  await journaliser(q, { ...acteur.trace(), action: 'MODIFICATION', objetType: 'avenant', objetId: avenantId, apres: { regle: qt.numero, miseEnDemeure: levee?.statut ?? null } });
+  return { quittance: qt.numero, primeTotale: totale, reprise: levee?.statut === 'LEVEE' ? levee.reprise : null };
+}
+
+/** Résiliation pour non-paiement : la prime impayée est annulée (EVT-04, journal EMI), sans remboursement. */
+async function annulerImpayes(q: Executant, acteur: Acteur, p: PoliceVie, reference: string) {
+  const qts = (await q.query<{ id: string; numero: string; prime_nette: string; accessoires: string; prime_totale: string; ecriture_constatation_id: string }>(
+    `SELECT id, numero, prime_nette, accessoires, prime_totale, ecriture_constatation_id FROM quittance WHERE police_id = $1 AND statut = 'A_TERME_LEGAL' FOR UPDATE`, [p.id])).rows;
+  const branche = (await q.query<{ compte_annulations_id: string }>('SELECT compte_annulations_id FROM branche_comptable WHERE code = $1', [p.branche])).rows[0]!;
+  for (const qt of qts) {
+    const lignes = (await q.query<{ compte_id: string; compte_auxiliaire_id: string | null; debit: string; credit: string; code_taxe_id: string | null }>(
+      'SELECT compte_id, compte_auxiliaire_id, debit, credit, code_taxe_id FROM ligne_ecriture WHERE ecriture_id = $1', [qt.ecriture_constatation_id])).rows;
+    const client = lignes.find(l => Number(l.debit) > 0 && l.compte_auxiliaire_id)!;
+    await comptabiliser(q, acteur, { codeEvt: 'EVT-04', reference: `${reference} ${qt.numero}`.slice(0, 60), pieceDocumentId: (await q.query<{ piece_justificative_id: string }>('SELECT piece_justificative_id FROM ecriture WHERE id = $1', [qt.ecriture_constatation_id])).rows[0]!.piece_justificative_id,
+      libelle: { police: p.numero }, montants: { PRIME_NETTE: Number(qt.prime_nette), ACCESSOIRES: Number(qt.accessoires), PRIME_TOTALE: Number(qt.prime_totale), REMBOURSE: 0, PAIEMENT_RISTOURNE: 0, COMMISSION: 0 },
+      comptes: { CLIENT: { compteId: client.compte_id, auxiliaireId: client.compte_auxiliaire_id }, ANNULATIONS_BRANCHE: { compteId: branche.compte_annulations_id },
+        TAXES: lignes.filter(l => l.code_taxe_id).map(l => ({ compteId: l.compte_id, montant: Number(l.credit), codeTaxeId: l.code_taxe_id! })), COMMISSIONS_A_PAYER: [] } });
+    await q.query(`UPDATE quittance SET statut = 'ANNULEE' WHERE id = $1`, [qt.id]);
+  }
+  return qts.length;
 }
 
 // ---------------------------------------------------------------- retrait d'un ayant droit (PROD-RG-041)
@@ -467,14 +541,20 @@ async function ristourneResiliation(q: Executant, p: PoliceVie, effet: string) {
 }
 
 export async function proposerResiliation(q: Executant, acteur: Acteur, policeId: string, d: { motif: MotifResiliation; justification: string; pieceDocumentId?: string; coordonneeId?: string }) {
-  exiger(d.motif in MOTIFS_RESILIATION, 'MOTIF_INVALIDE', 'La Compagnie résilie pour fraude avérée ou usurpation d\'identité (PROD-RG-061)');
+  exiger(d.motif in MOTIFS_RESILIATION, 'MOTIF_INVALIDE', 'La Compagnie résilie pour fraude avérée, usurpation d\'identité (PROD-RG-061) ou non-paiement après mise en demeure (PROD-RG-028)');
   exiger(d.justification?.trim(), 'JUSTIFICATION_REQUISE', 'La décision de résiliation est motivée');
   const reseau = await q.query('SELECT 1 FROM utilisateur u JOIN intervenant i ON i.tiers_id = u.tiers_id WHERE u.id = $1', [acteur.utilisateurId]);
   exiger(!reseau.rowCount, 'RESERVE_COMPAGNIE', 'La résiliation est une décision de la Compagnie (PROD-RG-061)', 403);
   const p = await lirePoliceVie(q, policeId, true);
   exiger(['ACTIVE', 'SUSPENDUE'].includes(p.statut), 'STATUT_INVALIDE', 'Seule une police en cours se résilie ; à l\'échéance, utiliser « ne pas renouveler » (PROD-RG-060)');
+  if (d.motif === 'NON_PAIEMENT') {
+    // Article 30 (règle verrouillée) : police suspendue et délai de 10 jours après la suspension écoulé
+    const m = await miseEnDemeureResiliable(q, policeId);
+    exiger(m && p.statut === 'SUSPENDUE', 'MISE_EN_DEMEURE_REQUISE', 'La résiliation pour non-paiement suit la mise en demeure et la suspension de la police (art. 30)');
+    exiger(m!.resiliation_possible_le <= aujourdhui(), 'DELAI_LEGAL', `Résiliation possible à partir du ${fr(m!.resiliation_possible_le)} (art. 30, délais non réductibles)`);
+  }
   await demandeEnCours(q, OPERATION_RESILIATION, policeId);
-  const r = await ristourneResiliation(q, p, aujourdhui());
+  const r = d.motif === 'NON_PAIEMENT' ? null : await ristourneResiliation(q, p, aujourdhui());
   if (r?.versClient) await coordonneeDuSouscripteur(q, p.souscripteur_id, d.coordonneeId);
   const demande = await soumettre(q, acteur, { typeOperation: OPERATION_RESILIATION, objetType: 'police', objetId: policeId, montant: r ? totalRistourne(r) : 0, donnees: {
     numero: p.numero, motif: MOTIFS_RESILIATION[d.motif], justification: d.justification, ristourneEstimee: r ? totalRistourne(r) : 0, saisie: d,
@@ -489,7 +569,9 @@ enregistrerOperation(OPERATION_RESILIATION, {
     const saisie = (demande.donnees as { saisie: { motif: MotifResiliation; justification: string; coordonneeId?: string } }).saisie;
     const p = await lirePoliceVie(q, demande.objet_id, true);
     exiger(['ACTIVE', 'SUSPENDUE'].includes(p.statut), 'STATUT_INVALIDE', 'La police n\'est plus en cours');
-    const r = await ristourneResiliation(q, p, effet);
+    const nonPaiement = saisie.motif === 'NON_PAIEMENT';
+    if (nonPaiement) exiger(p.statut === 'SUSPENDUE', 'STATUT_INVALIDE', 'La prime a été payée entre-temps : la police n\'est plus suspendue');
+    const r = nonPaiement ? null : await ristourneResiliation(q, p, effet);
     const total = r ? totalRistourne(r) : 0;
     const av = await nouvelAvenant(q, acteur, p);
     const motif = MOTIFS_RESILIATION[saisie.motif];
@@ -497,9 +579,13 @@ enregistrerOperation(OPERATION_RESILIATION, {
       numero: av.numero, police: p.numero, souscripteur: await nomTiers(q, p.souscripteur_id), date_effet: fr(effet), motif,
       lignes: total ? [{ libelle: 'Ristourne de prime nette (jours non couverts)', montant: gnf(r!.nette) }, ...(r!.accessoires ? [{ libelle: 'Accessoires', montant: gnf(r!.accessoires) }] : []),
         { libelle: 'Taxes', montant: gnf(r!.taxes.reduce((s, t) => s + t.montant, 0)) }, { libelle: 'Total ristourné', montant: gnf(total) }] : [{ libelle: 'Ristourne', montant: gnf(0) }],
-      mention_ristourne: total ? 'La ristourne est remboursée selon le mode de paiement de la prime.' : 'Le produit ne prévoit pas de ristourne en cas de résiliation.',
+      mention_ristourne: total ? 'La ristourne est remboursée selon le mode de paiement de la prime.' : nonPaiement ? 'La prime impayée est annulée ; les sommes dues pour la période couverte restent exigibles.' : 'Le produit ne prévoit pas de ristourne en cas de résiliation.',
     } });
     const res = r && total ? await contrePasser(q, acteur, p, r, { reference: av.numero, pieceDocumentId: doc.id, libelle: `Ristourne de résiliation ${av.numero}`, coordonneeId: saisie.coordonneeId }) : null;
+    if (nonPaiement) {
+      await annulerImpayes(q, acteur, p, av.numero);
+      await q.query(`UPDATE mise_en_demeure SET statut = 'RESILIEE' WHERE police_id = $1 AND statut = 'EN_COURS'`, [p.id]);
+    }
     await q.query(`UPDATE police SET statut = 'RESILIEE' WHERE id = $1`, [p.id]);
     await q.query(`UPDATE police_assure SET date_sortie = $2, motif_sortie = 'Résiliation' WHERE police_id = $1 AND (date_sortie IS NULL OR date_sortie > $2)`, [p.id, effet]);
     await q.query(`INSERT INTO avenant (id, numero, police_id, type, date_effet, description, difference_prime, demande_validation_id) VALUES ($1,$2,$3,'RESILIATION',$4,$5,$6,$7)`,
@@ -573,6 +659,6 @@ export async function renoncer(q: Executant, acteur: Acteur, policeId: string, d
 export async function avenantsDePolice(q: Executant, policeId: string) {
   return (await q.query(
     `SELECT a.id, a.numero, a.type, a.date_effet, a.description, a.difference_prime::bigint AS difference_prime, qt.numero AS quittance, a.preuve_id IS NOT NULL AS confirme, a.cree_le,
-            (a.type = 'CORRECTION' AND a.difference_prime > 0 AND a.quittance_id IS NULL) AS a_regler
+            (a.type = 'CORRECTION' AND qt.statut = 'A_TERME_LEGAL') AS a_regler
        FROM avenant a LEFT JOIN quittance qt ON qt.id = a.quittance_id WHERE a.police_id = $1 AND a.supprime_le IS NULL ORDER BY a.cree_le DESC`, [policeId])).rows;
 }

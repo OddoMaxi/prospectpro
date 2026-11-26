@@ -14,6 +14,8 @@ import { ajouterAyantDroit, confirmerChangementBeneficiaires, enregistrerAccepta
 import {
   avenantsDePolice, confirmerChangementSouscripteur, delaiRenonciation, preparerChangementSouscripteur, proposerCorrection, proposerResiliation, reglerAvenant, renoncer, retirerAyantDroit,
 } from '../modules/production/vieContrat.js';
+import { listerImpayes, traiterImpayes, validerEnvoi } from '../modules/production/nonPaiement.js';
+import { listerAlertes, traiterAlerte } from '../modules/conformite/alertes.js';
 import { droit, ecrire } from './socle.js';
 
 const uuid = z.string().uuid();
@@ -214,7 +216,7 @@ export function routesProduction(): Router {
   r.post('/polices/:id/resiliation', droit('AVENANT', 'CREER'), async (req, res) => {
     const id = uuid.parse(req.params.id);
     await exigerPoliceVisible(req, id);
-    const d = z.object({ motif: z.enum(['FRAUDE', 'USURPATION_IDENTITE']), justification: z.string().min(1).max(1000), pieceDocumentId: uuid.optional(), coordonneeId: uuid.optional() }).parse(req.body);
+    const d = z.object({ motif: z.enum(['FRAUDE', 'USURPATION_IDENTITE', 'NON_PAIEMENT']), justification: z.string().min(1).max(1000), pieceDocumentId: uuid.optional(), coordonneeId: uuid.optional() }).parse(req.body);
     res.status(201).json(await ecrire(req, q => proposerResiliation(q, req.acteur, id, d)));
   });
   r.post('/polices/:id/renonciation', droit('AVENANT', 'CREER'), async (req, res) => {
@@ -222,6 +224,23 @@ export function routesProduction(): Router {
     await exigerPoliceVisible(req, id);
     const d = z.object({ dateDemande: date.optional(), pieceDocumentId: uuid.optional(), coordonneeId: uuid.optional() }).parse(req.body);
     res.status(201).json(await ecrire(req, q => renoncer(q, req.acteur, id, d)));
+  });
+  // ---------------------------------------------------------------- Impayés, article 30 (PR-06)
+  r.get('/impayes', droit('AVENANT', 'CONSULTER'), async (_req, res) => { res.json(await listerImpayes(getPool())); });
+  r.post('/impayes/traitement', droit('AVENANT', 'VALIDER'), async (req, res) => { res.json(await ecrire(req, q => traiterImpayes(q, req.acteur))); });
+  r.post('/mises-en-demeure/:id/envoi', droit('AVENANT', 'VALIDER'), async (req, res) => {
+    const { dateEnvoi } = z.object({ dateEnvoi: date }).parse(req.body);
+    res.json(await ecrire(req, q => validerEnvoi(q, req.acteur, uuid.parse(req.params.id), dateEnvoi)));
+  });
+  // ---------------------------------------------------------------- Alertes de conformité (COM-RG-084)
+  r.get('/conformite/alertes', droit('ALERTES_CONFORMITE', 'CONSULTER'), async (req, res) => {
+    const { statut } = z.object({ statut: z.string().optional() }).parse(req.query);
+    res.json(await listerAlertes(getPool(), { statut }));
+  });
+  r.post('/conformite/alertes/:id', droit('ALERTES_CONFORMITE', 'MODIFIER'), async (req, res) => {
+    const d = z.object({ statut: z.enum(['EN_EXAMEN', 'CLOSE']), decision: z.string().max(2000).optional() }).parse(req.body);
+    await ecrire(req, q => traiterAlerte(q, req.acteur, uuid.parse(req.params.id), d));
+    res.status(204).end();
   });
   return r;
 }

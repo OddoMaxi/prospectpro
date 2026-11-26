@@ -158,7 +158,7 @@ export async function renouveler(q: Executant, acteur: Acteur, policeId: string,
   const ecritures = await comptabiliser(q, acteur, {
     codeEvt: mode.type === 'COMPTE_PRODUCTION' ? 'EVT-02' : 'EVT-03', reference: numeroQuittance, pieceDocumentId: docQuittance.id, journalTresorerie,
     libelle: { police: p.numero, bureau: p.bureau },
-    montants: { PRIME_NETTE: tarif.primeNette, ACCESSOIRES: tarif.accessoires, PRIME_TOTALE: tarif.primeTotale, COMMISSION: commissions.reduce((s, c) => s + c.montant, 0) },
+    montants: { PRIME_NETTE: tarif.primeNette, ACCESSOIRES: tarif.accessoires, PRIME_TOTALE: tarif.primeTotale, ENCAISSE: tarif.primeTotale, COMMISSION: commissions.reduce((s, c) => s + c.montant, 0) },
     comptes: {
       CLIENT: { compteId: client.collectif_id, auxiliaireId: client.id }, PRIMES_BRANCHE: { compteId: branche.compte_primes_id },
       TAXES: tarif.taxes.map(t => ({ compteId: t.compteId, montant: t.montant, codeTaxeId: t.codeTaxeId })),

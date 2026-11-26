@@ -3,6 +3,7 @@
  * par échéance même avec plusieurs serveurs) et distribution continue des événements métier.
  * Fuseau : Africa/Conakry. Chaque traitement s'exécute dans sa transaction, au nom du système, et il est journalisé.
  */
+import { traiterImpayes } from './modules/production/nonPaiement.js';
 import { basculerJournee } from './modules/finances/cloture.js';
 import { PgBoss } from 'pg-boss';
 import { transaction } from './db/pool.js';
@@ -45,6 +46,9 @@ export const TRAITEMENTS: Traitement[] = [
   }),
   // Bascule de la journée écoulée : anomalies enregistrées, jamais bloquantes ce jour-là (CA-FIN-05)
   quotidien('journee-comptable', 'Bascule de la journée comptable et liste des anomalies (FIN-RG-041)', '0 0 * * *', q => basculerJournee(q, ajouterJours(aujourdhui(), -1))),
+  // Article 30 : relances, mises en demeure à J+10, suspensions ; reprise le lendemain à midi du paiement (PROD-RG-028)
+  quotidien('impayes-article-30', 'Primes impayées : relance, mise en demeure, suspension (PROD-RG-028)', '30 0 * * *', q => traiterImpayes(q, systeme)),
+  quotidien('reprise-garanties', 'Reprise des polices suspendues payées la veille, à midi (PROD-RG-028)', '0 12 * * *', q => traiterImpayes(q, systeme)),
   quotidien('rappels-renouvellement', 'Rappels de renouvellement J-30, J-15, J-7, J-1 (PROD-RG-021)', '0 8 * * *', q => envoyerRappels(q)),
   quotidien('reclamations-escalade', 'Escalade des réclamations sans réponse à l\'échéance (§ 8.10)', '0 7 * * *', q => escaladerReclamations(q, systeme)),
 ];
