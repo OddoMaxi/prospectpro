@@ -185,6 +185,44 @@ console.log('Impayé : prime supplémentaire d\'un avenant de correction, mise e
   await transaction(null, q => traiterImpayes(q, new Acteur(null), ajouterJours(aujourdhui(), 10)));
 }
 
+console.log('Santé : nomenclatures, clinique agréée avec son administrateur et un médecin, pharmacie en agrément…');
+{
+  const { creerTiers } = await import('../src/modules/referentiels/tiers.js');
+  const { proposerCoordonnee } = await import('../src/modules/referentiels/coordonnees.js');
+  const { GardienLocal, MoteurChiffrement } = await import('../src/moteurs/chiffrement.js');
+  const { randomBytes } = await import('node:crypto');
+  const { importer } = await import('../src/modules/sante/nomenclatures.js');
+  const sante = await import('../src/modules/sante/prestataires.js');
+  const gestS = await utilisateur(c.admin, 'gest.sante', [{ code: 'GEST_SANTE' }], c.dg);
+  const mc = await utilisateur(c.admin, 'medecin.conseil', [{ code: 'MEDECIN_CONSEIL' }], c.dg);
+  await transaction(gestS.utilisateurId, q => importer(q, gestS, 'ACTES', ['C01;Consultation de médecine générale;CONSULTATION', 'C02;Consultation de spécialiste;CONSULTATION;Pédiatrie',
+    'B01;Numération formule sanguine;ANALYSE', 'B02;Goutte épaisse (paludisme);ANALYSE', 'R01;Radiographie thoracique;IMAGERIE', 'E01;Échographie abdominale;IMAGERIE',
+    'H01;Journée d\'hospitalisation;HOSPITALISATION', 'T01;Téléconsultation;TELECONSULTATION'].join('\n')));
+  await transaction(gestS.utilisateurId, q => importer(q, gestS, 'MEDICAMENTS', ['AMOX500;Amoxicilline 500 mg gélules;amoxicilline;oui;oui;3', 'PARA500;Paracétamol 500 mg comprimés;paracétamol;oui;oui;4',
+    'ARTE80;Artéméther-luméfantrine 80/480;artéméther-luméfantrine;oui;oui;2'].join('\n')));
+  const chiffre = new MoteurChiffrement(new GardienLocal(randomBytes(32)));
+  const structure = async (nom: string, type: string, tarifs: [string, number][], admin?: { identifiant: string; nom: string; tel: string }) => {
+    const tiersId = await transaction(gestS.utilisateurId, q => creerTiers(q, gestS, { nature: 'MORALE', nom, telephone: `+2246${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`, adresse: 'Kaloum, Conakry' }));
+    const p = await transaction(gestS.utilisateurId, q => sante.creerPrestataire(q, gestS, { tiersId, type, latitude: 9.5092, longitude: -13.7122 }));
+    for (const [acte, tarif] of tarifs) await transaction(gestS.utilisateurId, q => sante.ajouterTarif(q, gestS, p.id, { acteCode: acte, tarif, dateEffet: '2020-01-01' }));
+    if (!admin) return p;
+    await transaction(gestS.utilisateurId, async q => sante.modifierPrestataire(q, gestS, p.id, { conventionDocumentId: await pieceFictive('prestataire') }));
+    const co = await transaction(gestS.utilisateurId, q => proposerCoordonnee(q, gestS, chiffre, { tiersId, type: 'BANQUE', etablissement: 'Ecobank', numero: 'GN0012345678901234', intitule: nom }));
+    await valider(comptable, co.demandeValidation);
+    const resp = await transaction(gestS.utilisateurId, q => creerTiers(q, gestS, { nature: 'PHYSIQUE', nom: admin.nom, prenoms: 'Responsable', telephone: admin.tel }));
+    const a = await transaction(gestS.utilisateurId, q => sante.proposerAgrementPrestataire(q, gestS, p.id, { tiersId: resp, identifiant: admin.identifiant, motDePasse: MDP }));
+    await valider(mc, a.demandeValidation);
+    await valider(c.daf, a.demandeValidation);
+    return { ...p, admin: new Acteur(a.administrateurId) };
+  };
+  const clinique = await structure('CLINIQUE PASTEUR', 'CLINIQUE', [['C01', 150_000], ['C02', 250_000], ['H01', 600_000]], { identifiant: 'admin.clinique', nom: 'BARRY', tel: '+224628001122' }) as { id: string; admin: InstanceType<typeof Acteur> };
+  const m = await transaction(clinique.admin.utilisateurId, async q => sante.ajouterProfessionnel(q, clinique.admin, {
+    nom: 'CAMARA', prenoms: 'Fatoumata', telephone: '+224628334455', typePiece: 'CNI', numeroPiece: 'CNI-77812', profession: 'MEDECIN', specialite: 'Médecine générale',
+    numeroOrdre: 'ONMG-2011-0457', diplomeDocumentId: await pieceFictive('prestataire'), pieceDocumentId: await pieceFictive('prestataire'), identifiant: 'dr.camara', motDePasse: MDP }));
+  await valider(mc, m.demandeAgrement!);
+  await structure('PHARMACIE DU NIGER', 'PHARMACIE', [['C01', 1]].slice(0, 0) as [string, number][]);
+}
+
 // Comptes utilisables sans activation ni second facteur en développement (voir SECOND_FACTEUR_DISPENSE)
 await getPool().query(`UPDATE utilisateur SET statut = 'ACTIF' WHERE statut <> 'ACTIF'`);
 const comptes = (await getPool().query(`SELECT identifiant FROM utilisateur ORDER BY identifiant`)).rows.map(r => r.identifiant);

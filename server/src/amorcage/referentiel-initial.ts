@@ -53,6 +53,10 @@ export const FONCTIONS_SYSTEME: Record<string, string> = {
   ORGANISATION: 'Organisation',
   UTILISATEURS: 'Utilisateurs et habilitations',
   ALERTES_CONFORMITE: 'Alertes de conformité',
+  // Lot 3 – Santé
+  PRESTATAIRES: 'Prestataires agréés, professionnels de santé, tarifs conventionnés',
+  MA_STRUCTURE: 'Portail prestataire : professionnels et journal de la structure',
+  SOINS: 'Portail prestataire : vérification des droits, prises en charge, actes, carnet',
   // Fonctions du socle (lot 1)
   AUDIT: 'Journal d\'audit',
   PARAMETRES: 'Paramètres et règles légales',
@@ -86,6 +90,13 @@ export const PROFILS: { code: string; libelle: string; externe?: boolean }[] = [
   { code: 'DAF', libelle: 'Directeur administratif et financier' },
   { code: 'CONFORMITE', libelle: 'Conformité' },
   { code: 'COMITE_PARAMETRAGE', libelle: 'Comité de paramétrage' },
+  // Portail prestataire (SAN-RG-002, 005) : profils fixés par la Compagnie par type de prestataire
+  { code: 'ADMIN_PRESTATAIRE', libelle: 'Administrateur du prestataire', externe: true },
+  { code: 'MEDECIN_PRESCRIPTEUR', libelle: 'Médecin prescripteur (médecin, chirurgien-dentiste, sage-femme)', externe: true },
+  { code: 'BIOLOGISTE', libelle: 'Biologiste', externe: true },
+  { code: 'RADIOLOGUE', libelle: 'Radiologue', externe: true },
+  { code: 'PHARMACIEN', libelle: 'Pharmacien', externe: true },
+  { code: 'EXECUTANT', libelle: 'Professionnel exécutant (optique, kinésithérapie…)', externe: true },
 ];
 
 /**
@@ -125,6 +136,9 @@ export const MATRICE: Record<string, Partial<Record<string, Code[]>>> = {
   ORGANISATION: { ADMIN_GENERAL: ['C', 'S', 'P', 'V1'], DIRECTION_GENERALE: ['C', 'V1'] },
   UTILISATEURS: { ADMIN_GENERAL: ['C', 'S', 'P', 'V1'], CONFORMITE: ['C'], DIRECTION_GENERALE: ['C'] },
   ALERTES_CONFORMITE: { CONFORMITE: ['S', 'V1'] },
+  PRESTATAIRES: { GEST_SANTE: ['S'], MEDECIN_CONSEIL: ['C', 'V1'], DAF: ['C', 'V2'], CONFORMITE: ['C'], DIRECTION_GENERALE: ['C'], COMPTABLE: ['C'] },
+  MA_STRUCTURE: { ADMIN_PRESTATAIRE: ['S'] },
+  SOINS: { MEDECIN_PRESCRIPTEUR: ['S'], BIOLOGISTE: ['S'], RADIOLOGUE: ['S'], PHARMACIEN: ['S'], EXECUTANT: ['S'] },
   AUDIT: { ADMIN_GENERAL: ['C', 'X'], CONFORMITE: ['C', 'X'], DIRECTION_GENERALE: ['C'] },
   PARAMETRES: { ADMIN_GENERAL: ['C', 'S'], COMITE_PARAMETRAGE: ['C', 'V1'], CONFORMITE: ['C', 'V2'], DIRECTION_GENERALE: ['C'] },
   DELEGATIONS: { ADMIN_GENERAL: ['C', 'P'], DIRECTION_GENERALE: ['C'], AGENT_GENERAL: ['S'], RESP_COMMERCIAL: ['S'], GEST_PRODUCTION: ['S'], GEST_SANTE: ['S'], MEDECIN_CONSEIL: ['S'], GEST_SINISTRES: ['S'], COMPTABLE: ['S'], TRESORIER: ['S'], DAF: ['S'], CONFORMITE: ['S'] },
@@ -167,6 +181,8 @@ export const DELEGATIONS: { type: string; niveaux: { niveau: number; profils: st
   { type: 'SORTIE_IMMOBILISATION', niveaux: [{ niveau: 1, profils: ['COMPTABLE'] }, { niveau: 2, profils: ['DAF'] }] },
   { type: 'PAIEMENT_FOURNISSEUR', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
   { type: 'PAIEMENT_TAXE', niveaux: [{ niveau: 1, profils: ['DAF'] }] },
+  { type: 'AGREMENT_PRESTATAIRE', niveaux: [{ niveau: 1, profils: ['MEDECIN_CONSEIL'] }, { niveau: 2, profils: ['DAF'] }] },
+  { type: 'AGREMENT_PROFESSIONNEL', niveaux: [{ niveau: 1, profils: ['MEDECIN_CONSEIL'] }] },
   { type: 'AVENANT_CORRECTION', niveaux: [{ niveau: 1, profils: ['GEST_PRODUCTION'] }] },
   { type: 'RETRAIT_AYANT_DROIT', niveaux: [{ niveau: 1, profils: ['GEST_PRODUCTION'] }] },
   { type: 'RESILIATION', niveaux: [{ niveau: 1, profils: ['GEST_PRODUCTION'] }, { niveau: 2, profils: ['DAF'] }] },
@@ -310,6 +326,8 @@ export const MODELES_NOTIFICATION: { code: string; canal: string; contenu: strin
   { code: 'RELANCE_PRIME', canal: 'SMS', contenu: 'Prospect Pro : la prime de {{montant}} de votre police {{police}} (quittance {{quittance}}) est due depuis le {{echeance}}. Sans paiement, une mise en demeure vous sera adressée.' },
   { code: 'POLICE_SUSPENDUE', canal: 'SMS', contenu: 'Prospect Pro : faute de paiement après mise en demeure, les garanties de votre police {{police}} sont suspendues depuis le {{date}}. Le paiement de {{montant}} les rétablit le lendemain à midi.' },
   { code: 'SUSPENSION_LEVEE', canal: 'SMS', contenu: 'Prospect Pro : paiement reçu pour votre police {{police}}. Vos garanties reprennent le {{reprise}}.' },
+  { code: 'PRESTATAIRE_AGREE', canal: 'SMS', contenu: 'Prospect Pro : {{prestataire}} est agréé. Votre compte administrateur « {{identifiant}} » est actif sur le portail des prestataires.' },
+  { code: 'PROFESSIONNEL_AGREE', canal: 'SMS', contenu: 'Prospect Pro : votre agrément de {{profession}} est accordé. Votre compte « {{identifiant}} » chez {{prestataire}} est actif.' },
   { code: 'POLICE_RESILIEE', canal: 'SMS', contenu: 'Prospect Pro : votre police {{police}} est résiliée à compter du {{date}} ({{motif}}). Les cartes de ses assurés ne sont plus valables.{{ristourne}}' },
   { code: 'POLICE_RESILIEE_AGENT', canal: 'SMS', contenu: 'Prospect Pro : la police {{police}} de {{souscripteur}} est résiliée à compter du {{date}} ({{motif}}).' },
   { code: 'POLICE_RENONCIATION', canal: 'SMS', contenu: 'Prospect Pro : votre renonciation à la police {{police}} est enregistrée. La police est annulée et {{montant}} vous seront remboursés.' },
@@ -441,6 +459,22 @@ export const COMPTES_PROPOSES: { numero: string; libelle: string; parent?: strin
   { numero: '75', libelle: 'Autres produits techniques', imputable: false },
   { numero: '751', libelle: 'Accessoires', parent: '75', imputable: false },
   { numero: '7511', libelle: 'Coûts de polices et accessoires', parent: '751', sens: 'C' },
+];
+
+/**
+ * Types de prestataires (SAN-RG-001, § 9.4.1) : professions admises (chacune porte un profil, SAN-RG-005) et options
+ * proposées par défaut (SAN-RG-060). Configuration initiale du CDC, modifiable par la Compagnie.
+ */
+export const TYPES_PRESTATAIRE: { code: string; libelle: string; professions: string[]; options: string[] }[] = [
+  { code: 'CLINIQUE', libelle: 'Clinique', professions: ['MEDECIN', 'CHIRURGIEN_DENTISTE', 'SAGE_FEMME'], options: ['URGENCES', 'HOSPITALISATION', 'H24'] },
+  { code: 'HOPITAL', libelle: 'Hôpital', professions: ['MEDECIN', 'CHIRURGIEN_DENTISTE', 'SAGE_FEMME'], options: ['URGENCES', 'HOSPITALISATION', 'H24', 'GARDE'] },
+  { code: 'CABINET_MEDICAL', libelle: 'Cabinet médical', professions: ['MEDECIN', 'SAGE_FEMME'], options: ['TELECONSULTATION'] },
+  { code: 'CABINET_DENTAIRE', libelle: 'Cabinet dentaire', professions: ['CHIRURGIEN_DENTISTE'], options: [] },
+  { code: 'LABORATOIRE', libelle: 'Laboratoire d\'analyses', professions: ['BIOLOGISTE'], options: [] },
+  { code: 'IMAGERIE', libelle: 'Centre d\'imagerie', professions: ['RADIOLOGUE'], options: [] },
+  { code: 'PHARMACIE', libelle: 'Pharmacie', professions: ['PHARMACIEN'], options: ['GARDE'] },
+  { code: 'OPTIQUE', libelle: 'Optique', professions: ['OPTICIEN'], options: [] },
+  { code: 'KINESITHERAPIE', libelle: 'Kinésithérapie', professions: ['KINESITHERAPEUTE'], options: [] },
 ];
 
 /** Catégories d'immobilisations (FIN-RG-140, 144) : durées et taux indicatifs, à aligner sur les taux admis par le CGI. */

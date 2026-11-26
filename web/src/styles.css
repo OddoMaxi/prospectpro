@@ -335,3 +335,18 @@ label input[type=checkbox], label input[type=radio] { vertical-align: middle; ma
 /* Calendrier d'une mise en demeure (PR-06) */
 .jalons { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 .jalons li { display: flex; gap: 10px; align-items: baseline; }
+
+/* Portail des prestataires */
+.pp-app { min-height: 100vh; background: var(--fond); }
+.pp-entete { display: flex; align-items: center; gap: 24px; padding: 12px 24px; background: var(--titre); color: #fff; flex-wrap: wrap; }
+.pp-entete b { display: block; font-size: 17px; }
+.pp-entete small { opacity: .7; }
+.pp-entete nav { display: flex; gap: 6px; flex: 1; }
+.pp-entete nav a { color: #fff; opacity: .75; text-decoration: none; padding: 6px 12px; border-radius: 6px; }
+.pp-entete nav a.active { opacity: 1; background: #ffffff22; }
+.pp-moi { display: flex; gap: 12px; align-items: center; }
+.pp-moi .lien { color: #fff; }
+.pp-contenu { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+.pp-titre { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.pp-titre h1 { margin: 0; color: var(--titre); font-size: 24px; }
+.pp-titre .bouton { margin-left: auto; }

@@ -15,7 +15,7 @@ import { creerExercice } from '../modules/comptabilite/exercices.js';
 import { enregistrerSchema } from '../modules/comptabilite/schemas.js';
 import { creerModeleDocument } from '../modules/referentiels/modeles.js';
 import {
-  BRANCHES, CATEGORIES_IMMOBILISATION, COMPTES_PROPOSES, MODELES_ACHAT, MODELES_REGLEMENT, DELEGATIONS, DEPARTEMENTS, JOURNAUX, MODELES_DOCUMENTS, MOTIFS_BLOCAGE, NATURES_COMPTE, SCHEMAS, FONCTION_ADMIN, FONCTIONS_SYSTEME, INCOMPATIBILITES, MATRICE, MODELES_NOTIFICATION,
+  BRANCHES, CATEGORIES_IMMOBILISATION, TYPES_PRESTATAIRE, COMPTES_PROPOSES, MODELES_ACHAT, MODELES_REGLEMENT, DELEGATIONS, DEPARTEMENTS, JOURNAUX, MODELES_DOCUMENTS, MOTIFS_BLOCAGE, NATURES_COMPTE, SCHEMAS, FONCTION_ADMIN, FONCTIONS_SYSTEME, INCOMPATIBILITES, MATRICE, MODELES_NOTIFICATION,
   PARAMETRES, PROFILS, REGLES_LEGALES,
 } from './referentiel-initial.js';
 
@@ -136,6 +136,7 @@ export async function installer(q: Executant, admin: CompteInitial, direction: C
   for (const m of MODELES_ACHAT) {
     await q.query('INSERT INTO modele_ecriture (code, libelle, lignes) VALUES ($1,$2,$3)', [m.code, m.libelle, JSON.stringify({ nature: 'ACHAT', compte: m.compte, categorie: m.categorie ?? null })]);
   }
+  for (const t of TYPES_PRESTATAIRE) await q.query('INSERT INTO type_prestataire (code, libelle, professions, options) VALUES ($1,$2,$3,$4)', [t.code, t.libelle, JSON.stringify(t.professions), JSON.stringify(t.options)]);
   for (const m of MODELES_REGLEMENT) await q.query('INSERT INTO modele_reglement (code, mode, condition) VALUES ($1,$2,$3)', [m.code, m.mode, m.condition]);
   for (const m of MODELES_DOCUMENTS) await creerModeleDocument(q, systeme, { ...m, niveauSignature: 'CODE_USAGE_UNIQUE', dateEffet: `${annee}-01-01` });
 

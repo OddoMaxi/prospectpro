@@ -34,6 +34,8 @@ export function resume(d: Pick<Demande, 'type_operation' | 'donnees'>): string {
       return `Police ${x.numero} – ${x.assure} : ${c.map(y => `${y.donnee.toLowerCase()} ${y.avant} → ${y.apres}`).join(', ')} ; prime annuelle ${g(x.primeAvant)} → ${g(x.primeApres)} GNF, ${nature} (${x.motif})`;
     }
     case 'RETRAIT_AYANT_DROIT': return `Police ${x.numero} – retrait de ${x.assure} (décès le ${String(x.dateDeces ?? '').split('-').reverse().join('/')}) ; ristourne ${Number(x.ristourne ?? 0).toLocaleString('fr-FR')} GNF`;
+    case 'AGREMENT_PRESTATAIRE': return `${x.reprise ? 'Rétablissement de l\'agrément' : 'Agrément'} de ${x.nom} (${x.code}, ${String(x.type).toLowerCase().replace(/_/g, ' ')})`;
+    case 'AGREMENT_PROFESSIONNEL': return `${x.nom} – ${String(x.profession).toLowerCase().replace(/_/g, ' ')}${x.specialite ? ` (${x.specialite})` : ''}, ordre n° ${x.numeroOrdre}, présenté par ${x.prestataire}`;
     case 'RESILIATION': return `Police ${x.numero} – résiliation pour ${x.motif} : ${x.justification} ; ristourne ${Number(x.ristourneEstimee ?? 0).toLocaleString('fr-FR')} GNF`;
     default: return JSON.stringify(x);
   }

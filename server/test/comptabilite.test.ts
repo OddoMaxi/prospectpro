@@ -164,7 +164,7 @@ describe('Périodes et scellement', () => {
     await transaction(null, q => scellerEcritures(q));
     expect(await verifierScellement(getPool())).toEqual({ lots: 2, premiereAlteration: null });
     await getPool().query('ALTER TABLE ligne_ecriture DISABLE TRIGGER USER');
-    await getPool().query(`UPDATE ligne_ecriture SET libelle = 'falsifié' WHERE id = (SELECT min(id::text)::uuid FROM ligne_ecriture)`);
+    await getPool().query(`UPDATE ligne_ecriture SET libelle = 'falsifié' WHERE id = (SELECT l.id FROM ligne_ecriture l JOIN ecriture e ON e.id = l.ecriture_id ORDER BY e.cree_le, e.numero_piece LIMIT 1)`);
     await getPool().query('ALTER TABLE ligne_ecriture ENABLE TRIGGER USER');
     expect((await verifierScellement(getPool())).premiereAlteration).toBe(lot!.lot);
   });

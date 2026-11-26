@@ -32,6 +32,8 @@ import { PageRapprochement } from './pages/finances/Rapprochement';
 import { SouscriptionEnLigne } from './enligne/SouscriptionEnLigne';
 import { PageCanalDigital } from './pages/commercial/CanalDigital';
 import { PageAlertesConformite, PageImpayes } from './pages/production/Impayes';
+import { PageFichePrestataire, PageNomenclaturesSante, PagePrestataires, PageProfessionnels } from './pages/sante/Prestataires';
+import { PortailPrestataire } from './prestataire/Portail';
 import { PageFicheImmobilisation, PageImmobilisations } from './pages/comptabilite/Immobilisations';
 import { ApplicationAgent, ROLES_RESEAU } from './agent/Agent';
 import { PageCartesPro, PageMouvementsPortefeuille, PagePrescripteurs, PageVerificationCarte } from './pages/commercial/Reseau';
@@ -52,9 +54,10 @@ export function App() {
       <Route path="/verification/carte/:jeton" element={<PageVerificationCarte />} />
       <Route path="/souscrire" element={<SouscriptionEnLigne />} />
       <Route path="/agent/*" element={moi ? <ApplicationAgent /> : <Navigate to="/connexion" replace state={{ depuis: lieu.pathname }} />} />
+      <Route path="/prestataire/*" element={moi ? <PortailPrestataire /> : <Navigate to="/connexion" replace state={{ depuis: lieu.pathname }} />} />
       <Route element={moi ? <Coquille /> : <Navigate to="/connexion" replace state={{ depuis: lieu.pathname }} />}>
         {/* Les intervenants du réseau commercial arrivent sur l'application agent */}
-        <Route index element={moi && ROLES_RESEAU.includes(moi.type_compte) ? <Navigate to="/agent" replace /> : <PageAccueil />} />
+        <Route index element={moi && ROLES_RESEAU.includes(moi.type_compte) ? <Navigate to="/agent" replace /> : moi && ['ADMIN_PRESTATAIRE', 'PROFESSIONNEL_SANTE'].includes(moi.type_compte) ? <Navigate to="/prestataire" replace /> : <PageAccueil />} />
         <Route path="validations" element={<PageValidations />} />
         <Route path="administration/compagnie" element={<Protege droit="SOCIETE:CONSULTER"><PageCompagnie /></Protege>} />
         <Route path="administration/organigramme" element={<Protege droit="ORGANISATION:CONSULTER"><PageOrganigramme /></Protege>} />
@@ -76,6 +79,10 @@ export function App() {
         <Route path="commercial/intervenants" element={<Protege droit="AGREMENT:CONSULTER"><PageIntervenants /></Protege>} />
         <Route path="commercial/prescripteurs" element={<Protege droit="AGREMENT:CONSULTER"><PagePrescripteurs /></Protege>} />
         <Route path="commercial/cartes" element={<Protege droit="CARTE_PRO:CONSULTER"><PageCartesPro /></Protege>} />
+        <Route path="sante/prestataires" element={<Protege droit="PRESTATAIRES:CONSULTER"><PagePrestataires /></Protege>} />
+        <Route path="sante/prestataires/:id" element={<Protege droit="PRESTATAIRES:CONSULTER"><PageFichePrestataire /></Protege>} />
+        <Route path="sante/professionnels" element={<Protege droit="PRESTATAIRES:CONSULTER"><PageProfessionnels /></Protege>} />
+        <Route path="sante/nomenclatures" element={<Protege droit="NOMENCLATURES:CONSULTER"><PageNomenclaturesSante /></Protege>} />
         <Route path="production/impayes" element={<Protege droit="AVENANT:CONSULTER"><PageImpayes /></Protege>} />
         <Route path="conformite/alertes" element={<Protege droit="ALERTES_CONFORMITE:CONSULTER"><PageAlertesConformite /></Protege>} />
         <Route path="commercial/canal-digital" element={<Protege droit="SOUSCRIPTION_EN_LIGNE:CONSULTER"><PageCanalDigital /></Protege>} />

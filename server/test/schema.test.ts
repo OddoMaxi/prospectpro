@@ -14,7 +14,7 @@ const q = async (sql: string, p: unknown[] = []) => (await c.query(sql, p)).rows
 describe('Schéma cible (DD 1.1)', () => {
   it('crée les 156 tables et les 1 178 champs du dictionnaire, plus les tables techniques (X12), produit_taxe (X16), distribution_evenement (X17) et branche_comptable (X22)', async () => {
     const tables = await q(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name <> 'pgmigrations'`);
-    expect(tables.length).toBe(156 + 4 + 1 + 1 + 1);
+    expect(tables.length).toBe(156 + 4 + 1 + 1 + 1 + 1); // + type_prestataire (lot 3, SAN-RG-001)
     let manquants: string[] = [];
     for (const t of dd.tables) {
       const cols = new Set((await q(`SELECT column_name FROM information_schema.columns WHERE table_name=$1`, [t.nom])).map(r => r.column_name));

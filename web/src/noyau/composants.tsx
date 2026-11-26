@@ -110,7 +110,7 @@ export const OPERATIONS: Record<string, string> = {
   ANNULATION_ERREUR: 'Annulation pour erreur', RESTITUTION_COMPTE_PRODUCTION: 'Restitution du compte de production', ECRITURE_MANUELLE: 'Fiche d\'imputation',
   DECLARATION_TAXE: 'Déclaration de taxe', PAIEMENT_PRESTATAIRE: 'Paiement prestataire', PAIEMENT_INDEMNITE: 'Paiement d\'indemnité',
   PAIEMENT_REMBOURSEMENT_DEPOT: 'Remboursement de versements', PAIEMENT_FOURNISSEUR: 'Paiement fournisseur', PAIEMENT_TAXE: 'Paiement de taxe', PAIEMENT_RIST: 'Paiement de ristourne',
-  MOUVEMENT_PORTEFEUILLE: 'Mouvement de portefeuille', AVENANT_CORRECTION: 'Avenant de correction', RETRAIT_AYANT_DROIT: 'Retrait d\'un ayant droit (décès)', RESILIATION: 'Résiliation de police',
+  MOUVEMENT_PORTEFEUILLE: 'Mouvement de portefeuille', AGREMENT_PRESTATAIRE: 'Agrément d\'un prestataire', AGREMENT_PROFESSIONNEL: 'Agrément d\'un professionnel de santé', AVENANT_CORRECTION: 'Avenant de correction', RETRAIT_AYANT_DROIT: 'Retrait d\'un ayant droit (décès)', RESILIATION: 'Résiliation de police',
 };
 
 /** Tuile d'indicateur (maquette : cartes de chiffres en tête d'écran). */
